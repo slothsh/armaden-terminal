@@ -14,6 +14,7 @@ find_package(Qt6 6.11 REQUIRED COMPONENTS Quick CanvasPainter)
 qt_standard_project_setup(REQUIRES 6.11)
 
 add_subdirectory(qml/)
+add_subdirectory(core/)
 
 # Add to build
 add_executable_target(
@@ -75,6 +76,7 @@ target_link_libraries(
         Qt6::CanvasPainter
         EnTT::EnTT
         lgc::langgraph
+        LibCore
     PRIVATE
         LibQml
 )

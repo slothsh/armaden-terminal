@@ -1,0 +1,49 @@
+#include <langgraph_cpp/langgraph.hpp>
+#include "langgraph/checkpoint/saver.hpp"
+#include "langgraph/checkpoint/in_memory_saver.hpp"
+#include "langgraph/checkpoint/storage_saver.hpp"
+#include "langgraph/store/base_store.hpp"
+#include "langgraph/store/in_memory_store.hpp"
+#include "langgraph/store/storage_store.hpp"
+#include "langgraph/graph/compiled_state_graph.hpp"
+#include "foundation/network/i_http_client.hpp"
+#include "foundation/network/http_client_factory.hpp"
+#include "foundation/network/http_client_types.hpp"
+#include "foundation/config/config_loader.hpp"
+#include "foundation/event/i_event_sink.hpp"
+
+export module agent;
+
+export namespace mts::agent {
+    using ::lgc::Status;
+    using ::lgc::Result;
+    using ::lgc::BaseMessage;
+    using ::lgc::BaseChatModel;
+    using ::lgc::FakeChatModel;
+    using ::lgc::ProviderChatModel;
+    using ::lgc::ProviderChatModelOptions;
+    using ::lgc::ChatProviderKind;
+    using ::lgc::CancellationToken;
+    using ::lgc::CancellationSource;
+    using ::lgc::BaseCheckpointSaver;
+    using ::lgc::InMemorySaver;
+    using ::lgc::StorageSaver;
+    using ::lgc::BaseStore;
+    using ::lgc::InMemoryStore;
+    using ::lgc::StorageStore;
+    using ::lgc::StateGraph;
+    using ::lgc::CompiledStateGraph;
+    using ::lgc::ToolRegistry;
+    using ::lgc::ToolNode;
+    using ::lgc::FunctionTool;
+    using ::lgc::ToolPolicy;
+    using ::lgc::ToolSpec;
+    using ::lgc::ToolResult;
+    using ::lgc::ToolRuntime;
+    using ::lgc::IHttpClient;
+    using ::lgc::HttpClientConfig;
+    using ::lgc::DefaultHttpClientFactory;
+    using ::lgc::HttpClientFactoryOptions;
+    using ::lgc::ConfigLoader;
+    using ::lgc::IEventSink;
+}
