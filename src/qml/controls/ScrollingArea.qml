@@ -20,6 +20,8 @@ Item {
     property int hideDelay: 2000
     property int hideDuration: 150
     property int contentCursorShape: Qt.ArrowCursor
+    property int contentCursorStart: 0
+    property int contentCursorWidth: -1
 
     property alias contentY: flick.contentY
     property alias contentHeight: flick.contentHeight
@@ -62,6 +64,14 @@ Item {
         });
     }
 
+    function cursorShapeAt(x) {
+        if (control.contentCursorWidth < 0)
+            return control.contentCursorShape;
+        const inside = x >= control.contentCursorStart
+            && x < control.contentCursorStart + control.contentCursorWidth;
+        return inside ? control.contentCursorShape : Qt.ArrowCursor;
+    }
+
     function scrollBy(delta) {
         flick.contentY = Math.max(flick.originY, Math.min(flick.contentY + delta, control.maxContentY()));
     }
@@ -69,7 +79,8 @@ Item {
     MouseArea {
         anchors.fill: parent
         acceptedButtons: Qt.NoButton
-        cursorShape: control.contentCursorShape
+        hoverEnabled: true
+        cursorShape: control.cursorShapeAt(mouseX)
 
         onWheel: wheel => {
             const delta = wheel.pixelDelta.y !== 0

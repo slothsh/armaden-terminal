@@ -128,6 +128,8 @@ Window {
             anchors.bottom: inputDrawer.top
             stickToBottom: true
             contentCursorShape: Qt.IBeamCursor
+            contentCursorStart: root.chatColumnInset
+            contentCursorWidth: root.chatColumnWidth
             barTopMargin: Theme.metric.spacing
             barBottomMargin: Theme.metric.spacing
 
