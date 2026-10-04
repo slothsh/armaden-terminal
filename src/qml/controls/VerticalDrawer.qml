@@ -13,6 +13,9 @@ Rectangle {
     property int side: DrawerSide.Bottom
     property bool handleEnabled: false
     property bool handleHovered: false
+    property int handleThickness: 1
+    property int handleHoverThickness: 1
+    property int handleCollapsedThickness: 2
 
     width: parent.width
     height: Math.max(0, Math.min(drawer.size, drawer.sizeMax))
@@ -137,7 +140,7 @@ Rectangle {
 
         y: drawer.handleAreaY()
         height: drawer.height === 0
-            ? (drawer.handleHovered || drawer.handleEnabled ? 8 : 0)
-            : (drawer.handleHovered || drawer.handleEnabled ? 4 : 1)
+            ? (drawer.handleHovered || drawer.handleEnabled ? drawer.handleCollapsedThickness : 0)
+            : (drawer.handleHovered || drawer.handleEnabled ? drawer.handleHoverThickness : drawer.handleThickness)
     }
 }
