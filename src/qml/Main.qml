@@ -410,15 +410,28 @@ Window {
                     id: sessionRow
                     width: ListView.view.width
                     height: 28
-                    color: model.sessionId === chat.activeSession ? Theme.color.hover : "transparent"
 
                     readonly property bool renaming: root.renamingSession === model.sessionId
+                    readonly property bool menuEngaged: sessionMenu.opened && !sessionMenuButton.openedByButton
+                    color: model.sessionId === chat.activeSession
+                        ? Theme.color.active
+                        : ((rowHover.hovered || menuEngaged) ? Theme.color.hover : "transparent")
+
+                    HoverHandler {
+                        id: rowHover
+                    }
 
                     MouseArea {
                         anchors.fill: parent
                         enabled: !sessionRow.renaming
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: {
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                        onClicked: mouse => {
+                            if (mouse.button === Qt.RightButton) {
+                                sessionMenuButton.openedByButton = false
+                                sessionMenu.openAt(mouse.x, mouse.y)
+                                return
+                            }
                             conversationView.stickToBottom = true
                             chat.saveDraft(promptInput.text)
                             chat.selectSession(model.sessionId)
@@ -493,17 +506,21 @@ Window {
                     IconButton {
                         id: sessionMenuButton
                         glyph: "\u22EF"
-                        active: sessionMenu.opened
+                        property bool openedByButton: false
+                        active: sessionMenu.opened && sessionMenuButton.openedByButton
                         anchors.right: parent.right
                         anchors.rightMargin: 6
                         anchors.verticalCenter: parent.verticalCenter
-                        onClicked: sessionMenu.toggle()
+                        onClicked: {
+                            sessionMenuButton.openedByButton = true
+                            sessionMenu.x = sessionRow.width - sessionMenu.width
+                            sessionMenu.y = sessionRow.height + 2
+                            sessionMenu.toggle()
+                        }
                     }
 
-                    DropdownMenu {
+                    ContextMenu {
                         id: sessionMenu
-                        x: sessionRow.width - width
-                        y: sessionRow.height + 2
 
                         MenuButton {
                             width: sessionMenu.width - sessionMenu.padding * 2

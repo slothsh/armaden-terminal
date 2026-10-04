@@ -12,6 +12,7 @@ qt_add_qml_module(
         AboutDialog.qml
         BottomBar.qml
         ConfirmDialog.qml
+        ContextMenu.qml
         DrawerSide.qml
         DropdownMenu.qml
         HorizontalDrawer.qml
