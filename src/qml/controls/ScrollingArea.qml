@@ -64,12 +64,13 @@ Item {
         });
     }
 
-    function cursorShapeAt(x) {
+    function cursorShapeAt(x, y) {
         if (control.contentCursorWidth < 0)
             return control.contentCursorShape;
-        const inside = x >= control.contentCursorStart
+        const insideX = x >= control.contentCursorStart
             && x < control.contentCursorStart + control.contentCursorWidth;
-        return inside ? control.contentCursorShape : Qt.ArrowCursor;
+        const contentBottom = contentColumn.height + flick.originY - flick.contentY;
+        return (insideX && y < contentBottom) ? control.contentCursorShape : Qt.ArrowCursor;
     }
 
     function scrollBy(delta) {
@@ -80,7 +81,7 @@ Item {
         anchors.fill: parent
         acceptedButtons: Qt.NoButton
         hoverEnabled: true
-        cursorShape: control.cursorShapeAt(mouseX)
+        cursorShape: control.cursorShapeAt(mouseX, mouseY)
 
         onWheel: wheel => {
             const delta = wheel.pixelDelta.y !== 0
