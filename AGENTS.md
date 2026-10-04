@@ -40,6 +40,11 @@ Do NOT add documentation comments to ANY code. This will only be required on req
 - Attach the pointer or reference symbol to the `const` qualifier when one is available, otherwise to the type. For a const pointer to a const type, attach the second `const` qualifier to the pointer. Examples: `Foo const* foo`, `Foo const& foo`, `Foo const *const foo`, `Foo* foo`, `Foo& foo`.
 - When using a new library and a module facade has not been exported for it yet, query the user for instructions on how to treat it.
 
+## MANDATORY: Design Conventions
+
+- Prefer static polymorphism as much as possible. Model interfaces/protocols with concepts and type traits rather than inheritance hierarchies.
+- Only use dynamic dispatch (virtual functions / abstract base classes) when it is genuinely the most suitable option.
+
 ## MANDATORY: Git Rules
 
 NEVER stage, commit, pull or push any changes EVER. This will only be required on request from the user.
