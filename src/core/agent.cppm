@@ -45,5 +45,7 @@ export namespace mts::agent {
     using ::lgc::DefaultHttpClientFactory;
     using ::lgc::HttpClientFactoryOptions;
     using ::lgc::ConfigLoader;
+    using ::lgc::Config;
+    using ::lgc::ConfigValue;
     using ::lgc::IEventSink;
 }
