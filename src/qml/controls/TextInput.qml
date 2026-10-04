@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import Lib.Controls
 import Lib.Theme
 
 Rectangle {
@@ -13,15 +14,27 @@ Rectangle {
 
     color: Theme.color.menu
 
-    ScrollView {
+    function ensureCursorVisible() {
+        const r = area.cursorRectangle;
+        const top = r.y - area.topPadding;
+        const bottom = r.y + r.height + area.bottomPadding;
+        if (bottom > scroll.contentY + scroll.height) {
+            scroll.contentY = Math.min(bottom - scroll.height, scroll.maxContentY());
+        } else if (top < scroll.contentY) {
+            scroll.contentY = Math.max(top, 0);
+        }
+    }
+
+    ScrollingArea {
         id: scroll
         anchors.fill: parent
-        clip: true
-        background: null
+        barTopMargin: 8
+        barBottomMargin: 8
 
         TextArea {
             id: area
-            width: scroll.availableWidth
+            width: scroll.width
+            height: contentHeight + topPadding + bottomPadding
             leftPadding: 10
             rightPadding: 10
             topPadding: 8
@@ -39,6 +52,8 @@ Rectangle {
                 width: 2
                 color: Theme.color.accent
             }
+
+            onCursorRectangleChanged: control.ensureCursorVisible()
 
             Keys.onPressed: event => {
                 if (event.key === Qt.Key_Return && event.modifiers & Qt.ControlModifier) {

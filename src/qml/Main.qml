@@ -71,7 +71,7 @@ Window {
         height: parent.height - topBar.height - bottomBar.height
         color: Theme.color.dark
 
-        ListView {
+        ScrollingArea {
             id: conversationView
             anchors.left: parent.left
             anchors.right: parent.right
@@ -80,182 +80,66 @@ Window {
             anchors.topMargin: Theme.metric.spacing
             anchors.leftMargin: Theme.metric.spacing
             anchors.rightMargin: Theme.metric.spacing
-            clip: true
-            spacing: 0
-            interactive: false
-            boundsBehavior: Flickable.StopAtBounds
-            model: chat.conversation
-            onCountChanged: {
-                if (count > 0) {
-                    positionViewAtIndex(count - 1, ListView.End)
-                }
-                positionViewAtEnd()
-                Qt.callLater(positionViewAtEnd)
-            }
+            stickToBottom: true
+            bottomPadding: Theme.metric.spacing
+            barBottomMargin: Theme.metric.spacing
 
-            function scrollBy(delta) {
-                const minY = conversationView.originY;
-                const maxY = minY + Math.max(0, conversationView.contentHeight - conversationView.height);
-                conversationView.contentY = Math.max(minY, Math.min(conversationView.contentY + delta, maxY));
-            }
+            Repeater {
+                model: chat.conversation
 
-            footer: Item {
-                width: conversationView.width
-                height: Theme.metric.spacing
-            }
-
-            delegate: Rectangle {
-                width: ListView.view.width
-                height: blockText.contentHeight + 16
-                radius: 0
-                color: {
-                    switch (model.kind) {
-                        case ConversationModel.UserText: return Theme.color.medium;
-                        case ConversationModel.Reasoning: return Theme.color.menu;
-                        case ConversationModel.ToolCall: return Theme.color.menu;
-                        case ConversationModel.ToolResult: return Theme.color.menu;
-                        case ConversationModel.Error: return "#3a1f1f";
-                        default: return Theme.color.menu;
+                onItemAdded: {
+                    if (conversationView.stickToBottom) {
+                        conversationView.snapToEnd();
                     }
                 }
 
-                Rectangle {
-                    anchors.top: parent.top
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    height: 1
-                    visible: index > 0
-                    color: Theme.color.borderStrong
-                }
-
-                TextEdit {
-                    id: blockText
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.top: parent.top
-                    anchors.margins: 8
-                    height: contentHeight
-                    readOnly: true
-                    selectByMouse: true
-                    textFormat: TextEdit.PlainText
-                    wrapMode: TextEdit.Wrap
-                    text: model.kind === ConversationModel.ToolResult && model.payload.length > 0
-                        ? model.text + " " + model.payload
-                        : (model.kind === ConversationModel.ToolCall ? model.text + " " + model.payload : model.text)
-                    color: model.kind === ConversationModel.Reasoning ? Theme.color.textMuted : Theme.color.text
-                    font.pixelSize: 12
-                    font.italic: model.kind === ConversationModel.Reasoning
-                    font.family: (model.kind === ConversationModel.ToolCall || model.kind === ConversationModel.ToolResult)
-                        ? "monospace" : ""
-                    selectionColor: Theme.color.accent
-                    selectedTextColor: Theme.color.text
-                }
-            }
-        }
-
-        MouseArea {
-            anchors.fill: conversationView
-            acceptedButtons: Qt.NoButton
-
-            onWheel: wheel => {
-                const delta = wheel.pixelDelta.y !== 0
-                    ? wheel.pixelDelta.y
-                    : wheel.angleDelta.y / 120 * 90;
-                conversationView.scrollBy(-delta);
-                scrollBarHandle.poke();
-                wheel.accepted = true;
-            }
-        }
-
-        Rectangle {
-            id: scrollBarHandle
-            anchors.right: parent.right
-            anchors.rightMargin: 2
-            width: 6
-            radius: 3
-            color: "#c8c8c8"
-            z: 10
-            visible: conversationView.contentHeight > conversationView.height
-            readonly property bool revealed: root.active && (gutterHover.hovered || dragArea.pressed)
-            opacity: 0
-            readonly property real trackHeight: conversationView.height - Theme.metric.spacing
-            readonly property real contentRange: Math.max(0, conversationView.contentHeight - conversationView.height)
-            height: Math.max(24, trackHeight * conversationView.height / Math.max(1, conversationView.contentHeight))
-            y: conversationView.y + (contentRange <= 0
-                ? 0
-                : (conversationView.contentY - conversationView.originY) / contentRange * (trackHeight - height))
-
-            onRevealedChanged: {
-                if (revealed) {
-                    hideTimer.stop()
-                    hideAnimation.stop()
-                    scrollBarHandle.opacity = 1
-                } else {
-                    hideTimer.restart()
-                }
-            }
-
-            function poke() {
-                hideTimer.stop()
-                hideAnimation.stop()
-                scrollBarHandle.opacity = 1
-                hideTimer.restart()
-            }
-
-            Timer {
-                id: hideTimer
-                interval: 2000
-                onTriggered: {
-                    if (!scrollBarHandle.revealed) {
-                        hideAnimation.restart()
-                    }
-                }
-            }
-
-            NumberAnimation {
-                id: hideAnimation
-                target: scrollBarHandle
-                property: "opacity"
-                to: 0
-                duration: 150
-                easing.type: Easing.Linear
-            }
-
-            MouseArea {
-                id: dragArea
-                anchors.fill: parent
-                enabled: scrollBarHandle.opacity > 0
-                cursorShape: Qt.PointingHandCursor
-
-                property real grab: 0
-
-                onPressed: mouse => {
-                    dragArea.grab = mapToItem(conversationView, mouse.x, mouse.y).y - (scrollBarHandle.y - conversationView.y);
-                }
-
-                onPositionChanged: mouse => {
-                    if (!dragArea.pressed) {
-                        return;
+                delegate: Rectangle {
+                    width: conversationView.width
+                    height: blockText.contentHeight + 16
+                    radius: 0
+                    color: {
+                        switch (model.kind) {
+                            case ConversationModel.UserText: return Theme.color.medium;
+                            case ConversationModel.Reasoning: return Theme.color.menu;
+                            case ConversationModel.ToolCall: return Theme.color.menu;
+                            case ConversationModel.ToolResult: return Theme.color.menu;
+                            case ConversationModel.Error: return "#3a1f1f";
+                            default: return Theme.color.menu;
+                        }
                     }
 
-                    const travel = Math.max(1, scrollBarHandle.trackHeight - scrollBarHandle.height);
-                    const top = mapToItem(conversationView, mouse.x, mouse.y).y - dragArea.grab;
-                    const ratio = Math.max(0, Math.min(1, top / travel));
-                    conversationView.contentY = conversationView.originY + ratio * scrollBarHandle.contentRange;
+                    Rectangle {
+                        anchors.top: parent.top
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        height: 1
+                        visible: index > 0
+                        color: Theme.color.borderStrong
+                    }
+
+                    TextEdit {
+                        id: blockText
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.margins: 8
+                        height: contentHeight
+                        readOnly: true
+                        selectByMouse: true
+                        textFormat: TextEdit.PlainText
+                        wrapMode: TextEdit.Wrap
+                        text: model.kind === ConversationModel.ToolResult && model.payload.length > 0
+                            ? model.text + " " + model.payload
+                            : (model.kind === ConversationModel.ToolCall ? model.text + " " + model.payload : model.text)
+                        color: model.kind === ConversationModel.Reasoning ? Theme.color.textMuted : Theme.color.text
+                        font.pixelSize: 12
+                        font.italic: model.kind === ConversationModel.Reasoning
+                        font.family: (model.kind === ConversationModel.ToolCall || model.kind === ConversationModel.ToolResult)
+                            ? "monospace" : ""
+                        selectionColor: Theme.color.accent
+                        selectedTextColor: Theme.color.text
+                    }
                 }
-            }
-        }
-
-        Item {
-            id: scrollGutter
-            anchors.top: conversationView.top
-            anchors.bottom: conversationView.bottom
-            anchors.right: parent.right
-            width: 16
-            z: 11
-
-            HoverHandler {
-                id: gutterHover
             }
         }
 
@@ -295,6 +179,7 @@ Window {
                     anchors.verticalCenter: parent.verticalCenter
                     enabled: !chat.running && promptInput.text.trim().length > 0
                     onClicked: {
+                        conversationView.stickToBottom = true
                         chat.sendMessage(promptInput.text)
                         promptInput.text = ""
                     }
@@ -328,6 +213,7 @@ Window {
                 placeholderText: qsTr("Message the agent...")
                 readOnly: chat.running
                 onAccepted: {
+                    conversationView.stickToBottom = true
                     chat.sendMessage(text)
                     text = ""
                 }
@@ -397,6 +283,7 @@ Window {
                     anchors.right: clearHistoryButton.left
                     anchors.verticalCenter: parent.verticalCenter
                     onClicked: {
+                        conversationView.stickToBottom = true
                         chat.createSession()
                         inputDrawer.size = 72
                     }
@@ -443,7 +330,10 @@ Window {
                     MouseArea {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: chat.selectSession(model.sessionId)
+                        onClicked: {
+                            conversationView.stickToBottom = true
+                            chat.selectSession(model.sessionId)
+                        }
                     }
 
                     Text {
