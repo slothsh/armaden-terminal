@@ -31,11 +31,16 @@ struct CompactionConfig {
     std::uint64_t maxBytes = 0;
 };
 
+struct NamingConfig {
+    std::string model;
+};
+
 struct AppConfig {
     ProviderConfig provider;
     RuntimeConfig runtime;
     BudgetConfig budgets;
     CompactionConfig compaction;
+    NamingConfig naming;
 };
 
 [[nodiscard]] auto defaultConfig() -> AppConfig;
@@ -143,6 +148,9 @@ auto applyConfig(Config const& config, mts::config::AppConfig& app) -> Status {
     if (auto const status = readUInt32(config, "compaction.maxMessages", app.compaction.maxMessages); !status)
         return status;
     if (auto const status = readUInt64(config, "compaction.maxBytes", app.compaction.maxBytes); !status)
+        return status;
+
+    if (auto const status = readString(config, "naming.model", app.naming.model); !status)
         return status;
 
     return Status::ok();

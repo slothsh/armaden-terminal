@@ -51,6 +51,7 @@ private:
     void refreshSessions();
     void refreshRunning();
     void reloadConversation(QString const& id);
+    void maybeNameSession(QString const& id);
     void setStatus(QString const& status);
     void appendError(QString const& message);
 

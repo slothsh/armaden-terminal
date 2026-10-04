@@ -18,6 +18,8 @@ import harness;
 
 namespace {
 
+std::string const kDefaultSessionTitle = "New session";
+
 int blockKindFor(mts::persistence::MessageKind kind) {
     switch (kind) {
         case mts::persistence::MessageKind::UserText: return ConversationModel::UserText;
@@ -59,8 +61,11 @@ struct ChatController::Impl {
     mts::events::EventBus bus;
     std::unique_ptr<mts::persistence::SessionStoreHandle> store;
     std::unique_ptr<mts::model::ProviderHandle> provider;
+    std::unique_ptr<mts::model::ProviderHandle> namingProviderOwned;
+    mts::model::ProviderHandle* namingProvider = nullptr;
     std::unique_ptr<mts::harness::AgentHarness> harness;
     QHash<QString, std::shared_ptr<mts::runtime::Cancellation>> cancellations;
+    QHash<QString, std::shared_ptr<mts::runtime::Cancellation>> namingCancellations;
     QHash<QString, PendingRun> pending;
     QSet<QString> inFlight;
     QString activeSession;
@@ -102,9 +107,21 @@ ChatController::ChatController(QObject* parent)
     else
         setStatus(QString::fromStdString(provider.status().message()));
 
+    if (!config.provider.apiKey.empty()) {
+        auto namingConfig = config;
+        if (!config.naming.model.empty())
+            namingConfig.provider.model = config.naming.model;
+        if (!namingConfig.provider.model.empty()) {
+            if (auto naming = mts::model::makeProvider(namingConfig); naming) {
+                m_impl->namingProviderOwned = std::make_unique<mts::model::ProviderHandle>(std::move(naming.value()));
+                m_impl->namingProvider = m_impl->namingProviderOwned.get();
+            }
+        }
+    }
+
     if (m_impl->store != nullptr && m_impl->provider != nullptr) {
         m_impl->harness = std::make_unique<mts::harness::AgentHarness>(
-            *m_impl->provider, *m_impl->store, *m_impl->pool, m_impl->bus
+            *m_impl->provider, m_impl->namingProvider, *m_impl->store, *m_impl->pool, m_impl->bus
         );
 
         (void)m_impl->bus.subscribe<mts::events::RunStarted>([this](mts::events::RunStarted const& event) {
@@ -126,6 +143,7 @@ ChatController::ChatController(QObject* parent)
                     reloadConversation(id);
                 refreshRunning();
                 refreshSessions();
+                maybeNameSession(id);
             }, Qt::QueuedConnection);
         });
         (void)m_impl->bus.subscribe<mts::events::RunFailed>([this](mts::events::RunFailed const& event) {
@@ -216,6 +234,10 @@ ChatController::~ChatController() {
         return;
 
     for (auto const& cancellation : std::as_const(m_impl->cancellations)) {
+        if (cancellation != nullptr)
+            cancellation->cancel();
+    }
+    for (auto const& cancellation : std::as_const(m_impl->namingCancellations)) {
         if (cancellation != nullptr)
             cancellation->cancel();
     }
@@ -310,7 +332,7 @@ void ChatController::createSession() {
     if (m_impl->store == nullptr)
         return;
 
-    auto const session = m_impl->store->createSession("New session");
+    auto const session = m_impl->store->createSession(kDefaultSessionTitle);
     if (!session) {
         setStatus(QString::fromStdString(session.status().message()));
         return;
@@ -364,6 +386,34 @@ void ChatController::renameSession(QString const& id, QString const& title) {
     }
 
     refreshSessions();
+}
+
+void ChatController::maybeNameSession(QString const& id) {
+    if (m_impl->store == nullptr || m_impl->harness == nullptr)
+        return;
+    if (m_impl->namingCancellations.contains(id))
+        return;
+
+    auto const session = m_impl->store->getSession(id.toStdString());
+    if (!session || session.value().title != kDefaultSessionTitle)
+        return;
+
+    auto cancellation = std::make_shared<mts::runtime::Cancellation>();
+    m_impl->namingCancellations.insert(id, cancellation);
+
+    auto* harness = m_impl->harness.get();
+    m_impl->pool->schedule([this, id, cancellation, harness] {
+        auto const title = harness->suggestSessionTitle(id.toStdString(), *cancellation);
+        QMetaObject::invokeMethod(this, [this, id, title] {
+            m_impl->namingCancellations.remove(id);
+            if (!title || m_impl->store == nullptr)
+                return;
+            auto const current = m_impl->store->getSession(id.toStdString());
+            if (!current || current.value().title != kDefaultSessionTitle)
+                return;
+            renameSession(id, QString::fromStdString(title.value()));
+        }, Qt::QueuedConnection);
+    });
 }
 
 void ChatController::clearHistory() {
