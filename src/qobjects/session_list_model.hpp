@@ -11,6 +11,7 @@ struct SessionEntry {
     QString id;
     QString title;
     qint64 updatedAt = 0;
+    bool running = false;
 };
 
 class SessionListModel : public QAbstractListModel {
@@ -22,6 +23,7 @@ public:
         SessionIdRole = Qt::UserRole + 1,
         TitleRole,
         UpdatedAtRole,
+        RunningRole,
     };
     Q_ENUM(Role)
 
@@ -33,6 +35,7 @@ public:
 
     void replace(QList<SessionEntry> const& entries);
     void upsert(SessionEntry const& entry);
+    void setRunning(QString const& id, bool running);
     int indexOf(QString const& id) const;
 
 private:

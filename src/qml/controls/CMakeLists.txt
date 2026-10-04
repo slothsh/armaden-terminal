@@ -20,6 +20,7 @@ qt_add_qml_module(
         TextButton.qml
         TextInput.qml
         ScrollingArea.qml
+        Spinner.qml
         TopBar.qml
         VerticalDrawer.qml
     NO_LINT

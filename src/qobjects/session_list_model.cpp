@@ -18,6 +18,7 @@ QVariant SessionListModel::data(QModelIndex const& index, int role) const {
         case SessionIdRole: return entry.id;
         case TitleRole: return entry.title;
         case UpdatedAtRole: return entry.updatedAt;
+        case RunningRole: return entry.running;
         default: return {};
     }
 }
@@ -27,6 +28,7 @@ QHash<int, QByteArray> SessionListModel::roleNames() const {
         {SessionIdRole, "sessionId"},
         {TitleRole, "title"},
         {UpdatedAtRole, "updatedAt"},
+        {RunningRole, "running"},
     };
 }
 
@@ -49,6 +51,19 @@ void SessionListModel::upsert(SessionEntry const& entry) {
     beginInsertRows(QModelIndex(), m_entries.size(), m_entries.size());
     m_entries.append(entry);
     endInsertRows();
+}
+
+void SessionListModel::setRunning(QString const& id, bool running) {
+    for (int row = 0; row < m_entries.size(); ++row) {
+        if (m_entries.at(row).id != id)
+            continue;
+        if (m_entries.at(row).running == running)
+            return;
+        m_entries[row].running = running;
+        QModelIndex const changed = index(row);
+        emit dataChanged(changed, changed, {RunningRole});
+        return;
+    }
 }
 
 int SessionListModel::indexOf(QString const& id) const {

@@ -356,7 +356,7 @@ Window {
 
                     Text {
                         anchors.left: parent.left
-                        anchors.right: deleteSessionButton.left
+                        anchors.right: model.running ? sessionSpinner.left : deleteSessionButton.left
                         anchors.leftMargin: 12
                         anchors.rightMargin: 8
                         anchors.verticalCenter: parent.verticalCenter
@@ -364,6 +364,16 @@ Window {
                         color: Theme.color.text
                         font.pixelSize: 12
                         elide: Text.ElideRight
+                    }
+
+                    Spinner {
+                        id: sessionSpinner
+                        visible: model.running
+                        width: 12
+                        height: 12
+                        anchors.right: deleteSessionButton.left
+                        anchors.rightMargin: 8
+                        anchors.verticalCenter: parent.verticalCenter
                     }
 
                     IconButton {
