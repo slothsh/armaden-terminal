@@ -24,7 +24,8 @@ Window {
         anchors.top: parent.top
         width: parent.width
         z: 9
-        onMenuRequested: appMenu.open()
+        menuActive: appMenu.opened
+        onMenuRequested: appMenu.toggle()
         onCloseRequested: Qt.quit()
     }
 
@@ -187,10 +188,11 @@ Window {
                 IconButton {
                     id: clearHistoryButton
                     glyph: "\u22EF"
+                    active: historyMenu.opened
                     anchors.right: parent.right
                     anchors.rightMargin: 6
                     anchors.verticalCenter: parent.verticalCenter
-                    onClicked: historyMenu.open()
+                    onClicked: historyMenu.toggle()
                 }
 
                 IconButton {
@@ -213,7 +215,7 @@ Window {
             DropdownMenu {
                 id: historyMenu
                 x: leftDrawer.width - width
-                y: historyGutter.height
+                y: historyGutter.y + clearHistoryButton.y + clearHistoryButton.height + 2
 
                 MenuButton {
                     width: historyMenu.width - historyMenu.padding * 2
@@ -276,7 +278,7 @@ Window {
     DropdownMenu {
         id: appMenu
         x: Theme.metric.spacing
-        y: topBar.height + Theme.metric.spacing
+        y: topBar.menuAnchorBottom + 2
 
         MenuButton {
             width: appMenu.width - appMenu.padding * 2
@@ -289,8 +291,15 @@ Window {
 
         Rectangle {
             width: appMenu.width - appMenu.padding * 2
-            height: 1
-            color: Theme.color.border
+            height: 9
+            color: "transparent"
+
+            Rectangle {
+                anchors.verticalCenter: parent.verticalCenter
+                width: parent.width
+                height: 1
+                color: "#1affffff"
+            }
         }
 
         MenuButton {

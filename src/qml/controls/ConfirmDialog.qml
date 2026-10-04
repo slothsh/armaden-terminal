@@ -17,6 +17,7 @@ Popup {
     modal: true
     width: 360
     padding: 16
+    focus: true
     implicitHeight: contentColumn.implicitHeight + padding * 2
     x: (parent.width - width) / 2
     y: (parent.height - height) / 2
@@ -34,8 +35,8 @@ Popup {
 
         Rectangle {
             anchors.fill: parent
-            color: Theme.color.menu
-            border.color: Theme.color.border
+            color: Theme.color.popup
+            border.color: Theme.color.borderStrong
             border.width: 1
             radius: Theme.metric.radius
         }
@@ -45,6 +46,22 @@ Popup {
         id: contentColumn
         width: control.width - control.padding * 2
         spacing: 16
+
+        Keys.onEscapePressed: {
+            control.rejected()
+            control.close()
+            event.accepted = true
+        }
+
+        Shortcut {
+            sequence: "Escape"
+            context: Qt.WindowShortcut
+            enabled: control.opened
+            onActivated: {
+                control.rejected()
+                control.close()
+            }
+        }
 
         Text {
             width: parent.width

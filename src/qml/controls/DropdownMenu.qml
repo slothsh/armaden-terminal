@@ -6,9 +6,35 @@ import Lib.Theme
 Popup {
     id: control
 
+    property bool justClosed: false
+
     width: 160
     padding: 4
+    focus: true
     implicitHeight: contentColumn.implicitHeight + padding * 2
+
+    function toggle() {
+        if (control.opened) {
+            control.close()
+            return
+        }
+        if (control.justClosed) {
+            control.justClosed = false
+            return
+        }
+        control.open()
+    }
+
+    onClosed: {
+        control.justClosed = true
+        guard.restart()
+    }
+
+    Timer {
+        id: guard
+        interval: 150
+        onTriggered: control.justClosed = false
+    }
 
     background: Item {
         RectangularShadow {
@@ -22,8 +48,8 @@ Popup {
 
         Rectangle {
             anchors.fill: parent
-            color: Theme.color.menu
-            border.color: Theme.color.border
+            color: Theme.color.popup
+            border.color: Theme.color.borderStrong
             border.width: 1
             radius: Theme.metric.radius
         }
@@ -32,5 +58,17 @@ Popup {
     contentItem: Column {
         id: contentColumn
         spacing: 0
+
+        Keys.onEscapePressed: {
+            control.close()
+            event.accepted = true
+        }
+
+        Shortcut {
+            sequence: "Escape"
+            context: Qt.WindowShortcut
+            enabled: control.opened
+            onActivated: control.close()
+        }
     }
 }

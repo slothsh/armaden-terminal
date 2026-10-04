@@ -9,17 +9,17 @@ Rectangle {
 
     signal clicked()
 
-    implicitHeight: 30
+    implicitHeight: 26
     implicitWidth: 160
-    radius: Theme.metric.radius
+    radius: 2
     color: control.hovered ? Theme.color.hover : "transparent"
 
     Text {
         anchors.verticalCenter: parent.verticalCenter
-        x: 12
+        x: 8
         text: control.label
         color: Theme.color.text
-        font.pixelSize: 13
+        font.pixelSize: 12
     }
 
     MouseArea {

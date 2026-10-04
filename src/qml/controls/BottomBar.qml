@@ -13,7 +13,7 @@ Rectangle {
     color: Theme.color.medium
 
     IconButton {
-        glyph: "\uD83D\uDCAC\uFE0E"
+        glyph: "\uD83D\uDDE8\uFE0E"
         glyphColor: control.historyOpen ? Theme.color.accent : Theme.color.textMuted
         anchors.left: parent.left
         anchors.leftMargin: Theme.metric.spacing

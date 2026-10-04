@@ -6,6 +6,7 @@ Rectangle {
 
     required property string glyph
     property color glyphColor: Theme.color.text
+    property bool active: false
     property alias hovered: mouseArea.containsMouse
 
     signal clicked()
@@ -13,7 +14,7 @@ Rectangle {
     implicitWidth: 18
     implicitHeight: 18
     radius: Theme.metric.radius
-    color: control.hovered ? Theme.color.hover : "transparent"
+    color: control.hovered ? Theme.color.hover : (control.active ? Theme.color.active : "transparent")
 
     Text {
         anchors.centerIn: parent

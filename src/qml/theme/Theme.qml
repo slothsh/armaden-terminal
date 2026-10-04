@@ -18,10 +18,11 @@ QtObject {
         property color mediumBright: "#2e2e2e"
         property color dark: "#181818"
         property color menu: "#1f1f1f"
+        property color popup: "#313131"
 
         // Border
         property color border: "#242424"
-        property color borderStrong: "#333333"
+        property color borderStrong: "#404040"
 
         // Splits & Resizers
         property color splitHandle: "#324252"
@@ -35,5 +36,6 @@ QtObject {
 
         // Interaction
         property color hover: "#33ffffff"
+        property color active: "#40ffffff"
     }
 }
