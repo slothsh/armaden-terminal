@@ -212,11 +212,27 @@ Window {
                 anchors.bottom: parent.bottom
                 placeholderText: qsTr("Message the agent...")
                 readOnly: chat.running
+                onTextChanged: draftSaveTimer.restart()
+                Component.onCompleted: text = chat.draft
                 onAccepted: {
                     conversationView.stickToBottom = true
                     chat.sendMessage(text)
                     text = ""
                 }
+            }
+        }
+
+        Timer {
+            id: draftSaveTimer
+            interval: 300
+            onTriggered: chat.saveDraft(promptInput.text)
+        }
+
+        Connections {
+            target: chat
+
+            function onDraftChanged() {
+                promptInput.text = chat.draft
             }
         }
     }
@@ -284,6 +300,7 @@ Window {
                     anchors.verticalCenter: parent.verticalCenter
                     onClicked: {
                         conversationView.stickToBottom = true
+                        chat.saveDraft(promptInput.text)
                         chat.createSession()
                         inputDrawer.size = 72
                     }
@@ -332,6 +349,7 @@ Window {
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             conversationView.stickToBottom = true
+                            chat.saveDraft(promptInput.text)
                             chat.selectSession(model.sessionId)
                         }
                     }

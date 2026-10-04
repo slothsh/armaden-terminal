@@ -19,6 +19,7 @@ enum class MessageKind {
 struct SessionInfo {
     SessionId id;
     std::string title;
+    std::string draft;
     std::int64_t createdAt = 0;
     std::int64_t updatedAt = 0;
 };
@@ -39,11 +40,12 @@ template <class Type>
 using Result = mts::agent::Result<Type>;
 
 template <class Repository>
-concept SessionRepository = requires(Repository& repository, SessionId const& id, std::string title) {
+concept SessionRepository = requires(Repository& repository, SessionId const& id, std::string title, std::string draft) {
     { repository.createSession(title) } -> std::same_as<Result<SessionInfo>>;
     { repository.listSessions() } -> std::same_as<Result<std::vector<SessionInfo>>>;
     { repository.getSession(id) } -> std::same_as<Result<SessionInfo>>;
     { repository.renameSession(id, title) } -> std::same_as<Status>;
+    { repository.saveDraft(id, draft) } -> std::same_as<Status>;
     { repository.deleteSession(id) } -> std::same_as<Status>;
 };
 
@@ -68,6 +70,7 @@ public:
     auto listSessions() -> Result<std::vector<SessionInfo>>;
     auto getSession(SessionId const& id) -> Result<SessionInfo>;
     auto renameSession(SessionId const& id, std::string title) -> Status;
+    auto saveDraft(SessionId const& id, std::string draft) -> Status;
     auto deleteSession(SessionId const& id) -> Status;
 
     auto appendMessage(Message message) -> Status;
@@ -94,6 +97,7 @@ public:
     auto listSessions() -> Result<std::vector<SessionInfo>>;
     auto getSession(SessionId const& id) -> Result<SessionInfo>;
     auto renameSession(SessionId const& id, std::string title) -> Status;
+    auto saveDraft(SessionId const& id, std::string draft) -> Status;
     auto deleteSession(SessionId const& id) -> Status;
 
     auto appendMessage(Message message) -> Status;
@@ -116,6 +120,7 @@ public:
     auto listSessions() -> Result<std::vector<SessionInfo>>;
     auto getSession(SessionId const& id) -> Result<SessionInfo>;
     auto renameSession(SessionId const& id, std::string title) -> Status;
+    auto saveDraft(SessionId const& id, std::string draft) -> Status;
     auto deleteSession(SessionId const& id) -> Status;
 
     auto appendMessage(Message message) -> Status;
@@ -174,6 +179,7 @@ inline auto toJson(SessionInfo const& session) -> mts::agent::json {
     return mts::agent::json{
         {"id", session.id},
         {"title", session.title},
+        {"draft", session.draft},
         {"createdAt", session.createdAt},
         {"updatedAt", session.updatedAt},
     };
@@ -185,6 +191,7 @@ inline auto sessionFromJson(mts::agent::json const& value) -> Result<SessionInfo
     SessionInfo session;
     session.id = value.value("id", std::string{});
     session.title = value.value("title", std::string{});
+    session.draft = value.value("draft", std::string{});
     session.createdAt = value.value("createdAt", std::int64_t{0});
     session.updatedAt = value.value("updatedAt", std::int64_t{0});
     if (session.id.empty())
@@ -285,6 +292,15 @@ auto InMemorySessionStore::renameSession(SessionId const& id, std::string title)
         return Status::notFound("session not found");
     it->second.title = std::move(title);
     it->second.updatedAt = detail::nowMillis();
+    return Status::ok();
+}
+
+auto InMemorySessionStore::saveDraft(SessionId const& id, std::string draft) -> Status {
+    std::lock_guard const lock(m_impl->mutex);
+    auto const it = m_impl->sessions.find(id);
+    if (it == m_impl->sessions.end())
+        return Status::notFound("session not found");
+    it->second.draft = std::move(draft);
     return Status::ok();
 }
 
@@ -422,6 +438,19 @@ auto LanggraphSessionStore::renameSession(SessionId const& id, std::string title
     return stored.isOk() ? Status::ok() : stored.status();
 }
 
+auto LanggraphSessionStore::saveDraft(SessionId const& id, std::string draft) -> Status {
+    auto const session = getSession(id);
+    if (!session)
+        return session.status();
+
+    SessionInfo updated = session.value();
+    updated.draft = std::move(draft);
+
+    auto const value = detail::toJson(updated).dump();
+    auto const stored = m_impl->storage->put(mts::agent::StorageKey{std::string(detail::sessionScope), id}, value);
+    return stored.isOk() ? Status::ok() : stored.status();
+}
+
 auto LanggraphSessionStore::deleteSession(SessionId const& id) -> Status {
     if (auto const status = clearMessages(id); !status)
         return status;
@@ -534,6 +563,12 @@ auto SessionStoreHandle::getSession(SessionId const& id) -> Result<SessionInfo> 
 auto SessionStoreHandle::renameSession(SessionId const& id, std::string title) -> Status {
     return std::visit([&id, &title](auto& store) {
         return store.renameSession(id, std::move(title));
+    }, m_store);
+}
+
+auto SessionStoreHandle::saveDraft(SessionId const& id, std::string draft) -> Status {
+    return std::visit([&id, &draft](auto& store) {
+        return store.saveDraft(id, std::move(draft));
     }, m_store);
 }
 

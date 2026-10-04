@@ -17,6 +17,7 @@ class ChatController : public QObject {
     Q_PROPERTY(bool running READ running NOTIFY runningChanged)
     Q_PROPERTY(QString status READ status NOTIFY statusChanged)
     Q_PROPERTY(QString activeSession READ activeSession NOTIFY activeSessionChanged)
+    Q_PROPERTY(QString draft READ draft NOTIFY draftChanged)
 
 public:
     explicit ChatController(QObject* parent = nullptr);
@@ -27,18 +28,21 @@ public:
     bool running() const;
     QString status() const;
     QString activeSession() const;
+    QString draft() const;
 
     Q_INVOKABLE void createSession();
     Q_INVOKABLE void selectSession(QString const& id);
     Q_INVOKABLE void deleteSession(QString const& id);
     Q_INVOKABLE void clearHistory();
     Q_INVOKABLE void sendMessage(QString const& text);
+    Q_INVOKABLE void saveDraft(QString const& text);
     Q_INVOKABLE void cancel();
 
 signals:
     void runningChanged();
     void statusChanged();
     void activeSessionChanged();
+    void draftChanged();
 
 private:
     void refreshSessions();

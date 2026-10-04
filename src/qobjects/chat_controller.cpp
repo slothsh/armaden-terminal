@@ -56,6 +56,7 @@ struct ChatController::Impl {
     std::unique_ptr<mts::harness::AgentHarness> harness;
     std::shared_ptr<mts::runtime::Cancellation> cancellation;
     QString activeSession;
+    QString draft;
     QString status;
     int streamingRow = -1;
     bool running = false;
@@ -180,6 +181,10 @@ QString ChatController::activeSession() const {
     return m_impl->activeSession;
 }
 
+QString ChatController::draft() const {
+    return m_impl->draft;
+}
+
 void ChatController::refreshSessions() {
     if (m_impl->store == nullptr)
         return;
@@ -251,8 +256,12 @@ void ChatController::deleteSession(QString const& id) {
         m_conversation->clear();
         emit activeSessionChanged();
 
-        if (m_sessions->rowCount() > 0)
+        if (m_sessions->rowCount() > 0) {
             selectSession(m_sessions->data(m_sessions->index(0), SessionListModel::SessionIdRole).toString());
+        } else {
+            m_impl->draft.clear();
+            emit draftChanged();
+        }
     }
 }
 
@@ -269,7 +278,9 @@ void ChatController::clearHistory() {
     m_impl->activeSession.clear();
     m_impl->streamingRow = -1;
     m_conversation->clear();
+    m_impl->draft.clear();
     emit activeSessionChanged();
+    emit draftChanged();
     refreshSessions();
 }
 
@@ -279,15 +290,26 @@ void ChatController::selectSession(QString const& id) {
     m_conversation->clear();
     emit activeSessionChanged();
 
-    if (m_impl->store == nullptr)
-        return;
+    QString draft;
+    if (m_impl->store != nullptr) {
+        auto const messages = m_impl->store->loadMessages(id.toStdString());
+        if (messages) {
+            for (auto const& message : messages.value())
+                m_conversation->append(blockFor(message));
+        }
 
-    auto const messages = m_impl->store->loadMessages(id.toStdString());
-    if (!messages)
-        return;
+        if (auto const session = m_impl->store->getSession(id.toStdString()); session)
+            draft = QString::fromStdString(session.value().draft);
+    }
 
-    for (auto const& message : messages.value())
-        m_conversation->append(blockFor(message));
+    m_impl->draft = draft;
+    emit draftChanged();
+}
+
+void ChatController::saveDraft(QString const& text) {
+    m_impl->draft = text;
+    if (m_impl->store != nullptr && !m_impl->activeSession.isEmpty())
+        (void)m_impl->store->saveDraft(m_impl->activeSession.toStdString(), text.toStdString());
 }
 
 void ChatController::sendMessage(QString const& text) {
@@ -308,6 +330,8 @@ void ChatController::sendMessage(QString const& text) {
     }
 
     m_impl->cancellation = std::make_shared<mts::runtime::Cancellation>();
+    saveDraft(QString());
+    emit draftChanged();
     setRunning(true);
     m_impl->harness->run(m_impl->activeSession.toStdString(), m_impl->cancellation);
 }
