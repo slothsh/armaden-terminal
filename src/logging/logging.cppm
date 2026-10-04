@@ -1,14 +1,10 @@
-#include <chrono>
-#include <format>
-#include <memory>
-#include <string>
-#include <string_view>
 #include <spdlog/common.h>
 #include <spdlog/spdlog.h>
 #include <spdlog/formatter.h>
 
 export module logging;
 
+import std;
 import magic_enum;
 
 class LogFormatter final : public spdlog::formatter {

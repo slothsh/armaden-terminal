@@ -8,11 +8,11 @@
 #include <QRectF>
 #include <QWheelEvent>
 
-#include <cmath>
+import std;
+import ecs;
 
 namespace {
 
-constexpr float baseGridSpacing = 20.0f;
 constexpr float minimumZDepth = -2.0f;
 constexpr float maximumZDepth = 2.0f;
 constexpr float wheelDepthStep = 0.1f;
@@ -21,90 +21,61 @@ float scaleForDepth(float zDepth) {
     return std::exp(zDepth);
 }
 
-struct Viewport {
-    QPointF origin;
-    float scale;
-
-    QPointF mapWorldToScreen(const QPointF &point) const {
-        return origin + QPointF(point.x() * scale, -point.y() * scale);
-    }
-};
-
 class PainterCanvasRenderer final : public QCanvasPainterItemRenderer {
 public:
     void initializeResources(QCanvasPainter *painter) override {
-        if (!m_everonImage.isNull())
-            return;
+        if (m_everonImage.isNull())
+            m_everonImage = painter->addImage(QImage(":/assets/everon.png"));
 
-        m_everonImage = painter->addImage(QImage(":/assets/everon.png"));
+        if (!m_world.valid(m_camera)) {
+            m_camera = m_world.create();
+            m_world.emplace<mts::ecs::Camera>(m_camera, mts::ecs::Camera{});
+            m_world.emplace<mts::ecs::MainCamera>(m_camera);
+        }
+
+        if (!m_world.valid(m_grid)) {
+            m_grid = m_world.create();
+            m_world.emplace<mts::ecs::GridStyle>(m_grid, mts::ecs::GridStyle{});
+        }
     }
 
     void synchronizeData(QCanvasPainterItem *item) override {
         const auto *canvas = static_cast<const PainterCanvas *>(item);
-        m_translationX = canvas->translationX();
-        m_translationY = canvas->translationY();
-        m_zDepth = canvas->zDepth();
+        if (!m_world.valid(m_camera))
+            return;
+
+        const float scale = scaleForDepth(canvas->zDepth());
+        auto &camera = m_world.get<mts::ecs::Camera>(m_camera);
+        camera.center = QPointF(-canvas->translationX() / scale, canvas->translationY() / scale);
+        camera.scale = scale;
+        camera.rotation = 0.0f;
     }
 
     void paint(QCanvasPainter *painter) override {
         const QRectF canvasRect(0, 0, width(), height());
         const float devicePixelRatio = qMax(1.0f, painter->devicePixelRatio());
-        const float lineWidth = 1.0f / devicePixelRatio;
-        const float scale = scaleForDepth(m_zDepth);
-        const Viewport viewport {
-            QPointF(width() * 0.5f + m_translationX, height() * 0.5f + m_translationY),
-            scale,
+        const mts::ecs::RenderContext context {
+            painter,
+            canvasRect,
+            devicePixelRatio,
+            1.0f / devicePixelRatio,
         };
 
         painter->setFillStyle(QColor(24, 24, 24));
         painter->fillRect(canvasRect);
 
-        const float leftWorld = -viewport.origin.x() / scale;
-        const float rightWorld = (width() - viewport.origin.x()) / scale;
-        const float bottomWorld = (viewport.origin.y() - height()) / scale;
-        const float topWorld = viewport.origin.y() / scale;
-        const float firstVerticalGridLine = std::ceil(leftWorld / baseGridSpacing);
-        const float lastVerticalGridLine = std::floor(rightWorld / baseGridSpacing);
-        const float firstHorizontalGridLine = std::ceil(bottomWorld / baseGridSpacing);
-        const float lastHorizontalGridLine = std::floor(topWorld / baseGridSpacing);
+        if (!m_world.valid(m_camera))
+            return;
 
-        painter->setFillStyle(QColor(28, 28, 28));
-        for (float x = firstVerticalGridLine; x <= lastVerticalGridLine; x += 1.0f) {
-            const float screenX = viewport.mapWorldToScreen(QPointF(x * baseGridSpacing, 0.0f)).x();
-            painter->fillRect(screenX, canvasRect.top(), lineWidth, canvasRect.height());
-        }
-        for (float y = firstHorizontalGridLine; y <= lastHorizontalGridLine; y += 1.0f) {
-            const float screenY = viewport.mapWorldToScreen(QPointF(0.0f, y * baseGridSpacing)).y();
-            painter->fillRect(canvasRect.left(), screenY, canvasRect.width(), lineWidth);
-        }
-
-        const QPointF axisOrigin = viewport.mapWorldToScreen(QPointF());
-        painter->setFillStyle(QColor(82, 82, 82));
-        if (axisOrigin.x() >= canvasRect.left() && axisOrigin.x() <= canvasRect.right())
-            painter->fillRect(axisOrigin.x(), canvasRect.top(), lineWidth, canvasRect.height());
-        if (axisOrigin.y() >= canvasRect.top() && axisOrigin.y() <= canvasRect.bottom())
-            painter->fillRect(canvasRect.left(), axisOrigin.y(), canvasRect.width(), lineWidth);
-
-        // if (!m_everonImage.isNull() && m_everonImage.width() > 0 && m_everonImage.height() > 0) {
-        //     const QPointF topLeft = viewport.mapWorldToScreen(QPointF(
-        //         -float(m_everonImage.width()) * 0.5f,
-        //         float(m_everonImage.height()) * 0.5f
-        //     ));
-        //     painter->drawImage(
-        //         m_everonImage,
-        //         QRectF(
-        //             topLeft,
-        //             QSizeF(float(m_everonImage.width()) * scale, float(m_everonImage.height()) * scale)
-        //         )
-        //     );
-        // }
+        const mts::ecs::Camera &camera = m_world.get<mts::ecs::Camera>(m_camera);
+        mts::ecs::drawGridSystem(context, m_world, camera);
     }
 
 private:
+    mts::ecs::registry m_world;
+    mts::ecs::entity m_camera = mts::ecs::null;
+    mts::ecs::entity m_grid = mts::ecs::null;
     QCanvasImage m_everonImage;
-    float m_translationX = 0.0f;
-    float m_translationY = 0.0f;
-    float m_zDepth = 0.0f;
 };
 
 }
