@@ -118,6 +118,20 @@ inline void emitMessage(mts::events::EventBus& bus, SessionId const& session, Ba
     }
 }
 
+inline auto failureMessage(mts::agent::RunResult const& result) -> std::string {
+    for (auto const& event : result.events_) {
+        if (event.type_ != mts::agent::RuntimeEventType::RunFailed
+            && event.type_ != mts::agent::RuntimeEventType::NodeFailed
+            && event.type_ != mts::agent::RuntimeEventType::ToolCallFailed) {
+            continue;
+        }
+        if (!event.message_.empty())
+            return event.message_;
+        return std::string(mts::agent::runtimeEventTypeName(event.type_));
+    }
+    return "run did not complete";
+}
+
 }
 
 export namespace mts::harness {
@@ -248,8 +262,14 @@ auto AgentHarness::runBlocking(SessionId const& session, mts::runtime::Cancellat
     options.reducers_.set("messages", mts::agent::ReducerKind::AddMessages);
     options.cancellationToken_ = cancellation.agentToken();
     options.checkpointer_ = m_impl->checkpointer;
+    options.collectEvents_ = true;
+    options.eventTypes_ = {
+        mts::agent::RuntimeEventType::RunFailed,
+        mts::agent::RuntimeEventType::NodeFailed,
+        mts::agent::RuntimeEventType::ToolCallFailed,
+    };
 
-    auto const result = compiled.value().invoke(input.value(), options);
+    auto const result = compiled.value().stream(input.value(), options);
     if (!result) {
         bus.publish(mts::events::RunFailed{session, result.status().message()});
         return result.status();
@@ -261,8 +281,9 @@ auto AgentHarness::runBlocking(SessionId const& session, mts::runtime::Cancellat
         return Status::cancelled("run cancelled");
     }
     if (runStatus != mts::agent::RunStatus::Completed) {
-        bus.publish(mts::events::RunFailed{session, "run did not complete"});
-        return Status::internal("run did not complete");
+        std::string const message = detail::failureMessage(result.value());
+        bus.publish(mts::events::RunFailed{session, message});
+        return Status::internal(message);
     }
 
     auto const messages = mts::agent::messagesFromStateJson(result.value().state_.view());

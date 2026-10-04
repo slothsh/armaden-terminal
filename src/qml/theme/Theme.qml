@@ -15,6 +15,7 @@ QtObject {
     property QtObject color: QtObject {
         // Base
         property color medium: "#262626"
+        property color mediumBright: "#2e2e2e"
         property color dark: "#181818"
         property color menu: "#1f1f1f"
 

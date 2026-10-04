@@ -128,6 +128,7 @@ auto OpenRouterProvider::create(mts::config::ProviderConfig const& config) -> Re
 
     auto options = mts::agent::ProviderChatModelOptions::openAICompatible(client.value(), config.model, config.apiKey);
     options.path_ = config.path;
+    options.extraRequestFields_ = mts::agent::json::object();
     if (!config.referer.empty())
         options.headers_["HTTP-Referer"] = config.referer;
     if (!config.title.empty())

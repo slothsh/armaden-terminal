@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls
 import Lib.Controls
 import Lib.Theme
 
@@ -27,61 +26,47 @@ Rectangle {
     }
 
     Binding { target: drawer.anchors; property: "left";   value: parent.left;   when: drawer.side === DrawerSide.Left }
-
     Binding { target: drawer.anchors; property: "right";  value: parent.right;  when: drawer.side === DrawerSide.Right }
-
-    function isHandleHovered(mouse: MouseEvent): int {
-        switch (drawer.side) {
-            case DrawerSide.Right: {
-                return (drawer.width === 0 ? -8 : -2) <= mouse.x && mouse.x <= 4;
-            }
-
-            case DrawerSide.Left:
-            default: {
-                return Math.max(0, drawer.width - 2) <= mouse.x && mouse.x <= drawer.width + (drawer.width === 0 ? 8 : 2);
-            }
-        }
-    }
 
     function handleAreaX(): int {
         switch (drawer.side) {
             case DrawerSide.Right: {
-                return drawer.width === 0 ? -8 : -2;
+                return drawer.width === 0 ? -8 : -3;
             }
 
             case DrawerSide.Left:
             default: {
-                return 0;
+                return drawer.width === 0 ? 0 : drawer.width - 3;
             }
         }
     }
 
     function handleAreaWidth(): int {
-        return drawer.width + (drawer.width === 0 ? 8 : 2);
+        return drawer.width === 0 ? 8 : 6;
     }
 
-    function shouldCollapse(mouse: MouseEvent): int {
+    function shouldCollapse(x: int): bool {
         switch (drawer.side) {
             case DrawerSide.Right: {
-                return mouse.x > drawer.size - drawer.sizeMin / 2;
+                return x > drawer.size - drawer.sizeMin / 2;
             }
 
             case DrawerSide.Left:
             default: {
-                return mouse.x < drawer.sizeMin / 2;
+                return x < drawer.sizeMin / 2;
             }
         }
     }
 
-    function drawerSize(mouse: MouseEvent): int {
+    function drawerSize(x: int): int {
         switch (drawer.side) {
             case DrawerSide.Right: {
-                return Math.max(drawer.sizeMin, Math.min(drawer.size - mouse.x + 4, drawer.sizeMax));
+                return Math.max(drawer.sizeMin, Math.min(drawer.size - x + 4, drawer.sizeMax));
             }
 
             case DrawerSide.Left:
             default: {
-                return Math.max(drawer.sizeMin, Math.min(mouse.x, drawer.sizeMax));
+                return Math.max(drawer.sizeMin, Math.min(x, drawer.sizeMax));
             }
         }
     }
@@ -91,19 +76,23 @@ Rectangle {
         anchors.top: drawer.top
         anchors.bottom: drawer.bottom
 
-        Binding { target: parent.anchors; property: "left";  value: parent.left;  when: drawer.side === DrawerSide.Left }
-        Binding { target: parent.anchors; property: "right"; value: parent.right; when: drawer.side === DrawerSide.Right }
-
         x: drawer.handleAreaX()
         width: drawer.handleAreaWidth()
+        z: 16
 
         hoverEnabled: true
-        cursorShape: drawer.handleHovered || drawer.handleEnabled ? Qt.SplitHCursor : Qt.ArrowCursor
+        cursorShape: Qt.SplitHCursor
+
+        onEntered: {
+            drawer.handleHovered = true;
+        }
+
+        onExited: {
+            drawer.handleHovered = false;
+        }
 
         onPressed: {
-            if (drawer.handleHovered) {
-                drawer.handleEnabled = true;
-            }
+            drawer.handleEnabled = true;
         }
 
         onReleased: {
@@ -111,18 +100,16 @@ Rectangle {
         }
 
         onPositionChanged: mouse => {
-            drawer.handleHovered = drawer.isHandleHovered(mouse);
-            if (drawer.handleEnabled) {
-                if (drawer.shouldCollapse(mouse)) {
-                    drawer.size = 0;
-                } else {
-                    drawer.size = drawer.drawerSize(mouse);
-                }
+            if (!drawer.handleEnabled) {
+                return;
             }
-        }
 
-        onExited: {
-            drawer.handleHovered = false;
+            const x = mouse.x + drawer.handleAreaX();
+            if (drawer.shouldCollapse(x)) {
+                drawer.size = 0;
+            } else {
+                drawer.size = drawer.drawerSize(x);
+            }
         }
     }
 

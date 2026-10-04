@@ -57,6 +57,9 @@ export namespace mts::agent {
     using ::lgc::RunOptions;
     using ::lgc::RunResult;
     using ::lgc::RunStatus;
+    using ::lgc::RuntimeEvent;
+    using ::lgc::RuntimeEventType;
+    using ::lgc::runtimeEventTypeName;
     using ::lgc::Runtime;
     using ::lgc::ReducerKind;
     using ::lgc::START;
