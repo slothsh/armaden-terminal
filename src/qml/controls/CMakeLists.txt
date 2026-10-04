@@ -9,8 +9,13 @@ qt_add_qml_module(
     controls
     URI Lib.Controls
     QML_FILES
+        AboutDialog.qml
         DrawerSide.qml
+        DropdownMenu.qml
         HorizontalDrawer.qml
+        IconButton.qml
+        MenuButton.qml
+        TopBar.qml
         VerticalDrawer.qml
     NO_LINT
 )

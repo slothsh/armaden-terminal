@@ -128,7 +128,7 @@ Rectangle {
         anchors.bottom: drawer.bottom
         anchors.horizontalCenter: drawer.side === DrawerSide.Left ? drawer.right : drawer.left;
         clip: false
-        color: drawer.handleHovered || drawer.handleEnabled ? Theme.color.splitHandle : Theme.color.border
+        color: drawer.handleHovered || drawer.handleEnabled ? Theme.color.splitHandle : Theme.color.borderStrong
         z: 15
 
         width: drawer.width === 0

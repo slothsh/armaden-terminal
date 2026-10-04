@@ -37,15 +37,6 @@ public:
             m_grid = m_world.create();
             m_world.emplace<mts::ecs::GridStyle>(m_grid, mts::ecs::GridStyle{});
         }
-
-        if (!m_world.valid(m_sprite) && !m_everonImage.isNull()) {
-            m_sprite = m_world.create();
-            m_world.emplace<mts::ecs::Sprite>(m_sprite, mts::ecs::Sprite{
-                m_everonImage,
-                float(m_everonImage.width()),
-                float(m_everonImage.height()),
-            });
-        }
     }
 
     void synchronizeData(QCanvasPainterItem* item) override {
@@ -78,14 +69,12 @@ public:
 
         mts::ecs::Camera const& camera = m_world.get<mts::ecs::Camera>(m_camera);
         mts::ecs::drawGridSystem(context, m_world, camera);
-        mts::ecs::drawSpriteSystem(context, m_world, camera);
     }
 
 private:
     mts::ecs::registry m_world;
     mts::ecs::entity m_camera = mts::ecs::null;
     mts::ecs::entity m_grid = mts::ecs::null;
-    mts::ecs::entity m_sprite = mts::ecs::null;
     QCanvasImage m_everonImage;
 };
 

@@ -133,7 +133,7 @@ Rectangle {
         anchors.right: drawer.right
         anchors.verticalCenter: drawer.side === DrawerSide.Top ? drawer.bottom : drawer.top;
         clip: false
-        color: drawer.handleHovered || drawer.handleEnabled ? Theme.color.splitHandle : Theme.color.border
+        color: drawer.handleHovered || drawer.handleEnabled ? Theme.color.splitHandle : Theme.color.borderStrong
 
         y: drawer.handleAreaY()
         height: drawer.height === 0
