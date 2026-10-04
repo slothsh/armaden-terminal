@@ -125,4 +125,21 @@ export namespace mts::ecs {
                 context.painter->fillRect(context.canvasRect.left(), axisOrigin.y(), context.canvasRect.width(), context.lineWidth);
         }
     }
+
+    void drawSpriteSystem(const RenderContext &context, registry &world, const Camera &camera) {
+        const auto spriteView = world.view<const Sprite>();
+        const QSizeF canvasSize = context.canvasRect.size();
+
+        for (const auto entity : spriteView) {
+            const auto &sprite = spriteView.get<const Sprite>(entity);
+            if (sprite.image.isNull() || sprite.width <= 0.0f || sprite.height <= 0.0f)
+                continue;
+
+            const QPointF topLeft = mapWorldToScreen(camera, canvasSize, QPointF(-sprite.width * 0.5f, sprite.height * 0.5f));
+            context.painter->drawImage(
+                sprite.image,
+                QRectF(topLeft, QSizeF(sprite.width * camera.scale, sprite.height * camera.scale))
+            );
+        }
+    }
 }
