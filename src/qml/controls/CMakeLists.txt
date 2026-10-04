@@ -18,6 +18,7 @@ qt_add_qml_module(
         IconButton.qml
         MenuButton.qml
         TextButton.qml
+        TextInput.qml
         TopBar.qml
         VerticalDrawer.qml
     NO_LINT

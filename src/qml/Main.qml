@@ -34,8 +34,33 @@ Window {
         anchors.bottom: parent.bottom
         width: parent.width
         z: 9
-        historyOpen: leftDrawer.width > 0
-        onHistoryToggled: leftDrawer.size = leftDrawer.width > 0 ? 0 : 220
+
+        IconButton {
+            id: historyButton
+            glyph: "\uD83D\uDDE8\uFE0E"
+            glyphColor: leftDrawer.width > 0 ? Theme.color.accent : Theme.color.textMuted
+            x: Theme.metric.spacing
+            anchors.verticalCenter: parent.verticalCenter
+            onClicked: leftDrawer.size = leftDrawer.width > 0 ? 0 : 220
+        }
+
+        IconButton {
+            id: inputDrawerButton
+            glyph: "\u2328"
+            glyphColor: inputDrawer.size > 0 ? Theme.color.accent : Theme.color.textMuted
+            x: Math.max(content.x + Theme.metric.spacing, historyButton.x + historyButton.width + Theme.metric.spacing)
+            anchors.verticalCenter: parent.verticalCenter
+            onClicked: inputDrawer.size = inputDrawer.size > 0 ? 0 : 120
+        }
+
+        Rectangle {
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            x: content.x - 1
+            width: 1
+            color: Theme.color.borderStrong
+            visible: content.x > 0
+        }
     }
 
     Rectangle {
@@ -51,17 +76,24 @@ Window {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
-            anchors.bottom: composer.top
-            anchors.margins: Theme.metric.spacing
+            anchors.bottom: inputDrawer.top
+            anchors.topMargin: Theme.metric.spacing
+            anchors.leftMargin: Theme.metric.spacing
+            anchors.rightMargin: Theme.metric.spacing
             clip: true
-            spacing: Theme.metric.spacing
+            spacing: 0
             model: chat.conversation
             onCountChanged: positionViewAtEnd()
+
+            footer: Item {
+                width: conversationView.width
+                height: Theme.metric.spacing
+            }
 
             delegate: Rectangle {
                 width: ListView.view.width
                 height: blockText.implicitHeight + 16
-                radius: Theme.metric.radius
+                radius: 0
                 color: {
                     switch (model.kind) {
                         case ConversationModel.UserText: return Theme.color.medium;
@@ -71,6 +103,15 @@ Window {
                         case ConversationModel.Error: return "#3a1f1f";
                         default: return Theme.color.menu;
                     }
+                }
+
+                Rectangle {
+                    anchors.top: parent.top
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    height: 1
+                    visible: index > 0
+                    color: Theme.color.borderStrong
                 }
 
                 Text {
@@ -83,6 +124,7 @@ Window {
                         ? model.text + " " + model.payload
                         : (model.kind === ConversationModel.ToolCall ? model.text + " " + model.payload : model.text)
                     color: model.kind === ConversationModel.Reasoning ? Theme.color.textMuted : Theme.color.text
+                    font.pixelSize: 12
                     font.italic: model.kind === ConversationModel.Reasoning
                     font.family: (model.kind === ConversationModel.ToolCall || model.kind === ConversationModel.ToolResult)
                         ? "monospace" : ""
@@ -91,49 +133,77 @@ Window {
             }
         }
 
-        Rectangle {
-            id: composer
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-            height: 56
+        RectangularShadow {
+            anchors.fill: inputDrawer
+            visible: inputDrawer.height > 0
+            radius: inputDrawer.radius
+            color: "#20000000"
+            blur: 10
+            spread: 2
+            offset: Qt.point(0, -2)
+            z: 6
+        }
+
+        VerticalDrawer {
+            id: inputDrawer
+            side: DrawerSide.Bottom
+            size: 120
+            sizeMin: 80
+            sizeMax: Math.max(80, Math.round(content.height / 2))
+            z: 7
             color: Theme.color.medium
 
-            TextField {
-                id: input
+            Rectangle {
+                id: inputGutter
+                anchors.top: parent.top
                 anchors.left: parent.left
-                anchors.leftMargin: Theme.metric.spacing
-                anchors.verticalCenter: parent.verticalCenter
-                width: parent.width - sendButton.width - stopButton.width - Theme.metric.spacing * 4
-                placeholderText: qsTr("Message the agent...")
-                color: Theme.color.text
-                enabled: !chat.running
-                onAccepted: {
-                    chat.sendMessage(text)
-                    text = ""
+                anchors.right: parent.right
+                height: 30
+                color: Theme.color.mediumBright
+
+                IconButton {
+                    id: sendButton
+                    glyph: "\u27A4"
+                    anchors.left: parent.left
+                    anchors.leftMargin: Theme.metric.spacing
+                    anchors.verticalCenter: parent.verticalCenter
+                    enabled: !chat.running && promptInput.text.trim().length > 0
+                    onClicked: {
+                        chat.sendMessage(promptInput.text)
+                        promptInput.text = ""
+                    }
+                }
+
+                IconButton {
+                    id: stopButton
+                    glyph: "\u25A0"
+                    anchors.left: sendButton.right
+                    anchors.leftMargin: Theme.metric.spacing
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: chat.running
+                    onClicked: chat.cancel()
+                }
+
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    height: 1
+                    color: Theme.color.borderStrong
                 }
             }
 
-            IconButton {
-                id: stopButton
-                glyph: "\u25A0"
-                anchors.right: sendButton.left
-                anchors.rightMargin: Theme.metric.spacing
-                anchors.verticalCenter: parent.verticalCenter
-                visible: chat.running
-                onClicked: chat.cancel()
-            }
-
-            IconButton {
-                id: sendButton
-                glyph: "\u27A4"
+            TextInput {
+                id: promptInput
+                anchors.top: inputGutter.bottom
+                anchors.left: parent.left
                 anchors.right: parent.right
-                anchors.rightMargin: Theme.metric.spacing
-                anchors.verticalCenter: parent.verticalCenter
-                enabled: !chat.running && input.text.trim().length > 0
-                onClicked: {
-                    chat.sendMessage(input.text)
-                    input.text = ""
+                anchors.bottom: parent.bottom
+                placeholderText: qsTr("Message the agent...")
+                readOnly: chat.running
+                onAccepted: {
+                    chat.sendMessage(text)
+                    text = ""
                 }
             }
         }
@@ -200,7 +270,10 @@ Window {
                     glyph: "+"
                     anchors.right: clearHistoryButton.left
                     anchors.verticalCenter: parent.verticalCenter
-                    onClicked: chat.createSession()
+                    onClicked: {
+                        chat.createSession()
+                        inputDrawer.size = 72
+                    }
                 }
 
                 Rectangle {
