@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Window
 import Lib.Controls
 import Lib.Theme
 
@@ -18,6 +19,16 @@ Rectangle {
 
     implicitHeight: Theme.metric.topBarHeight
     color: Theme.color.medium
+
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.LeftButton
+        onPressed: {
+            if (Window.window) {
+                Window.window.startSystemMove()
+            }
+        }
+    }
 
     IconButton {
         id: menuButton
