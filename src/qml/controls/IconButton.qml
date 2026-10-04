@@ -5,6 +5,7 @@ Rectangle {
     id: control
 
     required property string glyph
+    property color glyphColor: Theme.color.text
     property alias hovered: mouseArea.containsMouse
 
     signal clicked()
@@ -17,7 +18,7 @@ Rectangle {
     Text {
         anchors.centerIn: parent
         text: control.glyph
-        color: Theme.color.text
+        color: control.glyphColor
         font.pixelSize: 12
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter

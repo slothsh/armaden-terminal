@@ -26,6 +26,9 @@ QtObject {
         // Splits & Resizers
         property color splitHandle: "#324252"
 
+        // Accent
+        property color accent: "#4a90d9"
+
         // Text & Icons
         property color text: "#e6e6e6"
         property color textMuted: "#8a8a8a"

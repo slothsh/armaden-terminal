@@ -28,12 +28,21 @@ Window {
         onCloseRequested: Qt.quit()
     }
 
+    BottomBar {
+        id: bottomBar
+        anchors.bottom: parent.bottom
+        width: parent.width
+        z: 9
+        historyOpen: leftDrawer.width > 0
+        onHistoryToggled: leftDrawer.size = leftDrawer.width > 0 ? 0 : 220
+    }
+
     Rectangle {
         id: content
         x: leftDrawer.width
         y: topBar.height
         width: parent.width - leftDrawer.width
-        height: parent.height - topBar.height
+        height: parent.height - topBar.height - bottomBar.height
         color: Theme.color.dark
 
         ListView {
@@ -152,10 +161,10 @@ Window {
             sizeMin: 140
             sizeMax: root.width > 500 ? root.width / 2 : 250
             y: topBar.height
-            height: root.height - topBar.height
+            height: root.height - topBar.height - bottomBar.height
             z: 8
 
-            color: Theme.color.medium
+            color: Theme.color.menu
 
             Rectangle {
                 id: historyGutter
@@ -211,7 +220,7 @@ Window {
                     label: qsTr("Clear history")
                     onClicked: {
                         historyMenu.close()
-                        chat.clearHistory()
+                        clearDialog.open()
                     }
                 }
             }
@@ -295,6 +304,12 @@ Window {
         id: deleteDialog
         message: qsTr("Are you sure you want to delete this session's history?")
         onAccepted: chat.deleteSession(root.pendingDelete)
+    }
+
+    ConfirmDialog {
+        id: clearDialog
+        message: qsTr("Are you sure you want to clear all conversation history?")
+        onAccepted: chat.clearHistory()
     }
 
     AboutDialog {
