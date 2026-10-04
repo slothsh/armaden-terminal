@@ -58,6 +58,7 @@ struct ToolCallStarted {
 struct ToolCallFinished {
     SessionId session;
     std::string callId;
+    std::string name;
     std::string result;
     bool ok;
 };
