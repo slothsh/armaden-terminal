@@ -38,6 +38,16 @@ Window {
         anchors.fill: parent
         color: "transparent"
 
+        RectangularShadow {
+            anchors.fill: leftDrawer
+            visible: leftDrawer.width > 0
+            radius: leftDrawer.radius
+            color: "#20000000"
+            blur: 10
+            spread: 2
+            offset: Qt.point(2, 0)
+        }
+
         HorizontalDrawer {
             id: leftDrawer
             size: 0
@@ -47,16 +57,6 @@ Window {
             z: 8
 
             color: Theme.color.medium
-
-            RectangularShadow {
-                anchors.fill: parent
-                visible: leftDrawer.width > 0
-                radius: parent.radius
-                color: "#20000000"
-                blur: 10
-                spread: 2
-                offset: Qt.point(2, 0)
-            }
         }
     }
 
@@ -93,4 +93,5 @@ Window {
         version: qsTr("Version 0.0.0")
         description: qsTr("A mindtosis application.")
     }
+
 }
