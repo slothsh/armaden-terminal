@@ -1,4 +1,7 @@
 #include <langgraph_cpp/langgraph.hpp>
+#include <nlohmann/json.hpp>
+#include "foundation/storage/i_storage.hpp"
+#include "foundation/storage/sqlite_storage.hpp"
 #include "langgraph/checkpoint/saver.hpp"
 #include "langgraph/checkpoint/in_memory_saver.hpp"
 #include "langgraph/checkpoint/storage_saver.hpp"
@@ -16,6 +19,8 @@
 export module agent;
 
 export namespace mts::agent {
+    using ::nlohmann::json;
+
     using ::lgc::Status;
     using ::lgc::Result;
     using ::lgc::BaseMessage;
@@ -57,4 +62,14 @@ export namespace mts::agent {
     using ::lgc::Config;
     using ::lgc::ConfigValue;
     using ::lgc::IEventSink;
+    using ::lgc::IStorage;
+    using ::lgc::StorageKey;
+    using ::lgc::StorageItem;
+    using ::lgc::StoragePutOptions;
+    using ::lgc::StoragePutMode;
+    using ::lgc::StorageListOptions;
+    using ::lgc::StorageListResult;
+    using ::lgc::StorageLimits;
+    using ::lgc::SQLiteStorage;
+    using ::lgc::SQLiteStorageOptions;
 }
