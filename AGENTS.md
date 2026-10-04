@@ -37,6 +37,7 @@ Do NOT add documentation comments to ANY code. This will only be required on req
 - Always use east-const convention for everything.
 - Prefer import modules where possible. Only include headers for unsupported libraries.
 - Always prefix member function calls with `this->` and static member function calls with the class's name (`Foo::static_member()`).
+- Attach the pointer or reference symbol to the `const` qualifier when one is available, otherwise to the type. For a const pointer to a const type, attach the second `const` qualifier to the pointer. Examples: `Foo const* foo`, `Foo const& foo`, `Foo const *const foo`, `Foo* foo`, `Foo& foo`.
 - When using a new library and a module facade has not been exported for it yet, query the user for instructions on how to treat it.
 
 ## MANDATORY: Git Rules

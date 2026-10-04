@@ -15,7 +15,7 @@ class PainterCanvas : public QCanvasPainterItem {
     Q_PROPERTY(float zDepth READ zDepth WRITE setZDepth NOTIFY zDepthChanged)
 
 public:
-    explicit PainterCanvas(QQuickItem *parent = nullptr);
+    explicit PainterCanvas(QQuickItem* parent = nullptr);
 
     float translationX() const;
     void setTranslationX(float translation);
@@ -32,11 +32,11 @@ signals:
     void zDepthChanged();
 
 protected:
-    QCanvasPainterItemRenderer *createItemRenderer() const override;
-    void mousePressEvent(QMouseEvent *event) override;
-    void mouseMoveEvent(QMouseEvent *event) override;
-    void mouseReleaseEvent(QMouseEvent *event) override;
-    void wheelEvent(QWheelEvent *event) override;
+    QCanvasPainterItemRenderer* createItemRenderer() const override;
+    void mousePressEvent(QMouseEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
+    void wheelEvent(QWheelEvent* event) override;
 
 private:
     float m_translationX = 0.0f;
