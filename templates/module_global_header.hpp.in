@@ -1,0 +1,29 @@
+#if defined(MODULE_FILE_TRANSLATION_UNIT)
+module;
+#endif
+
+#include <string_view>
+
+#if !defined(LIBRARY_NAME_DEFINITION) || !defined(MODULE_NAME_DEFINITION) || !defined(MODULE_ID)
+#error "Library, module and ID definitions must be defined for each translation unit"
+#endif
+
+static constexpr int ModuleId = @MODULE_ID@;
+
+template<int I>
+struct ModuleInfo {
+    static constexpr int ID = -1;
+    static constexpr std::string_view LIBRARY_NAME = "unknown";
+    static constexpr std::string_view MODULE_NAME = "unknown";
+};
+
+template<>
+struct ModuleInfo<MODULE_ID> {
+    static constexpr int ID = @MODULE_ID@;
+    static constexpr std::string_view LIBRARY_NAME = "@LIBRARY_NAME_DEFINITION@";
+    static constexpr std::string_view MODULE_NAME = "@MODULE_NAME_DEFINITION@";
+};
+
+using ModuleScope = ModuleInfo<ModuleId>;
+
+#include "global.hpp"
