@@ -7,6 +7,7 @@ Rectangle {
     required property string glyph
     property color glyphColor: Theme.color.text
     property bool active: false
+    property bool interactive: true
     property alias hovered: mouseArea.containsMouse
 
     signal clicked()
@@ -14,7 +15,10 @@ Rectangle {
     implicitWidth: 18
     implicitHeight: 18
     radius: Theme.metric.radius
-    color: control.hovered ? Theme.color.hover : (control.active ? Theme.color.active : "transparent")
+    opacity: control.interactive ? 1.0 : 0.4
+    color: control.interactive && control.hovered
+        ? Theme.color.hover
+        : (control.interactive && control.active ? Theme.color.active : "transparent")
 
     Text {
         anchors.centerIn: parent
@@ -29,7 +33,11 @@ Rectangle {
         id: mouseArea
         anchors.fill: parent
         hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
-        onClicked: control.clicked()
+        cursorShape: control.interactive ? Qt.PointingHandCursor : Qt.ForbiddenCursor
+        onClicked: {
+            if (control.interactive) {
+                control.clicked()
+            }
+        }
     }
 }

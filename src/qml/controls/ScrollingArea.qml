@@ -19,6 +19,7 @@ Item {
     property int gutterWidth: 16
     property int hideDelay: 2000
     property int hideDuration: 150
+    property int contentCursorShape: Qt.ArrowCursor
 
     property alias contentY: flick.contentY
     property alias contentHeight: flick.contentHeight
@@ -68,6 +69,7 @@ Item {
     MouseArea {
         anchors.fill: parent
         acceptedButtons: Qt.NoButton
+        cursorShape: control.contentCursorShape
 
         onWheel: wheel => {
             const delta = wheel.pixelDelta.y !== 0

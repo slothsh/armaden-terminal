@@ -16,6 +16,18 @@ Rectangle {
     property int handleHoverThickness: 1
     property int handleCollapsedThickness: 2
 
+    property int lastOpenSize: size
+
+    onSizeChanged: {
+        if (size > 0) {
+            lastOpenSize = size;
+        }
+    }
+
+    function toggle() {
+        size = size > 0 ? 0 : Math.min(lastOpenSize, sizeMax);
+    }
+
     width: parent.width
     height: Math.max(0, Math.min(drawer.size, drawer.sizeMax))
 
@@ -124,7 +136,7 @@ Rectangle {
         anchors.right: drawer.right
         anchors.verticalCenter: drawer.side === DrawerSide.Top ? drawer.bottom : drawer.top;
         clip: false
-        color: drawer.handleHovered || drawer.handleEnabled ? Theme.color.splitHandle : Theme.color.borderStrong
+        color: drawer.handleHovered || drawer.handleEnabled ? Theme.color.accent : Theme.color.borderStrong
         z: 15
 
         height: drawer.height === 0

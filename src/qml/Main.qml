@@ -15,6 +15,14 @@ Window {
 
     property string pendingDelete: ""
 
+    property bool chatExpanded: false
+    readonly property real chatPageWidth: 960
+    readonly property real chatMarginMin: Theme.metric.spacing
+    readonly property bool chatNarrow: content.width < chatPageWidth + chatMarginMin * 2
+    readonly property bool chatFullWidth: chatExpanded || chatNarrow
+    readonly property real chatColumnInset: chatFullWidth ? 0 : Math.round((content.width - chatPageWidth) / 2)
+    readonly property real chatColumnWidth: chatFullWidth ? content.width : chatPageWidth
+
     ChatController {
         id: chat
     }
@@ -49,8 +57,13 @@ Window {
         width: parent.width
         z: 9
         menuActive: appMenu.opened
+        expandActive: root.chatExpanded
+        expandEnabled: !root.chatNarrow
+        contentX: content.x
+        contentInset: root.chatColumnInset
         onMenuRequested: appMenu.toggle()
         onCloseRequested: root.requestQuit()
+        onExpandRequested: root.chatExpanded = !root.chatExpanded
     }
 
     BottomBar {
@@ -65,7 +78,7 @@ Window {
             glyphColor: leftDrawer.width > 0 ? Theme.color.accent : Theme.color.textMuted
             x: Theme.metric.spacing
             anchors.verticalCenter: parent.verticalCenter
-            onClicked: leftDrawer.size = leftDrawer.width > 0 ? 0 : 220
+            onClicked: leftDrawer.toggle()
         }
 
         IconButton {
@@ -74,7 +87,7 @@ Window {
             glyphColor: inputDrawer.size > 0 ? Theme.color.accent : Theme.color.textMuted
             x: Math.max(content.x + Theme.metric.spacing, historyButton.x + historyButton.width + Theme.metric.spacing)
             anchors.verticalCenter: parent.verticalCenter
-            onClicked: inputDrawer.size = inputDrawer.size > 0 ? 0 : 120
+            onClicked: inputDrawer.toggle()
         }
 
         Rectangle {
@@ -101,67 +114,76 @@ Window {
             anchors.right: parent.right
             anchors.top: parent.top
             anchors.bottom: inputDrawer.top
-            anchors.topMargin: Theme.metric.spacing
-            anchors.leftMargin: Theme.metric.spacing
-            anchors.rightMargin: Theme.metric.spacing
             stickToBottom: true
-            bottomPadding: Theme.metric.spacing
+            contentCursorShape: Qt.IBeamCursor
+            barTopMargin: Theme.metric.spacing
             barBottomMargin: Theme.metric.spacing
 
-            Repeater {
-                model: chat.conversation
+            Item {
+                width: root.chatColumnWidth
+                x: (conversationView.width - width) / 2
+                height: threadColumn.height
 
-                onItemAdded: {
-                    if (conversationView.stickToBottom) {
-                        conversationView.snapToEnd();
-                    }
-                }
+                Column {
+                    id: threadColumn
+                    width: parent.width
 
-                delegate: Rectangle {
-                    width: conversationView.width
-                    height: blockText.contentHeight + 16
-                    radius: 0
-                    color: {
-                        switch (model.kind) {
-                            case ConversationModel.UserText: return Theme.color.medium;
-                            case ConversationModel.Reasoning: return Theme.color.menu;
-                            case ConversationModel.ToolCall: return Theme.color.menu;
-                            case ConversationModel.ToolResult: return Theme.color.menu;
-                            case ConversationModel.Error: return "#3a1f1f";
-                            default: return Theme.color.menu;
+                    Repeater {
+                        model: chat.conversation
+
+                        onItemAdded: {
+                            if (conversationView.stickToBottom) {
+                                conversationView.snapToEnd();
+                            }
                         }
-                    }
 
-                    Rectangle {
-                        anchors.top: parent.top
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        height: 1
-                        visible: index > 0
-                        color: Theme.color.borderStrong
-                    }
+                        delegate: Rectangle {
+                            width: threadColumn.width
+                            height: blockText.contentHeight + 24
+                            radius: 0
+                            color: {
+                                switch (model.kind) {
+                                    case ConversationModel.UserText: return Theme.color.medium;
+                                    case ConversationModel.Reasoning: return Theme.color.menu;
+                                    case ConversationModel.ToolCall: return Theme.color.menu;
+                                    case ConversationModel.ToolResult: return Theme.color.menu;
+                                    case ConversationModel.Error: return "#3a1f1f";
+                                    default: return Theme.color.menu;
+                                }
+                            }
 
-                    TextEdit {
-                        id: blockText
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.top: parent.top
-                        anchors.margins: 8
-                        height: contentHeight
-                        readOnly: true
-                        selectByMouse: true
-                        textFormat: TextEdit.PlainText
-                        wrapMode: TextEdit.Wrap
-                        text: model.kind === ConversationModel.ToolResult && model.payload.length > 0
-                            ? model.text + " " + model.payload
-                            : (model.kind === ConversationModel.ToolCall ? model.text + " " + model.payload : model.text)
-                        color: model.kind === ConversationModel.Reasoning ? Theme.color.textMuted : Theme.color.text
-                        font.pixelSize: 12
-                        font.italic: model.kind === ConversationModel.Reasoning
-                        font.family: (model.kind === ConversationModel.ToolCall || model.kind === ConversationModel.ToolResult)
-                            ? "monospace" : ""
-                        selectionColor: Theme.color.accent
-                        selectedTextColor: Theme.color.text
+                            Rectangle {
+                                anchors.top: parent.top
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                height: 1
+                                visible: index > 0
+                                color: Theme.color.borderStrong
+                            }
+
+                            TextEdit {
+                                id: blockText
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.top: parent.top
+                                anchors.margins: 12
+                                height: contentHeight
+                                readOnly: true
+                                selectByMouse: true
+                                textFormat: TextEdit.PlainText
+                                wrapMode: TextEdit.Wrap
+                                text: model.kind === ConversationModel.ToolResult && model.payload.length > 0
+                                    ? model.text + " " + model.payload
+                                    : (model.kind === ConversationModel.ToolCall ? model.text + " " + model.payload : model.text)
+                                color: model.kind === ConversationModel.Reasoning ? Theme.color.textMuted : Theme.color.text
+                                font.pixelSize: 12
+                                font.italic: model.kind === ConversationModel.Reasoning
+                                font.family: (model.kind === ConversationModel.ToolCall || model.kind === ConversationModel.ToolResult)
+                                    ? "monospace" : ""
+                                selectionColor: Theme.color.accent
+                                selectedTextColor: Theme.color.text
+                            }
+                        }
                     }
                 }
             }
@@ -201,7 +223,7 @@ Window {
                     anchors.left: parent.left
                     anchors.leftMargin: Theme.metric.spacing
                     anchors.verticalCenter: parent.verticalCenter
-                    enabled: !chat.running && promptInput.text.trim().length > 0
+                    interactive: !chat.running && promptInput.text.trim().length > 0
                     onClicked: {
                         conversationView.stickToBottom = true
                         chat.sendMessage(promptInput.text)

@@ -24,9 +24,6 @@ QtObject {
         property color border: "#242424"
         property color borderStrong: "#404040"
 
-        // Splits & Resizers
-        property color splitHandle: "#324252"
-
         // Accent
         property color accent: "#4a90d9"
 

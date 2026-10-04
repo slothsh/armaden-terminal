@@ -30,11 +30,12 @@ Rectangle {
         anchors.fill: parent
         barTopMargin: 8
         barBottomMargin: 8
+        contentCursorShape: Qt.IBeamCursor
 
         TextArea {
             id: area
             width: scroll.width
-            height: contentHeight + topPadding + bottomPadding
+            height: Math.max(scroll.viewportHeight, contentHeight + topPadding + bottomPadding)
             leftPadding: 10
             rightPadding: 10
             topPadding: 8
