@@ -9,6 +9,7 @@
 #include "foundation/network/i_http_client.hpp"
 #include "foundation/network/http_client_factory.hpp"
 #include "foundation/network/http_client_types.hpp"
+#include "foundation/network/i_authorization_provider.hpp"
 #include "foundation/config/config_loader.hpp"
 #include "foundation/event/i_event_sink.hpp"
 
@@ -18,6 +19,11 @@ export namespace mts::agent {
     using ::lgc::Status;
     using ::lgc::Result;
     using ::lgc::BaseMessage;
+    using ::lgc::ToolCall;
+    using ::lgc::AIMessageChunk;
+    using ::lgc::AIMessageChunkHandler;
+    using ::lgc::ChatModelTool;
+    using ::lgc::ChatModelToolBinding;
     using ::lgc::BaseChatModel;
     using ::lgc::FakeChatModel;
     using ::lgc::ProviderChatModel;
@@ -44,6 +50,9 @@ export namespace mts::agent {
     using ::lgc::HttpClientConfig;
     using ::lgc::DefaultHttpClientFactory;
     using ::lgc::HttpClientFactoryOptions;
+    using ::lgc::IHttpClientFactory;
+    using ::lgc::IAuthorizationProvider;
+    using ::lgc::defaultHttpClientFactory;
     using ::lgc::ConfigLoader;
     using ::lgc::Config;
     using ::lgc::ConfigValue;
