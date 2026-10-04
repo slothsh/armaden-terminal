@@ -17,6 +17,7 @@ Rectangle {
     property int handleCollapsedThickness: 2
 
     property int lastOpenSize: size
+    property int pressSize: 0
 
     onSizeChanged: {
         if (size > 0) {
@@ -26,6 +27,18 @@ Rectangle {
 
     function toggle() {
         size = size > 0 ? 0 : Math.min(lastOpenSize, sizeMax);
+    }
+
+    function beginResize() {
+        handleEnabled = true;
+        pressSize = size;
+    }
+
+    function endResize() {
+        handleEnabled = false;
+        if (size === 0 && pressSize > 0) {
+            lastOpenSize = pressSize;
+        }
     }
 
     width: Math.max(0, Math.min(drawer.size, drawer.sizeMax))
@@ -104,11 +117,11 @@ Rectangle {
         }
 
         onPressed: {
-            drawer.handleEnabled = true;
+            drawer.beginResize();
         }
 
         onReleased: {
-            drawer.handleEnabled = false;
+            drawer.endResize();
         }
 
         onPositionChanged: mouse => {
