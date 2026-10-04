@@ -56,7 +56,6 @@ struct PendingRun {
 };
 
 struct ChatController::Impl {
-    std::unique_ptr<mts::runtime::ThreadPool> pool;
     mts::events::EventBus bus;
     std::unique_ptr<mts::persistence::SessionStoreHandle> store;
     std::unique_ptr<mts::model::ProviderHandle> provider;
@@ -69,6 +68,11 @@ struct ChatController::Impl {
     QString status;
     int streamingRow = -1;
     bool running = false;
+
+    // Declared last so it is destroyed first: the pool's destructor joins its
+    // workers, which must happen before the harness/provider/store/bus above
+    // (which the workers reference) are freed.
+    std::unique_ptr<mts::runtime::ThreadPool> pool;
 };
 
 ChatController::ChatController(QObject* parent)
@@ -207,7 +211,19 @@ ChatController::ChatController(QObject* parent)
     }
 }
 
-ChatController::~ChatController() = default;
+ChatController::~ChatController() {
+    if (m_impl == nullptr)
+        return;
+
+    for (auto const& cancellation : std::as_const(m_impl->cancellations)) {
+        if (cancellation != nullptr)
+            cancellation->cancel();
+    }
+
+    // Join the pool here, while the harness/provider/store/bus it references are
+    // still alive. The pool is declared last in Impl for the same reason.
+    m_impl->pool.reset();
+}
 
 SessionListModel* ChatController::sessions() const {
     return m_sessions;
@@ -435,4 +451,15 @@ void ChatController::sendMessage(QString const& text) {
 void ChatController::cancel() {
     if (auto it = m_impl->cancellations.find(m_impl->activeSession); it != m_impl->cancellations.end() && it.value() != nullptr)
         it.value()->cancel();
+}
+
+void ChatController::cancelAll() {
+    for (auto const& cancellation : std::as_const(m_impl->cancellations)) {
+        if (cancellation != nullptr)
+            cancellation->cancel();
+    }
+}
+
+bool ChatController::hasInFlight() const {
+    return !m_impl->inFlight.isEmpty();
 }

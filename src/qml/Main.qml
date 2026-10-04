@@ -19,6 +19,30 @@ Window {
         id: chat
     }
 
+    property bool quitConfirmed: false
+
+    function requestQuit() {
+        quitDialog.open()
+    }
+
+    function performQuit() {
+        quitConfirmed = true
+        chat.cancelAll()
+        if (!chat.hasInFlight()) {
+            Qt.quit()
+        } else {
+            quitDrainTimer.restart()
+            quitTimeoutTimer.restart()
+        }
+    }
+
+    onClosing: close => {
+        if (!quitConfirmed) {
+            close.accepted = false
+            requestQuit()
+        }
+    }
+
     TopBar {
         id: topBar
         anchors.top: parent.top
@@ -26,7 +50,7 @@ Window {
         z: 9
         menuActive: appMenu.opened
         onMenuRequested: appMenu.toggle()
-        onCloseRequested: Qt.quit()
+        onCloseRequested: root.requestQuit()
     }
 
     BottomBar {
@@ -422,7 +446,10 @@ Window {
         MenuButton {
             width: appMenu.width - appMenu.padding * 2
             label: qsTr("Quit")
-            onClicked: Qt.quit()
+            onClicked: {
+                appMenu.close()
+                root.requestQuit()
+            }
         }
     }
 
@@ -443,5 +470,35 @@ Window {
         title: qsTr("mindtosis")
         version: qsTr("Version 0.0.0")
         description: chat.status.length > 0 ? chat.status : qsTr("An AI agent harness.")
+    }
+
+    Timer {
+        id: quitDrainTimer
+        interval: 100
+        repeat: true
+        onTriggered: {
+            if (!chat.hasInFlight()) {
+                stop()
+                quitTimeoutTimer.stop()
+                Qt.quit()
+            }
+        }
+    }
+
+    Timer {
+        id: quitTimeoutTimer
+        interval: 5000
+        onTriggered: {
+            quitDrainTimer.stop()
+            Qt.quit()
+        }
+    }
+
+    ConfirmDialog {
+        id: quitDialog
+        message: qsTr("Are you sure you want to exit? Any in-flight responses will be cancelled.")
+        confirmText: qsTr("Quit")
+        cancelText: qsTr("Cancel")
+        onAccepted: root.performQuit()
     }
 }

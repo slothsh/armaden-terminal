@@ -37,6 +37,8 @@ public:
     Q_INVOKABLE void sendMessage(QString const& text);
     Q_INVOKABLE void saveDraft(QString const& text);
     Q_INVOKABLE void cancel();
+    Q_INVOKABLE void cancelAll();
+    Q_INVOKABLE bool hasInFlight() const;
 
 signals:
     void runningChanged();
