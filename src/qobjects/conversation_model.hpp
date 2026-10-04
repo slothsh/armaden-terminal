@@ -16,6 +16,7 @@ struct ConversationBlock {
 class ConversationModel : public QAbstractListModel {
     Q_OBJECT
     QML_NAMED_ELEMENT(ConversationModel)
+    Q_PROPERTY(int count READ count NOTIFY countChanged)
 
 public:
     enum BlockKind {
@@ -41,6 +42,12 @@ public:
     QVariant data(QModelIndex const& index, int role) const override;
     QHash<int, QByteArray> roleNames() const override;
 
+    int count() const;
+
+signals:
+    void countChanged();
+
+public:
     void clear();
     void append(ConversationBlock const& block);
     void appendText(int row, QString const& text);

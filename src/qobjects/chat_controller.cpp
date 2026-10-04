@@ -354,6 +354,18 @@ void ChatController::deleteSession(QString const& id) {
     }
 }
 
+void ChatController::renameSession(QString const& id, QString const& title) {
+    if (m_impl->store == nullptr)
+        return;
+
+    if (auto const status = m_impl->store->renameSession(id.toStdString(), title.toStdString()); !status) {
+        setStatus(QString::fromStdString(status.message()));
+        return;
+    }
+
+    refreshSessions();
+}
+
 void ChatController::clearHistory() {
     if (m_impl->store == nullptr)
         return;

@@ -31,15 +31,19 @@ QHash<int, QByteArray> ConversationModel::roleNames() const {
 }
 
 void ConversationModel::clear() {
+    bool const hadBlocks = !m_blocks.isEmpty();
     beginResetModel();
     m_blocks.clear();
     endResetModel();
+    if (hadBlocks)
+        emit countChanged();
 }
 
 void ConversationModel::append(ConversationBlock const& block) {
     beginInsertRows(QModelIndex(), m_blocks.size(), m_blocks.size());
     m_blocks.append(block);
     endInsertRows();
+    emit countChanged();
 }
 
 void ConversationModel::appendText(int row, QString const& text) {
@@ -60,4 +64,8 @@ void ConversationModel::setText(int row, QString const& text) {
 
 int ConversationModel::lastRow() const {
     return static_cast<int>(m_blocks.size()) - 1;
+}
+
+int ConversationModel::count() const {
+    return static_cast<int>(m_blocks.size());
 }

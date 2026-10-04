@@ -11,6 +11,7 @@ Rectangle {
     signal expandRequested()
 
     property bool menuActive: false
+    property bool expandVisible: true
     property bool expandActive: false
     property bool expandEnabled: true
     property real contentX: 0
@@ -47,7 +48,7 @@ Rectangle {
         x: control.contentX - 1
         width: 1
         color: Theme.color.borderStrong
-        visible: control.contentX > 0
+        visible: control.expandVisible && control.contentX > 0
     }
 
     IconButton {
@@ -55,6 +56,7 @@ Rectangle {
         glyph: "\u2922"
         x: Math.max(control.contentX + Math.max(control.contentInset, Theme.metric.spacing), menuButton.x + menuButton.width + Theme.metric.spacing)
         anchors.verticalCenter: parent.verticalCenter
+        visible: control.expandVisible
         interactive: control.expandEnabled
         glyphColor: control.expandActive ? Theme.color.accent : Theme.color.textMuted
         onClicked: control.expandRequested()

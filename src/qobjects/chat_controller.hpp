@@ -33,6 +33,7 @@ public:
     Q_INVOKABLE void createSession();
     Q_INVOKABLE void selectSession(QString const& id);
     Q_INVOKABLE void deleteSession(QString const& id);
+    Q_INVOKABLE void renameSession(QString const& id, QString const& title);
     Q_INVOKABLE void clearHistory();
     Q_INVOKABLE void sendMessage(QString const& text);
     Q_INVOKABLE void saveDraft(QString const& text);

@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick as Quick
 import QtQuick.Window
 import QtQuick.Controls
 import QtQuick.Effects
@@ -14,6 +15,7 @@ Window {
     title: qsTr("mindtosis")
 
     property string pendingDelete: ""
+    property string renamingSession: ""
 
     property bool chatExpanded: false
     readonly property real chatPageWidth: 960
@@ -44,6 +46,15 @@ Window {
         }
     }
 
+    function commitRename(id, title) {
+        if (root.renamingSession !== id)
+            return
+        root.renamingSession = ""
+        const trimmed = title.trim()
+        if (trimmed.length > 0)
+            chat.renameSession(id, trimmed)
+    }
+
     onClosing: close => {
         if (!quitConfirmed) {
             close.accepted = false
@@ -57,6 +68,7 @@ Window {
         width: parent.width
         z: 9
         menuActive: appMenu.opened
+        expandVisible: chat.conversation.count > 0
         expandActive: root.chatExpanded
         expandEnabled: !root.chatNarrow
         contentX: content.x
@@ -348,7 +360,6 @@ Window {
                         conversationView.stickToBottom = true
                         chat.saveDraft(promptInput.text)
                         chat.createSession()
-                        inputDrawer.size = 72
                     }
                 }
 
@@ -386,12 +397,16 @@ Window {
                 model: chat.sessions
 
                 delegate: Rectangle {
+                    id: sessionRow
                     width: ListView.view.width
                     height: 28
                     color: model.sessionId === chat.activeSession ? Theme.color.hover : "transparent"
 
+                    readonly property bool renaming: root.renamingSession === model.sessionId
+
                     MouseArea {
                         anchors.fill: parent
+                        enabled: !sessionRow.renaming
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             conversationView.stickToBottom = true
@@ -401,8 +416,9 @@ Window {
                     }
 
                     Text {
+                        visible: !sessionRow.renaming
                         anchors.left: parent.left
-                        anchors.right: model.running ? sessionSpinner.left : deleteSessionButton.left
+                        anchors.right: model.running ? sessionSpinner.left : sessionMenuButton.left
                         anchors.leftMargin: 12
                         anchors.rightMargin: 8
                         anchors.verticalCenter: parent.verticalCenter
@@ -412,25 +428,90 @@ Window {
                         elide: Text.ElideRight
                     }
 
+                    Quick.TextInput {
+                        id: sessionRename
+                        visible: sessionRow.renaming
+                        anchors.left: parent.left
+                        anchors.right: sessionMenuButton.left
+                        anchors.leftMargin: 12
+                        anchors.rightMargin: 8
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: ""
+                        color: Theme.color.text
+                        font.pixelSize: 12
+                        clip: true
+                        selectByMouse: true
+                        selectionColor: Theme.color.accent
+                        selectedTextColor: Theme.color.text
+                        cursorDelegate: Rectangle {
+                            width: 2
+                            color: Theme.color.accent
+                        }
+
+                        onAccepted: root.commitRename(model.sessionId, text)
+
+                        onActiveFocusChanged: {
+                            if (!activeFocus && sessionRow.renaming) {
+                                root.commitRename(model.sessionId, text)
+                            }
+                        }
+
+                        Keys.onEscapePressed: event => {
+                            root.renamingSession = ""
+                            event.accepted = true
+                        }
+
+                        onVisibleChanged: {
+                            if (visible) {
+                                text = model.title
+                                forceActiveFocus()
+                                selectAll()
+                            }
+                        }
+                    }
+
                     Spinner {
                         id: sessionSpinner
                         visible: model.running
                         width: 12
                         height: 12
-                        anchors.right: deleteSessionButton.left
+                        anchors.right: sessionMenuButton.left
                         anchors.rightMargin: 8
                         anchors.verticalCenter: parent.verticalCenter
                     }
 
                     IconButton {
-                        id: deleteSessionButton
-                        glyph: "\u2212"
+                        id: sessionMenuButton
+                        glyph: "\u22EF"
+                        active: sessionMenu.opened
                         anchors.right: parent.right
                         anchors.rightMargin: 6
                         anchors.verticalCenter: parent.verticalCenter
-                        onClicked: {
-                            root.pendingDelete = model.sessionId
-                            deleteDialog.open()
+                        onClicked: sessionMenu.toggle()
+                    }
+
+                    DropdownMenu {
+                        id: sessionMenu
+                        x: sessionRow.width - width
+                        y: sessionRow.height + 2
+
+                        MenuButton {
+                            width: sessionMenu.width - sessionMenu.padding * 2
+                            label: qsTr("Rename")
+                            onClicked: {
+                                sessionMenu.close()
+                                root.renamingSession = model.sessionId
+                            }
+                        }
+
+                        MenuButton {
+                            width: sessionMenu.width - sessionMenu.padding * 2
+                            label: qsTr("Remove")
+                            onClicked: {
+                                sessionMenu.close()
+                                root.pendingDelete = model.sessionId
+                                deleteDialog.open()
+                            }
                         }
                     }
                 }
