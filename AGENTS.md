@@ -32,6 +32,13 @@ Use the `wt-switch-create` skill for managing worktrees and/or the `worktrunk` s
 
 Do NOT add documentation comments to ANY code. This will only be required on request from the user.
 
+## MANDATORY: Code Style Conventions
+
+- Always use east-const convention for everything.
+- Prefer import modules where possible. Only include headers for unsupported libraries.
+- Always prefix member function calls with `this->` and static member function calls with the class's name (`Foo::static_member()`).
+- When using a new library and a module facade has not been exported for it yet, query the user for instructions on how to treat it.
+
 ## MANDATORY: Git Rules
 
 NEVER stage, commit, pull or push any changes EVER. This will only be required on request from the user.
