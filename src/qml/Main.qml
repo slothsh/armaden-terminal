@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick as Quick
 import QtQuick.Window
 import QtQuick.Controls
+import QtQuick.Templates as T
 import QtQuick.Effects
 import Lib.Controls
 import Lib.Theme
@@ -16,6 +17,8 @@ Window {
 
     property string pendingDelete: ""
     property string renamingSession: ""
+
+    signal contextMenuRequested(real x, real y)
 
     property bool chatExpanded: false
     readonly property real chatPageWidth: 960
@@ -119,6 +122,10 @@ Window {
         width: parent.width - leftDrawer.width
         height: parent.height - topBar.height - bottomBar.height
         color: Theme.color.dark
+        T.ContextMenu.menu: null
+        T.ContextMenu.onRequested: function(position) {
+            root.contextMenuRequested(position.x, position.y)
+        }
 
         ScrollingArea {
             id: conversationView
@@ -279,6 +286,7 @@ Window {
                     chat.sendMessage(text)
                     text = ""
                 }
+                onContextMenuRequested: (x, y) => root.contextMenuRequested(x, y)
             }
         }
 

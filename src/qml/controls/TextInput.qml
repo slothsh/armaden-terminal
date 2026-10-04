@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Templates as T
 import Lib.Controls
 import Lib.Theme
 
@@ -11,6 +12,7 @@ Rectangle {
     property bool readOnly: false
 
     signal accepted()
+    signal contextMenuRequested(real x, real y)
 
     color: Theme.color.menu
 
@@ -34,6 +36,10 @@ Rectangle {
 
         TextArea {
             id: area
+            T.ContextMenu.menu: null
+            T.ContextMenu.onRequested: function(position) {
+                control.contextMenuRequested(position.x, position.y)
+            }
             width: scroll.width
             height: Math.max(scroll.viewportHeight, contentHeight + topPadding + bottomPadding)
             leftPadding: 10
