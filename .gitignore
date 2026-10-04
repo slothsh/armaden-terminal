@@ -1,0 +1,9 @@
+.DS_Store
+build/
+.cpm-cache/
+.todos/
+.cache/
+.pi/
+._*
+.env
+*.env
