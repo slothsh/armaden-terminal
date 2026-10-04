@@ -82,8 +82,22 @@ Window {
             anchors.rightMargin: Theme.metric.spacing
             clip: true
             spacing: 0
+            interactive: false
+            boundsBehavior: Flickable.StopAtBounds
             model: chat.conversation
-            onCountChanged: positionViewAtEnd()
+            onCountChanged: {
+                if (count > 0) {
+                    positionViewAtIndex(count - 1, ListView.End)
+                }
+                positionViewAtEnd()
+                Qt.callLater(positionViewAtEnd)
+            }
+
+            function scrollBy(delta) {
+                const minY = conversationView.originY;
+                const maxY = minY + Math.max(0, conversationView.contentHeight - conversationView.height);
+                conversationView.contentY = Math.max(minY, Math.min(conversationView.contentY + delta, maxY));
+            }
 
             footer: Item {
                 width: conversationView.width
@@ -92,7 +106,7 @@ Window {
 
             delegate: Rectangle {
                 width: ListView.view.width
-                height: blockText.implicitHeight + 16
+                height: blockText.contentHeight + 16
                 radius: 0
                 color: {
                     switch (model.kind) {
@@ -114,12 +128,17 @@ Window {
                     color: Theme.color.borderStrong
                 }
 
-                Text {
+                TextEdit {
                     id: blockText
                     anchors.left: parent.left
                     anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.top: parent.top
                     anchors.margins: 8
+                    height: contentHeight
+                    readOnly: true
+                    selectByMouse: true
+                    textFormat: TextEdit.PlainText
+                    wrapMode: TextEdit.Wrap
                     text: model.kind === ConversationModel.ToolResult && model.payload.length > 0
                         ? model.text + " " + model.payload
                         : (model.kind === ConversationModel.ToolCall ? model.text + " " + model.payload : model.text)
@@ -128,8 +147,115 @@ Window {
                     font.italic: model.kind === ConversationModel.Reasoning
                     font.family: (model.kind === ConversationModel.ToolCall || model.kind === ConversationModel.ToolResult)
                         ? "monospace" : ""
-                    wrapMode: Text.Wrap
+                    selectionColor: Theme.color.accent
+                    selectedTextColor: Theme.color.text
                 }
+            }
+        }
+
+        MouseArea {
+            anchors.fill: conversationView
+            acceptedButtons: Qt.NoButton
+
+            onWheel: wheel => {
+                const delta = wheel.pixelDelta.y !== 0
+                    ? wheel.pixelDelta.y
+                    : wheel.angleDelta.y / 120 * 90;
+                conversationView.scrollBy(-delta);
+                scrollBarHandle.poke();
+                wheel.accepted = true;
+            }
+        }
+
+        Rectangle {
+            id: scrollBarHandle
+            anchors.right: parent.right
+            anchors.rightMargin: 2
+            width: 6
+            radius: 3
+            color: "#c8c8c8"
+            z: 10
+            visible: conversationView.contentHeight > conversationView.height
+            readonly property bool revealed: root.active && (gutterHover.hovered || dragArea.pressed)
+            opacity: 0
+            readonly property real trackHeight: conversationView.height - Theme.metric.spacing
+            readonly property real contentRange: Math.max(0, conversationView.contentHeight - conversationView.height)
+            height: Math.max(24, trackHeight * conversationView.height / Math.max(1, conversationView.contentHeight))
+            y: conversationView.y + (contentRange <= 0
+                ? 0
+                : (conversationView.contentY - conversationView.originY) / contentRange * (trackHeight - height))
+
+            onRevealedChanged: {
+                if (revealed) {
+                    hideTimer.stop()
+                    hideAnimation.stop()
+                    scrollBarHandle.opacity = 1
+                } else {
+                    hideTimer.restart()
+                }
+            }
+
+            function poke() {
+                hideTimer.stop()
+                hideAnimation.stop()
+                scrollBarHandle.opacity = 1
+                hideTimer.restart()
+            }
+
+            Timer {
+                id: hideTimer
+                interval: 2000
+                onTriggered: {
+                    if (!scrollBarHandle.revealed) {
+                        hideAnimation.restart()
+                    }
+                }
+            }
+
+            NumberAnimation {
+                id: hideAnimation
+                target: scrollBarHandle
+                property: "opacity"
+                to: 0
+                duration: 150
+                easing.type: Easing.Linear
+            }
+
+            MouseArea {
+                id: dragArea
+                anchors.fill: parent
+                enabled: scrollBarHandle.opacity > 0
+                cursorShape: Qt.PointingHandCursor
+
+                property real grab: 0
+
+                onPressed: mouse => {
+                    dragArea.grab = mapToItem(conversationView, mouse.x, mouse.y).y - (scrollBarHandle.y - conversationView.y);
+                }
+
+                onPositionChanged: mouse => {
+                    if (!dragArea.pressed) {
+                        return;
+                    }
+
+                    const travel = Math.max(1, scrollBarHandle.trackHeight - scrollBarHandle.height);
+                    const top = mapToItem(conversationView, mouse.x, mouse.y).y - dragArea.grab;
+                    const ratio = Math.max(0, Math.min(1, top / travel));
+                    conversationView.contentY = conversationView.originY + ratio * scrollBarHandle.contentRange;
+                }
+            }
+        }
+
+        Item {
+            id: scrollGutter
+            anchors.top: conversationView.top
+            anchors.bottom: conversationView.bottom
+            anchors.right: parent.right
+            width: 16
+            z: 11
+
+            HoverHandler {
+                id: gutterHover
             }
         }
 
