@@ -12,6 +12,7 @@ auto main(int argc, char** argv) -> int {
 
     QGuiApplication app(argc, argv);
     QQuickWindow::setGraphicsApi(QSGRendererInterface::Vulkan);
+    QQuickWindow::setTextRenderType(QQuickWindow::NativeTextRendering);
     QQmlApplicationEngine engine;
 
     mts::log::info("Done! Connecting application to GUI engine...");
