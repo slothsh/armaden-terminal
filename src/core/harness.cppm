@@ -2,6 +2,7 @@ export module harness;
 
 import std;
 import agent;
+import config;
 import events;
 import persistence;
 import provider;
@@ -18,7 +19,8 @@ public:
                  mts::model::ProviderHandle* namingProvider,
                  mts::persistence::SessionStoreHandle& store,
                  mts::runtime::ThreadPool& pool,
-                 mts::events::EventBus& bus);
+                 mts::events::EventBus& bus,
+                 mts::config::ServerConfig const& server);
     ~AgentHarness();
 
     AgentHarness(AgentHarness const&) = delete;
@@ -51,6 +53,124 @@ inline auto makeEchoTool() -> mts::agent::Tool {
                             .additionalProperties(false);
     tool.callable_ = [](mts::agent::json const& input) -> mts::agent::Result<mts::agent::json> {
         return mts::agent::json{{"text", input.value("text", std::string{})}};
+    };
+    return tool;
+}
+
+class GameCommandClient {
+public:
+    GameCommandClient() = default;
+
+    GameCommandClient(std::shared_ptr<mts::agent::IHttpClient> client, mts::config::ServerConfig config)
+        : m_client(std::move(client))
+        , m_config(std::move(config)) {}
+
+    auto echo(std::string const& message) const -> mts::agent::Result<mts::agent::json> {
+        return this->postCommand(m_config.echoPath, mts::agent::json{{"message", message}});
+    }
+
+    auto smite(int playerId, std::optional<int> instigatorId, std::optional<double> radiusKm) const -> mts::agent::Result<mts::agent::json> {
+        auto body = mts::agent::json{{"playerId", playerId}};
+        if (instigatorId.has_value())
+            body["instigatorId"] = instigatorId.value();
+        if (radiusKm.has_value())
+            body["radiusKm"] = radiusKm.value();
+        return this->postCommand(m_config.smitePath, body);
+    }
+
+    auto getPlayers() const -> mts::agent::Result<mts::agent::json> {
+        return this->postCommand(m_config.getPlayersPath, mts::agent::json::object());
+    }
+
+private:
+    auto postCommand(std::string const& path, mts::agent::json const& body) const -> mts::agent::Result<mts::agent::json> {
+        if (m_client == nullptr)
+            return mts::agent::Status::unavailable("game server client is not configured");
+
+        auto request = mts::agent::HttpRequest::post(path, body.dump());
+
+        auto const response = m_client->send(std::move(request), mts::agent::HttpRequestOptions{});
+        if (!response)
+            return response.status();
+        if (!response.value().isSuccessful())
+            return mts::agent::Status::internal(
+                "game server returned HTTP " + std::to_string(response.value().statusCode_));
+
+        auto const parsed = mts::agent::json::parse(response.value().body_, nullptr, false);
+        if (!parsed.is_discarded())
+            return parsed;
+        return mts::agent::json(response.value().body_);
+    }
+
+    std::shared_ptr<mts::agent::IHttpClient> m_client;
+    mts::config::ServerConfig m_config;
+};
+
+inline auto makeGameCommandClient(mts::config::ServerConfig const& config) -> GameCommandClient {
+    auto const clientConfig = mts::agent::HttpClientConfig::fromOrigin(config.origin);
+    if (!clientConfig)
+        return {};
+    auto const factory = mts::agent::defaultHttpClientFactory();
+    if (!factory)
+        return {};
+    auto const client = factory->create(clientConfig.value(), nullptr);
+    if (!client)
+        return {};
+    return GameCommandClient(client.value(), config);
+}
+
+inline auto makeCommandEchoTool(GameCommandClient& client) -> mts::agent::Tool {
+    mts::agent::Tool tool;
+    tool.name_ = "command_echo";
+    tool.description_ =
+        "Print a message into the in-game chat by running the server's echo command. "
+        "Use this when the user asks you to say, print, or echo something in the game. "
+        "Returns the server's echoed response.";
+    tool.inputSchema_ = mts::agent::JsonSchema::object()
+                            .property("message", mts::agent::JsonSchema::string(), true)
+                            .additionalProperties(false);
+    tool.callable_ = [&client](mts::agent::json const& input) -> mts::agent::Result<mts::agent::json> {
+        return client.echo(input.value("message", std::string{}));
+    };
+    return tool;
+}
+
+inline auto makeCommandSmiteTool(GameCommandClient& client) -> mts::agent::Tool {
+    mts::agent::Tool tool;
+    tool.name_ = "command_smite";
+    tool.description_ =
+        "Smite a player by their id using the server's smite command. "
+        "Optionally attribute the smite to another player with instigatorId and/or "
+        "give it a blast radius in kilometres with radiusKm. "
+        "Use this when the user asks to smite, strike, zap, or punish a player. "
+        "Returns the server's response.";
+    tool.inputSchema_ = mts::agent::JsonSchema::object()
+                            .property("playerId", mts::agent::JsonSchema::integer(), true)
+                            .property("instigatorId", mts::agent::JsonSchema::integer(), false)
+                            .property("radiusKm", mts::agent::JsonSchema::number(), false)
+                            .additionalProperties(false);
+    tool.callable_ = [&client](mts::agent::json const& input) -> mts::agent::Result<mts::agent::json> {
+        std::optional<int> instigatorId;
+        if (input.contains("instigatorId"))
+            instigatorId = input.value("instigatorId", 0);
+        std::optional<double> radiusKm;
+        if (input.contains("radiusKm"))
+            radiusKm = input.value("radiusKm", 0.0);
+        return client.smite(input.value("playerId", 0), instigatorId, radiusKm);
+    };
+    return tool;
+}
+
+inline auto makeCommandGetPlayersTool(GameCommandClient& client) -> mts::agent::Tool {
+    mts::agent::Tool tool;
+    tool.name_ = "command_get_players";
+    tool.description_ =
+        "List the players currently on the game server using the server's getPlayers command. "
+        "Use this when the user asks who is online or wants player ids or positions. "
+        "Returns a players array of objects with id, name and position.";
+    tool.inputSchema_ = mts::agent::JsonSchema::object().additionalProperties(false);
+    tool.callable_ = [&client](mts::agent::json const&) -> mts::agent::Result<mts::agent::json> {
+        return client.getPlayers();
     };
     return tool;
 }
@@ -231,13 +351,16 @@ struct AgentHarness::Impl {
     mts::runtime::ThreadPool* pool = nullptr;
     mts::events::EventBus* bus = nullptr;
     std::shared_ptr<mts::agent::BaseCheckpointSaver> checkpointer;
+    detail::GameCommandClient gameClient;
+    std::shared_ptr<mts::agent::ToolRegistry> registry;
 };
 
 AgentHarness::AgentHarness(mts::model::ProviderHandle& provider,
                            mts::model::ProviderHandle* namingProvider,
                            mts::persistence::SessionStoreHandle& store,
                            mts::runtime::ThreadPool& pool,
-                           mts::events::EventBus& bus)
+                           mts::events::EventBus& bus,
+                           mts::config::ServerConfig const& server)
     : m_impl(std::make_unique<Impl>()) {
     m_impl->provider = &provider;
     m_impl->namingProvider = namingProvider;
@@ -245,6 +368,19 @@ AgentHarness::AgentHarness(mts::model::ProviderHandle& provider,
     m_impl->pool = &pool;
     m_impl->bus = &bus;
     m_impl->checkpointer = std::make_shared<mts::agent::InMemorySaver>();
+
+    m_impl->gameClient = detail::makeGameCommandClient(server);
+
+    m_impl->registry = std::make_shared<mts::agent::ToolRegistry>();
+    (void)m_impl->registry->add(detail::makeEchoTool());
+    (void)m_impl->registry->add(detail::makeCommandEchoTool(m_impl->gameClient));
+    (void)m_impl->registry->add(detail::makeCommandSmiteTool(m_impl->gameClient));
+    (void)m_impl->registry->add(detail::makeCommandGetPlayersTool(m_impl->gameClient));
+
+    mts::agent::ChatModelToolBinding binding;
+    for (auto const& spec : m_impl->registry->list())
+        binding.tools_.push_back(mts::agent::ChatModelTool{spec.name_, spec.description_, spec.inputSchema_});
+    (void)provider.bindTools(binding);
 }
 
 AgentHarness::~AgentHarness() = default;
@@ -270,11 +406,7 @@ auto AgentHarness::runBlocking(SessionId const& session, mts::runtime::Cancellat
     auto& bus = *m_impl->bus;
     bus.publish(mts::events::RunStarted{session});
 
-    auto registry = std::make_shared<mts::agent::ToolRegistry>();
-    if (auto const status = registry->add(detail::makeEchoTool()); !status) {
-        bus.publish(mts::events::RunFailed{session, status.status().message()});
-        return status.status();
-    }
+    auto const registry = m_impl->registry;
 
     auto* provider = m_impl->provider;
     mts::agent::NodeHandler const modelNode =

@@ -76,6 +76,12 @@ export namespace mts::agent {
     using ::lgc::ToolRuntime;
     using ::lgc::IHttpClient;
     using ::lgc::HttpClientConfig;
+    using ::lgc::HttpRequest;
+    using ::lgc::HttpResponse;
+    using ::lgc::HttpRequestOptions;
+    using ::lgc::HttpMethod;
+    using ::lgc::HttpHeaders;
+    using ::lgc::HttpResult;
     using ::lgc::DefaultHttpClientFactory;
     using ::lgc::HttpClientFactoryOptions;
     using ::lgc::IHttpClientFactory;

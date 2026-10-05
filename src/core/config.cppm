@@ -14,6 +14,13 @@ struct ProviderConfig {
     std::string title;
 };
 
+struct ServerConfig {
+    std::string origin = "http://127.0.0.1:8000";
+    std::string echoPath = "api/command/echo";
+    std::string smitePath = "api/command/smite";
+    std::string getPlayersPath = "api/command/getPlayers";
+};
+
 struct RuntimeConfig {
     std::uint32_t workers = 4;
 };
@@ -37,6 +44,7 @@ struct NamingConfig {
 
 struct AppConfig {
     ProviderConfig provider;
+    ServerConfig server;
     RuntimeConfig runtime;
     BudgetConfig budgets;
     CompactionConfig compaction;
@@ -129,6 +137,15 @@ auto applyConfig(Config const& config, mts::config::AppConfig& app) -> Status {
     if (auto const status = readString(config, "provider.referer", app.provider.referer); !status)
         return status;
     if (auto const status = readString(config, "provider.title", app.provider.title); !status)
+        return status;
+
+    if (auto const status = readString(config, "server.origin", app.server.origin); !status)
+        return status;
+    if (auto const status = readString(config, "server.echoPath", app.server.echoPath); !status)
+        return status;
+    if (auto const status = readString(config, "server.smitePath", app.server.smitePath); !status)
+        return status;
+    if (auto const status = readString(config, "server.getPlayersPath", app.server.getPlayersPath); !status)
         return status;
 
     if (auto const status = readUInt32(config, "runtime.workers", app.runtime.workers); !status)

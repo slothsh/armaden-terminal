@@ -121,7 +121,7 @@ ChatController::ChatController(QObject* parent)
 
     if (m_impl->store != nullptr && m_impl->provider != nullptr) {
         m_impl->harness = std::make_unique<mts::harness::AgentHarness>(
-            *m_impl->provider, m_impl->namingProvider, *m_impl->store, *m_impl->pool, m_impl->bus
+            *m_impl->provider, m_impl->namingProvider, *m_impl->store, *m_impl->pool, m_impl->bus, config.server
         );
 
         (void)m_impl->bus.subscribe<mts::events::RunStarted>([this](mts::events::RunStarted const& event) {
