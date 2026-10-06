@@ -16,9 +16,7 @@ struct ProviderConfig {
 
 struct ServerConfig {
     std::string origin = "http://127.0.0.1:8000";
-    std::string echoPath = "api/command/echo";
-    std::string smitePath = "api/command/smite";
-    std::string getPlayersPath = "api/command/getPlayers";
+    std::string graphqlPath = "api/command/graphql";
 };
 
 struct RuntimeConfig {
@@ -141,11 +139,7 @@ auto applyConfig(Config const& config, mts::config::AppConfig& app) -> Status {
 
     if (auto const status = readString(config, "server.origin", app.server.origin); !status)
         return status;
-    if (auto const status = readString(config, "server.echoPath", app.server.echoPath); !status)
-        return status;
-    if (auto const status = readString(config, "server.smitePath", app.server.smitePath); !status)
-        return status;
-    if (auto const status = readString(config, "server.getPlayersPath", app.server.getPlayersPath); !status)
+    if (auto const status = readString(config, "server.graphqlPath", app.server.graphqlPath); !status)
         return status;
 
     if (auto const status = readUInt32(config, "runtime.workers", app.runtime.workers); !status)
