@@ -17,6 +17,7 @@ struct ProviderConfig {
 struct ServerConfig {
     std::string origin = "http://127.0.0.1:8000";
     std::string graphqlPath = "api/command/graphql";
+    std::string schemaPath = "api/command/schema";
 };
 
 struct RuntimeConfig {
@@ -140,6 +141,8 @@ auto applyConfig(Config const& config, mts::config::AppConfig& app) -> Status {
     if (auto const status = readString(config, "server.origin", app.server.origin); !status)
         return status;
     if (auto const status = readString(config, "server.graphqlPath", app.server.graphqlPath); !status)
+        return status;
+    if (auto const status = readString(config, "server.schemaPath", app.server.schemaPath); !status)
         return status;
 
     if (auto const status = readUInt32(config, "runtime.workers", app.runtime.workers); !status)

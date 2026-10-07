@@ -74,11 +74,19 @@ public:
         , m_config(std::move(config)) {}
 
     auto execute(std::string const& query, mts::agent::json const& variables) const -> mts::agent::Result<mts::agent::json> {
+        return this->postJson(m_config.graphqlPath, mts::agent::json{{"query", query}, {"variables", variables}});
+    }
+
+    auto fetchSchema() const -> mts::agent::Result<mts::agent::json> {
+        return this->postJson(m_config.schemaPath, mts::agent::json::object());
+    }
+
+private:
+    auto postJson(std::string const& path, mts::agent::json const& body) const -> mts::agent::Result<mts::agent::json> {
         if (m_client == nullptr)
             return mts::agent::Status::unavailable("game server client is not configured");
 
-        mts::agent::json const body{{"query", query}, {"variables", variables}};
-        auto request = mts::agent::HttpRequest::post(m_config.graphqlPath, body.dump());
+        auto request = mts::agent::HttpRequest::post(path, body.dump());
 
         auto const response = m_client->send(std::move(request), mts::agent::HttpRequestOptions{});
         if (!response)
@@ -93,7 +101,6 @@ public:
         return mts::agent::json(response.value().body_);
     }
 
-private:
     std::shared_ptr<mts::agent::IHttpClient> m_client;
     mts::config::ServerConfig m_config;
 };
@@ -119,7 +126,8 @@ inline auto makeCommandGraphqlTool(GameGraphqlClient& client) -> mts::agent::Too
         "Write the GraphQL document yourself based on what the user is asking for, "
         "pass it in `query`, and pass any operation variables as a JSON object in `variables`. "
         "Use a query for reads and a mutation for actions. "
-        "The server exposes this schema:\n" + std::string{kGraphqlSchema};
+        "Call getSchema for the authoritative, current schema; the summary below is only a hint.\n"
+        + std::string{kGraphqlSchema};
     tool.inputSchema_ = mts::agent::JsonSchema::object()
                             .property("query", mts::agent::JsonSchema::string(), true)
                             .property("variables", mts::agent::JsonSchema::object(), false)
@@ -129,6 +137,20 @@ inline auto makeCommandGraphqlTool(GameGraphqlClient& client) -> mts::agent::Too
             ? input["variables"]
             : mts::agent::json::object();
         return client.execute(input.value("query", std::string{}), variables);
+    };
+    return tool;
+}
+
+inline auto makeGetSchemaTool(GameGraphqlClient& client) -> mts::agent::Tool {
+    mts::agent::Tool tool;
+    tool.name_ = "getSchema";
+    tool.description_ =
+        "Fetch the exact, current schema of the game server's GraphQL API. "
+        "Call this whenever you are unsure which queries, mutations, fields or arguments exist "
+        "before writing a command_graphql operation. Returns the raw schema as JSON context.";
+    tool.inputSchema_ = mts::agent::JsonSchema::object().additionalProperties(false);
+    tool.callable_ = [&client](mts::agent::json const&) -> mts::agent::Result<mts::agent::json> {
+        return client.fetchSchema();
     };
     return tool;
 }
@@ -332,6 +354,7 @@ AgentHarness::AgentHarness(mts::model::ProviderHandle& provider,
     m_impl->registry = std::make_shared<mts::agent::ToolRegistry>();
     (void)m_impl->registry->add(detail::makeEchoTool());
     (void)m_impl->registry->add(detail::makeCommandGraphqlTool(m_impl->gameClient));
+    (void)m_impl->registry->add(detail::makeGetSchemaTool(m_impl->gameClient));
 
     mts::agent::ChatModelToolBinding binding;
     for (auto const& spec : m_impl->registry->list())
