@@ -69,6 +69,7 @@ private:
 
 [[nodiscard]] auto makeOpenRouterProvider(mts::config::ProviderConfig const& config) -> Result<OpenRouterProvider>;
 [[nodiscard]] auto makeProvider(mts::config::AppConfig const& config) -> Result<ProviderHandle>;
+[[nodiscard]] auto makeVisionProvider(mts::config::AppConfig const& config) -> Result<ProviderHandle>;
 
 }
 
@@ -193,6 +194,24 @@ auto makeProvider(mts::config::AppConfig const& config) -> Result<ProviderHandle
     }
 
     return ProviderHandle(FakeModelProvider{});
+}
+
+auto makeVisionProvider(mts::config::AppConfig const& config) -> Result<ProviderHandle> {
+    if (config.vision.model.empty())
+        return mts::agent::Result<ProviderHandle>::fromStatus(
+            mts::agent::Status::invalidArgument(
+                "vision model is not configured; set vision.model in the config to enable map image description"));
+    if (config.provider.apiKey.empty())
+        return mts::agent::Result<ProviderHandle>::fromStatus(
+            mts::agent::Status::invalidArgument(
+                "provider.apiKey is not configured; the vision model cannot be used without credentials"));
+
+    auto providerConfig = config.provider;
+    providerConfig.model = config.vision.model;
+    auto provider = makeOpenRouterProvider(providerConfig);
+    if (!provider)
+        return provider.status();
+    return ProviderHandle(std::move(provider.value()));
 }
 
 }

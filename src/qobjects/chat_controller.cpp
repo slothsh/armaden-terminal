@@ -63,6 +63,8 @@ struct ChatController::Impl {
     std::unique_ptr<mts::model::ProviderHandle> provider;
     std::unique_ptr<mts::model::ProviderHandle> namingProviderOwned;
     mts::model::ProviderHandle* namingProvider = nullptr;
+    std::unique_ptr<mts::model::ProviderHandle> visionProviderOwned;
+    mts::model::ProviderHandle* visionProvider = nullptr;
     std::unique_ptr<mts::harness::AgentHarness> harness;
     QHash<QString, std::shared_ptr<mts::runtime::Cancellation>> cancellations;
     QHash<QString, std::shared_ptr<mts::runtime::Cancellation>> namingCancellations;
@@ -116,6 +118,16 @@ ChatController::ChatController(QObject* parent)
                 m_impl->namingProviderOwned = std::make_unique<mts::model::ProviderHandle>(std::move(naming.value()));
                 m_impl->namingProvider = m_impl->namingProviderOwned.get();
             }
+        }
+    }
+
+    if (!config.vision.model.empty()) {
+        auto vision = mts::model::makeVisionProvider(config);
+        if (vision) {
+            m_impl->visionProviderOwned = std::make_unique<mts::model::ProviderHandle>(std::move(vision.value()));
+            m_impl->visionProvider = m_impl->visionProviderOwned.get();
+        } else {
+            setStatus(QString::fromStdString(vision.status().message()));
         }
     }
 

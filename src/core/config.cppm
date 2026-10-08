@@ -41,6 +41,12 @@ struct NamingConfig {
     std::string model;
 };
 
+struct VisionConfig {
+    std::string model;
+    std::uint32_t maxPixels = 1024;
+    std::uint32_t timeoutMs = 30000;
+};
+
 struct CacheConfig {
     std::string tilesDir = "~/.cache/mindtosis/tiles";
 };
@@ -53,6 +59,7 @@ struct AppConfig {
     CompactionConfig compaction;
     NamingConfig naming;
     CacheConfig cache;
+    VisionConfig vision;
 };
 
 [[nodiscard]] auto defaultConfig() -> AppConfig;
@@ -173,6 +180,13 @@ auto applyConfig(Config const& config, mts::config::AppConfig& app) -> Status {
         return status;
 
     if (auto const status = readString(config, "cache.tilesDir", app.cache.tilesDir); !status)
+        return status;
+
+    if (auto const status = readString(config, "vision.model", app.vision.model); !status)
+        return status;
+    if (auto const status = readUInt32(config, "vision.maxPixels", app.vision.maxPixels); !status)
+        return status;
+    if (auto const status = readUInt32(config, "vision.timeoutMs", app.vision.timeoutMs); !status)
         return status;
 
     return Status::ok();
