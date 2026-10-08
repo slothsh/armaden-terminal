@@ -115,10 +115,10 @@ public:
             return;
 
         mts::ecs::Camera const& camera = m_world.get<mts::ecs::Camera>(m_camera);
+        mts::ecs::drawGridSystem(context, m_world, camera);
+
         if (m_loader != nullptr)
             this->paintMapLayers(painter, context, camera);
-
-        mts::ecs::drawGridSystem(context, m_world, camera);
     }
 
 private:
