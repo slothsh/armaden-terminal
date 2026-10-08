@@ -74,6 +74,7 @@ export namespace mts::agent {
     using ::lgc::ToolPolicy;
     using ::lgc::ToolSpec;
     using ::lgc::ToolResult;
+    using ::lgc::ToolRiskLevel;
     using ::lgc::ToolRuntime;
     using ::lgc::IHttpClient;
     using ::lgc::HttpClientConfig;

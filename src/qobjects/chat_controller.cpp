@@ -4,12 +4,18 @@
 #include "map_controller.hpp"
 #include "session_list_model.hpp"
 
+#include <QBuffer>
 #include <QHash>
+#include <QImage>
 #include <QMetaObject>
+#include <QPointF>
+#include <QRectF>
 #include <QSet>
+#include <QSizeF>
 #include <QString>
 
 import std;
+import agent;
 import runtime;
 import events;
 import config;
@@ -144,8 +150,95 @@ ChatController::ChatController(QObject* parent)
         setStatus(m_impl->mapController->status());
 
     if (m_impl->store != nullptr && m_impl->provider != nullptr) {
+        mts::harness::MapTools mapTools;
+        mapTools.visionTimeoutMs = int(config.vision.timeoutMs);
+        mapTools.info = [this]() -> mts::agent::Result<mts::agent::json> {
+            auto const* controller = m_impl->mapController.get();
+            auto const* loader = controller != nullptr ? controller->loader() : nullptr;
+            if (loader == nullptr)
+                return mts::agent::Result<mts::agent::json>::fromStatus(mts::agent::Status::unavailable(
+                    controller != nullptr && !controller->status().isEmpty()
+                        ? controller->status().toStdString()
+                        : "map is not loaded"));
+
+            mts::map::MapInfo const& info = loader->info();
+            mts::agent::json result = mts::agent::json::object();
+            result["id"] = info.id;
+            result["name"] = info.name;
+            result["unitLabel"] = info.transform.unitLabel;
+            result["metersPerPixel"] = info.transform.metersPerPixel;
+            result["minLevel"] = info.minLevel;
+            result["maxLevel"] = info.maxLevel;
+            result["tileSize"] = info.tileSize;
+            result["baseSize"] = mts::agent::json{{"width", info.baseSize.width()}, {"height", info.baseSize.height()}};
+            result["worldBounds"] = mts::agent::json{
+                {"x", info.worldBounds.left()},
+                {"y", info.worldBounds.top()},
+                {"width", info.worldBounds.width()},
+                {"height", info.worldBounds.height()},
+            };
+            mts::agent::json layers = mts::agent::json::array();
+            for (auto const* layer : loader->layers()) {
+                layers.push_back(mts::agent::json{
+                    {"id", layer->id()},
+                    {"name", layer->name()},
+                    {"visible", layer->visible()},
+                    {"opacity", layer->opacity()},
+                    {"blend", mts::map::blendModeToString(layer->blend())},
+                });
+            }
+            result["layers"] = std::move(layers);
+            return result;
+        };
+        mapTools.snapshot = [this, maxPixels = int(config.vision.maxPixels)](
+                                std::optional<mts::harness::MapToolRegion> const& region,
+                                std::optional<int> level,
+                                std::vector<std::string> const& layers)
+            -> mts::agent::Result<mts::harness::MapToolSnapshot> {
+            auto const* controller = m_impl->mapController.get();
+            if (controller == nullptr || controller->loader() == nullptr || controller->snapshotService() == nullptr)
+                return mts::agent::Result<mts::harness::MapToolSnapshot>::fromStatus(
+                    mts::agent::Status::unavailable("map imagery is not available"));
+
+            mts::map::MapInfo const& info = controller->loader()->info();
+            QRectF worldRect = info.worldBounds;
+            if (region.has_value()) {
+                worldRect = QRectF(
+                    QPointF(region->x, region->y),
+                    QSizeF(region->width, region->height)
+                ).normalized();
+            }
+
+            mts::map::SnapshotOptions options;
+            options.level = level;
+            options.layers = layers;
+            options.maxPixels = maxPixels;
+            auto const snapshot = controller->snapshotService()->renderRegion(worldRect, options);
+            if (!snapshot)
+                return snapshot.status();
+
+            QByteArray png;
+            QBuffer buffer(&png);
+            buffer.open(QIODevice::WriteOnly);
+            snapshot.value().image.save(&buffer, "png");
+            buffer.close();
+
+            mts::harness::MapToolSnapshot out;
+            out.snapshotId = snapshot.value().id;
+            out.width = snapshot.value().pixelSize.width();
+            out.height = snapshot.value().pixelSize.height();
+            out.level = snapshot.value().level;
+            out.layers = snapshot.value().layers;
+            out.region = mts::harness::MapToolRegion{
+                worldRect.left(), worldRect.top(), worldRect.width(), worldRect.height()};
+            out.unitLabel = info.transform.unitLabel;
+            out.pngBase64 = png.toBase64().toStdString();
+            return out;
+        };
+
         m_impl->harness = std::make_unique<mts::harness::AgentHarness>(
-            *m_impl->provider, m_impl->namingProvider, *m_impl->store, *m_impl->pool, m_impl->bus, config.server
+            *m_impl->provider, m_impl->namingProvider, m_impl->visionProvider, *m_impl->store,
+            *m_impl->pool, m_impl->bus, config.server, std::move(mapTools)
         );
 
         (void)m_impl->bus.subscribe<mts::events::RunStarted>([this](mts::events::RunStarted const& event) {
