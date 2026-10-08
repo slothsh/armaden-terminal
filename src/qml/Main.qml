@@ -20,6 +20,7 @@ Window {
 
     signal contextMenuRequested(real x, real y)
 
+    property bool mapPaneVisible: false
     property bool chatExpanded: false
     readonly property real chatPageWidth: 960
     readonly property real chatMarginMin: Theme.metric.spacing
@@ -105,6 +106,15 @@ Window {
             onClicked: inputDrawer.toggle()
         }
 
+        IconButton {
+            id: mapPaneButton
+            glyph: "\u25A3"
+            glyphColor: root.mapPaneVisible ? Theme.color.accent : Theme.color.textMuted
+            x: Math.max(content.x + Theme.metric.spacing, inputDrawerButton.x + inputDrawerButton.width + Theme.metric.spacing)
+            anchors.verticalCenter: parent.verticalCenter
+            onClicked: root.mapPaneVisible = !root.mapPaneVisible
+        }
+
         Rectangle {
             anchors.top: parent.top
             anchors.bottom: parent.bottom
@@ -127,8 +137,16 @@ Window {
             root.contextMenuRequested(position.x, position.y)
         }
 
+        MapCanvas {
+            id: mapCanvas
+            anchors.fill: parent
+            visible: root.mapPaneVisible
+            controller: chat.mapController
+        }
+
         ScrollingArea {
             id: conversationView
+            visible: !root.mapPaneVisible
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
@@ -223,6 +241,7 @@ Window {
 
         VerticalDrawer {
             id: inputDrawer
+            visible: !root.mapPaneVisible
             side: DrawerSide.Bottom
             size: 120
             sizeMin: 80

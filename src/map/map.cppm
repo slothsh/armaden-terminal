@@ -199,10 +199,13 @@ public:
 
         m_scheduler.request(tile, generation,
             [this, tile, completion = std::move(completion)](mts::agent::Result<imagery::SharedImage> const& result) {
-                if (result)
+                if (result) {
                     m_cache.store(tile, result.value());
-                else
+                } else if (result.status().code() == mts::agent::StatusCode::NotFound) {
+                    m_cache.evict(tile);
+                } else {
                     m_cache.markFailed(tile, result.status().message());
+                }
                 if (completion)
                     completion(result);
             });

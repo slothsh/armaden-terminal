@@ -22,6 +22,7 @@ export namespace mts::agent {
     using ::nlohmann::json;
 
     using ::lgc::Status;
+    using ::lgc::StatusCode;
     using ::lgc::Result;
     using ::lgc::BaseMessage;
     using ::lgc::ToolCall;

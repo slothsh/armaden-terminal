@@ -1,6 +1,7 @@
 #include "chat_controller.hpp"
 
 #include "conversation_model.hpp"
+#include "map_controller.hpp"
 #include "session_list_model.hpp"
 
 #include <QHash>
@@ -15,6 +16,8 @@ import config;
 import persistence;
 import provider;
 import harness;
+import imagery;
+import map;
 
 namespace {
 
@@ -61,6 +64,7 @@ struct ChatController::Impl {
     mts::events::EventBus bus;
     std::unique_ptr<mts::persistence::SessionStoreHandle> store;
     std::unique_ptr<mts::model::ProviderHandle> provider;
+    std::unique_ptr<MapController> mapController;
     std::unique_ptr<mts::model::ProviderHandle> namingProviderOwned;
     mts::model::ProviderHandle* namingProvider = nullptr;
     std::unique_ptr<mts::model::ProviderHandle> visionProviderOwned;
@@ -130,6 +134,14 @@ ChatController::ChatController(QObject* parent)
             setStatus(QString::fromStdString(vision.status().message()));
         }
     }
+
+    m_impl->mapController = std::make_unique<MapController>(
+        *m_impl->pool,
+        mts::imagery::expandHomePath(config.map.configPath),
+        mts::imagery::expandHomePath(config.cache.tilesDir),
+        this);
+    if (!m_impl->mapController->status().isEmpty())
+        setStatus(m_impl->mapController->status());
 
     if (m_impl->store != nullptr && m_impl->provider != nullptr) {
         m_impl->harness = std::make_unique<mts::harness::AgentHarness>(
@@ -261,6 +273,10 @@ ChatController::~ChatController() {
 
 SessionListModel* ChatController::sessions() const {
     return m_sessions;
+}
+
+MapController* ChatController::mapController() const {
+    return m_impl->mapController.get();
 }
 
 ConversationModel* ChatController::conversation() const {

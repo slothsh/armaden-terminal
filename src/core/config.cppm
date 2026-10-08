@@ -51,6 +51,10 @@ struct CacheConfig {
     std::string tilesDir = "~/.cache/mindtosis/tiles";
 };
 
+struct MapConfig {
+    std::string configPath = "config/maps/everon.json";
+};
+
 struct AppConfig {
     ProviderConfig provider;
     ServerConfig server;
@@ -59,6 +63,7 @@ struct AppConfig {
     CompactionConfig compaction;
     NamingConfig naming;
     CacheConfig cache;
+    MapConfig map;
     VisionConfig vision;
 };
 
@@ -180,6 +185,8 @@ auto applyConfig(Config const& config, mts::config::AppConfig& app) -> Status {
         return status;
 
     if (auto const status = readString(config, "cache.tilesDir", app.cache.tilesDir); !status)
+        return status;
+    if (auto const status = readString(config, "map.configPath", app.map.configPath); !status)
         return status;
 
     if (auto const status = readString(config, "vision.model", app.vision.model); !status)

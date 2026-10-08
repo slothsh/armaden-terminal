@@ -79,6 +79,12 @@ export namespace mts::ecs {
         return mapWorldToScreen(camera, canvasSize, QPointF());
     }
 
+    QRectF screenRectForWorldRect(Camera const& camera, QSizeF const& canvasSize, QRectF const& worldRect) {
+        QPointF const topLeft = mapWorldToScreen(camera, canvasSize, worldRect.topLeft());
+        QPointF const bottomRight = mapWorldToScreen(camera, canvasSize, worldRect.bottomRight());
+        return QRectF(topLeft, bottomRight).normalized();
+    }
+
     QRectF worldBounds(Camera const& camera, QRectF const& canvasRect) {
         QSizeF const canvasSize = canvasRect.size();
         QPointF const topLeft = mapScreenToWorld(camera, canvasSize, canvasRect.topLeft());

@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "conversation_model.hpp"
+#include "map_controller.hpp"
 #include "session_list_model.hpp"
 
 class ChatController : public QObject {
@@ -18,6 +19,7 @@ class ChatController : public QObject {
     Q_PROPERTY(QString status READ status NOTIFY statusChanged)
     Q_PROPERTY(QString activeSession READ activeSession NOTIFY activeSessionChanged)
     Q_PROPERTY(QString draft READ draft NOTIFY draftChanged)
+    Q_PROPERTY(MapController* mapController READ mapController CONSTANT)
 
 public:
     explicit ChatController(QObject* parent = nullptr);
@@ -25,6 +27,7 @@ public:
 
     SessionListModel* sessions() const;
     ConversationModel* conversation() const;
+    MapController* mapController() const;
     bool running() const;
     QString status() const;
     QString activeSession() const;
