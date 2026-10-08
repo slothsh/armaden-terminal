@@ -15,6 +15,7 @@ qt_standard_project_setup(REQUIRES 6.11)
 
 add_subdirectory(qml/)
 add_subdirectory(core/)
+add_subdirectory(imagery/)
 
 # Add to build
 add_executable_target(
@@ -77,6 +78,7 @@ target_link_libraries(
         EnTT::EnTT
         lgc::langgraph
         LibCore
+        LibImagery
     PRIVATE
         LibQml
 )
