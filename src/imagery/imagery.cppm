@@ -1,25 +1,11 @@
+#include <QCryptographicHash>
 #include <QImage>
+#include <QImageReader>
 #include <QPointF>
 #include <QRectF>
 #include <QSize>
 #include <QSizeF>
 #include <QtGlobal>
-
-#include <algorithm>
-#include <atomic>
-#include <cmath>
-#include <condition_variable>
-#include <cstddef>
-#include <cstdint>
-#include <functional>
-#include <limits>
-#include <list>
-#include <mutex>
-#include <optional>
-#include <string>
-#include <unordered_map>
-#include <utility>
-#include <vector>
 
 export module imagery;
 
@@ -582,6 +568,381 @@ private:
     std::unordered_map<TileId, std::shared_ptr<Inflight>, TileIdHash> m_inflight;
     std::shared_ptr<std::atomic_bool> m_alive;
     Generation m_generation = 0;
+};
+
+[[nodiscard]] auto expandHomePath(std::string const& path) -> std::filesystem::path {
+    if (path.empty() || path.front() != '~')
+        return std::filesystem::path(path);
+
+    std::string const home = []() -> std::string {
+        if (char const* env = std::getenv("HOME"); env != nullptr && *env != '\0')
+            return std::string(env);
+        return {};
+    }();
+    if (home.empty())
+        return std::filesystem::path(path);
+    if (path.size() == 1)
+        return std::filesystem::path(home);
+    if (path.at(1) == '/' || path.at(1) == std::filesystem::path::preferred_separator)
+        return std::filesystem::path(home) / std::filesystem::path(path.substr(2));
+    return std::filesystem::path(path);
+}
+
+struct TileBuildProgress {
+    bool building = false;
+    bool ready = false;
+    bool failed = false;
+    std::string error;
+    int levelsReady = 0;
+    int levelCount = 0;
+};
+
+namespace detail {
+
+struct PyramidBuildState {
+    enum class State : std::uint8_t {
+        Idle,
+        Building,
+        Ready,
+        Failed,
+    };
+
+    using Listener = std::function<void(TileBuildProgress const&)>;
+
+    [[nodiscard]] auto progress(int levelCount) const -> TileBuildProgress {
+        std::lock_guard const lock(mutex);
+        TileBuildProgress progress;
+        progress.building = state == State::Building;
+        progress.ready = state == State::Ready;
+        progress.failed = state == State::Failed;
+        progress.error = error;
+        progress.levelsReady = levelsReady.load(std::memory_order_acquire);
+        progress.levelCount = levelCount;
+        return progress;
+    }
+
+    void notify(TileBuildProgress const& progress) const {
+        std::vector<Listener> snapshot;
+        {
+            std::lock_guard const lock(mutex);
+            snapshot.reserve(listeners.size());
+            for (auto const& [id, listener] : listeners)
+                snapshot.push_back(listener);
+        }
+        for (auto const& listener : snapshot)
+            listener(progress);
+    }
+
+    mutable std::mutex mutex;
+    State state = State::Idle;
+    std::string error;
+    std::atomic<int> levelsReady{0};
+    std::unordered_map<std::size_t, Listener> listeners;
+    std::size_t nextListenerId = 1;
+};
+
+}
+
+class SingleFileTileSource {
+public:
+    struct Options {
+        int tileSize = 256;
+        std::filesystem::path cacheDir;
+    };
+
+    static constexpr int kMaximumLevels = 16;
+
+    [[nodiscard]] static auto create(std::filesystem::path const& file, Options options)
+        -> mts::agent::Result<SingleFileTileSource> {
+        if (options.tileSize <= 0)
+            return mts::agent::Result<SingleFileTileSource>::fromStatus(
+                mts::agent::Status::invalidArgument("tile size must be positive"));
+
+        std::error_code pathError;
+        if (!std::filesystem::exists(file, pathError) || pathError)
+            return mts::agent::Result<SingleFileTileSource>::fromStatus(
+                mts::agent::Status::invalidArgument("map source file does not exist: " + file.string()));
+
+        QImageReader reader(QString::fromStdString(file.string()));
+        QSize const baseSize = reader.size();
+        if (baseSize.isEmpty())
+            return mts::agent::Result<SingleFileTileSource>::fromStatus(
+                mts::agent::Status::internal("could not read source image dimensions: " + file.string()));
+
+        return SingleFileTileSource(file, baseSize, std::move(options));
+    }
+
+    [[nodiscard]] auto tileSize() const -> int {
+        return m_tileSize;
+    }
+
+    [[nodiscard]] auto levelCount() const -> int {
+        return m_levelCount;
+    }
+
+    [[nodiscard]] auto levelInfo(int level) const -> LevelInfo {
+        int const clamped = qBound(0, level, m_levelCount - 1);
+        return levelInfoForBase(m_baseSize, m_tileSize, clamped);
+    }
+
+    [[nodiscard]] auto baseSize() const -> QSize {
+        return m_baseSize;
+    }
+
+    [[nodiscard]] auto filePath() const -> std::filesystem::path const& {
+        return m_file;
+    }
+
+    [[nodiscard]] auto pyramidDirectory() const -> std::filesystem::path const& {
+        return m_pyramidDir;
+    }
+
+    void startBuild(mts::runtime::ThreadPool& pool) {
+        {
+            std::lock_guard const lock(m_core->mutex);
+            if (m_core->state != detail::PyramidBuildState::State::Idle)
+                return;
+
+            int const ready = this->countReadyLevels();
+            if (ready == m_levelCount) {
+                m_core->state = detail::PyramidBuildState::State::Ready;
+                m_core->levelsReady.store(ready, std::memory_order_release);
+            } else {
+                m_core->state = detail::PyramidBuildState::State::Building;
+                m_core->levelsReady.store(ready, std::memory_order_release);
+                auto const core = m_core;
+                auto const file = m_file;
+                auto const pyramidDir = m_pyramidDir;
+                auto const baseSize = m_baseSize;
+                int const tileSize = m_tileSize;
+                int const levelCount = m_levelCount;
+                pool.schedule([core, file, pyramidDir, baseSize, tileSize, levelCount] {
+                    runPyramidBuild(core, file, pyramidDir, baseSize, tileSize, levelCount);
+                });
+            }
+        }
+        m_core->notify(m_core->progress(m_levelCount));
+    }
+
+    [[nodiscard]] auto buildProgress() const -> TileBuildProgress {
+        return m_core->progress(m_levelCount);
+    }
+
+    [[nodiscard]] auto levelReady(int level) const -> bool {
+        int const clamped = qBound(0, level, m_levelCount - 1);
+        std::error_code error;
+        return std::filesystem::exists(this->levelMarkerPath(clamped), error) && !error;
+    }
+
+    auto addProgressListener(detail::PyramidBuildState::Listener listener) -> std::size_t {
+        std::lock_guard const lock(m_core->mutex);
+        std::size_t const id = m_core->nextListenerId++;
+        m_core->listeners.emplace(id, std::move(listener));
+        return id;
+    }
+
+    void removeProgressListener(std::size_t id) {
+        std::lock_guard const lock(m_core->mutex);
+        m_core->listeners.erase(id);
+    }
+
+    [[nodiscard]] auto readTile(TileId const& tile) -> mts::agent::Result<SharedImage> {
+        if (tile.level < 0 || tile.level >= m_levelCount)
+            return mts::agent::Result<SharedImage>::fromStatus(
+                mts::agent::Status::invalidArgument("tile level out of range"));
+
+        double const scale = levelPixelScale(tile.level);
+        int const levelWidth = int(std::ceil(double(m_baseSize.width()) / scale));
+        int const levelHeight = int(std::ceil(double(m_baseSize.height()) / scale));
+        if (tile.x < 0 || std::int64_t(tile.x) * m_tileSize >= levelWidth
+            || tile.y < 0 || std::int64_t(tile.y) * m_tileSize >= levelHeight) {
+            return mts::agent::Result<SharedImage>::fromStatus(
+                mts::agent::Status::invalidArgument("tile coordinates out of range"));
+        }
+
+        SharedImage image(QString::fromStdString(this->tilePath(tile).string()));
+        if (image.isNull()) {
+            TileBuildProgress const progress = m_core->progress(m_levelCount);
+            if (progress.failed)
+                return mts::agent::Result<SharedImage>::fromStatus(
+                    mts::agent::Status::internal("map pyramid build failed: " + progress.error));
+            if (!progress.building && !progress.ready)
+                return mts::agent::Result<SharedImage>::fromStatus(
+                    mts::agent::Status::notFound("map pyramid has not been built"));
+            return mts::agent::Result<SharedImage>::fromStatus(
+                mts::agent::Status::notFound("tile not yet available"));
+        }
+        return image;
+    }
+
+private:
+    SingleFileTileSource(std::filesystem::path file, QSize baseSize, Options options)
+        : m_file(std::move(file))
+        , m_baseSize(baseSize)
+        , m_tileSize(options.tileSize)
+        , m_core(std::make_shared<detail::PyramidBuildState>()) {
+        int width = m_baseSize.width();
+        int height = m_baseSize.height();
+        int levels = 1;
+        while ((std::max(width, height) > m_tileSize) && levels < kMaximumLevels) {
+            width = (width + 1) / 2;
+            height = (height + 1) / 2;
+            ++levels;
+        }
+        m_levelCount = levels;
+
+        std::filesystem::path const cacheRoot = options.cacheDir.empty()
+            ? expandHomePath("~/.cache/mindtosis/tiles")
+            : expandHomePath(options.cacheDir.string());
+
+        std::error_code pathError;
+        auto const absolute = std::filesystem::absolute(m_file, pathError);
+        std::uintmax_t const sizeBytes = pathError ? 0 : std::filesystem::file_size(m_file, pathError);
+        auto const modified = std::filesystem::last_write_time(m_file, pathError);
+        auto const modifiedTicks = pathError ? 0 : modified.time_since_epoch().count();
+
+        std::string const identity = absolute.string() + "|" + std::to_string(sizeBytes)
+            + "|" + std::to_string(modifiedTicks);
+        QByteArray const digest = QCryptographicHash::hash(
+            QByteArray::fromStdString(identity), QCryptographicHash::Sha1).toHex();
+
+        m_pyramidDir = cacheRoot / "v1" / std::filesystem::path(digest.constData())
+            / std::to_string(m_tileSize);
+    }
+
+    [[nodiscard]] auto countReadyLevels() const -> int {
+        int ready = 0;
+        for (int level = 0; level < m_levelCount; ++level) {
+            std::error_code error;
+            if (std::filesystem::exists(this->levelMarkerPath(level), error) && !error)
+                ++ready;
+        }
+        return ready;
+    }
+
+    [[nodiscard]] auto tilePath(TileId const& tile) const -> std::filesystem::path {
+        return m_pyramidDir / std::to_string(tile.level)
+            / (std::to_string(tile.x) + "_" + std::to_string(tile.y) + ".png");
+    }
+
+    [[nodiscard]] auto levelMarkerPath(int level) const -> std::filesystem::path {
+        return m_pyramidDir / ("level_" + std::to_string(level) + ".done");
+    }
+
+    [[nodiscard]] static auto levelImageFor(QImage const& base, QSize baseSize, int level) -> QImage {
+        if (level == 0)
+            return base;
+        double const scale = levelPixelScale(level);
+        QSize const target(
+            int(std::ceil(double(baseSize.width()) / scale)),
+            int(std::ceil(double(baseSize.height()) / scale))
+        );
+        return base.scaled(target, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    }
+
+    [[nodiscard]] static auto writeTile(QImage const& levelImage, QSize levelSize,
+                                        std::filesystem::path const& pyramidDir,
+                                        int tileSize, int level, int x, int y) -> bool {
+        int const left = x * tileSize;
+        int const top = y * tileSize;
+        int const width = std::min(tileSize, levelSize.width() - left);
+        int const height = std::min(tileSize, levelSize.height() - top);
+        if (width <= 0 || height <= 0)
+            return true;
+
+        QImage const tile = levelImage.copy(left, top, width, height);
+        std::filesystem::path const directory = pyramidDir / std::to_string(level);
+        std::error_code error;
+        std::filesystem::create_directories(directory, error);
+        if (error)
+            return false;
+
+        auto const tilePath = directory / (std::to_string(x) + "_" + std::to_string(y) + ".png");
+        return tile.save(QString::fromStdString(tilePath.string()), "png");
+    }
+
+    static void failPyramidBuild(std::shared_ptr<detail::PyramidBuildState> const& core,
+                                 int levelCount, std::string message) {
+        {
+            std::lock_guard const lock(core->mutex);
+            core->state = detail::PyramidBuildState::State::Failed;
+            core->error = std::move(message);
+        }
+        core->notify(core->progress(levelCount));
+    }
+
+    static void runPyramidBuild(std::shared_ptr<detail::PyramidBuildState> const& core,
+                                std::filesystem::path const& file,
+                                std::filesystem::path const& pyramidDir,
+                                QSize baseSize, int tileSize, int levelCount) {
+        QImageReader reader(QString::fromStdString(file.string()));
+        QImage const base = reader.read();
+        if (base.isNull()) {
+            failPyramidBuild(core, levelCount, "could not decode map source: " + reader.errorString().toStdString());
+            return;
+        }
+
+        int ready = 0;
+        for (int level = 0; level < levelCount; ++level) {
+            std::error_code error;
+            if (std::filesystem::exists(pyramidDir / ("level_" + std::to_string(level) + ".done"), error) && !error)
+                ++ready;
+        }
+        core->levelsReady.store(ready, std::memory_order_release);
+
+        for (int level = levelCount - 1; level >= 0; --level) {
+            std::error_code error;
+            std::filesystem::path const marker = pyramidDir / ("level_" + std::to_string(level) + ".done");
+            if (std::filesystem::exists(marker, error) && !error)
+                continue;
+
+            double const scale = levelPixelScale(level);
+            QSize const levelSize(
+                int(std::ceil(double(baseSize.width()) / scale)),
+                int(std::ceil(double(baseSize.height()) / scale))
+            );
+            QImage const levelImage = levelImageFor(base, baseSize, level);
+            if (levelImage.isNull()) {
+                failPyramidBuild(core, levelCount, "could not scale source to level " + std::to_string(level));
+                return;
+            }
+
+            int const tilesAcross = int(std::ceil(double(levelSize.width()) / double(tileSize)));
+            int const tilesDown = int(std::ceil(double(levelSize.height()) / double(tileSize)));
+            for (int y = 0; y < tilesDown; ++y) {
+                for (int x = 0; x < tilesAcross; ++x) {
+                    if (!writeTile(levelImage, levelSize, pyramidDir, tileSize, level, x, y)) {
+                        failPyramidBuild(core, levelCount,
+                            "could not write tile " + std::to_string(x) + "_" + std::to_string(y)
+                            + " at level " + std::to_string(level));
+                        return;
+                    }
+                }
+            }
+
+            std::ofstream markerFile(marker, std::ios::out | std::ios::trunc);
+            if (!markerFile.is_open()) {
+                failPyramidBuild(core, levelCount, "could not write level marker " + marker.string());
+                return;
+            }
+
+            core->levelsReady.fetch_add(1, std::memory_order_acq_rel);
+            core->notify(core->progress(levelCount));
+        }
+
+        {
+            std::lock_guard const lock(core->mutex);
+            core->state = detail::PyramidBuildState::State::Ready;
+        }
+        core->notify(core->progress(levelCount));
+    }
+
+    std::filesystem::path m_file;
+    QSize m_baseSize;
+    int m_tileSize;
+    int m_levelCount = 1;
+    std::filesystem::path m_pyramidDir;
+    std::shared_ptr<detail::PyramidBuildState> m_core;
 };
 
 }

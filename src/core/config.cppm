@@ -41,6 +41,10 @@ struct NamingConfig {
     std::string model;
 };
 
+struct CacheConfig {
+    std::string tilesDir = "~/.cache/mindtosis/tiles";
+};
+
 struct AppConfig {
     ProviderConfig provider;
     ServerConfig server;
@@ -48,6 +52,7 @@ struct AppConfig {
     BudgetConfig budgets;
     CompactionConfig compaction;
     NamingConfig naming;
+    CacheConfig cache;
 };
 
 [[nodiscard]] auto defaultConfig() -> AppConfig;
@@ -165,6 +170,9 @@ auto applyConfig(Config const& config, mts::config::AppConfig& app) -> Status {
         return status;
 
     if (auto const status = readString(config, "naming.model", app.naming.model); !status)
+        return status;
+
+    if (auto const status = readString(config, "cache.tilesDir", app.cache.tilesDir); !status)
         return status;
 
     return Status::ok();
