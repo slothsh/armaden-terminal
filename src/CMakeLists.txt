@@ -4,7 +4,6 @@ file(GLOB_RECURSE QOBJECTS_MODULE_HEADER_FILES qobjects/*.hpp)
 
 # Project module source files
 file(GLOB_RECURSE LOGGING_MODULE_SRC_FILES logging/*.cppm)
-file(GLOB_RECURSE ECS_MODULE_SRC_FILES CONFIGURE_DEPENDS ecs/*.cppm)
 
 # Third-party module source files
 file(GLOB_RECURSE MAGIC_ENUM_MODULE_SRC_FILES "${magic_enum_SOURCE_DIR}/module/*.cppm")
@@ -15,7 +14,9 @@ qt_standard_project_setup(REQUIRES 6.11)
 
 add_subdirectory(qml/)
 add_subdirectory(core/)
+add_subdirectory(ecs/)
 add_subdirectory(imagery/)
+add_subdirectory(map/)
 
 # Add to build
 add_executable_target(
@@ -27,7 +28,6 @@ add_executable_target(
         main.cpp
     MODULE_FILES
         ${LOGGING_MODULE_SRC_FILES}
-        ${ECS_MODULE_SRC_FILES}
     THIRD_PARTY_MODULE_FILES
         ${MAGIC_ENUM_MODULE_SRC_FILES}
 )
@@ -78,7 +78,9 @@ target_link_libraries(
         EnTT::EnTT
         lgc::langgraph
         LibCore
+        LibEcs
         LibImagery
+        LibMap
     PRIVATE
         LibQml
 )
