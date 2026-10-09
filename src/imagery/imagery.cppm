@@ -651,6 +651,8 @@ public:
     };
 
     static constexpr int kMaximumLevels = 16;
+    static constexpr int kMaximumImageAllocationMiB = 4096;
+    static constexpr std::uint64_t kAllocationSafetyMarginBytes = 64ULL * 1024ULL * 1024ULL;
 
     [[nodiscard]] static auto create(std::filesystem::path const& file, Options options)
         -> mts::agent::Result<SingleFileTileSource> {
@@ -668,6 +670,25 @@ public:
         if (baseSize.isEmpty())
             return mts::agent::Result<SingleFileTileSource>::fromStatus(
                 mts::agent::Status::internal("could not read source image dimensions: " + file.string()));
+
+        std::uint64_t const pixelBytes = std::uint64_t(baseSize.width())
+            * std::uint64_t(baseSize.height()) * 4ULL;
+        std::uint64_t const requiredBytes = pixelBytes + kAllocationSafetyMarginBytes;
+        std::uint64_t const requiredMiB = (requiredBytes + (1024ULL * 1024ULL - 1ULL)) / (1024ULL * 1024ULL);
+        if (requiredMiB > std::uint64_t(kMaximumImageAllocationMiB))
+            return mts::agent::Result<SingleFileTileSource>::fromStatus(
+                mts::agent::Status::resourceExhausted(
+                    "source image " + std::to_string(baseSize.width()) + "x" + std::to_string(baseSize.height())
+                    + " requires about " + std::to_string(requiredMiB) + " MiB to decode; limit is "
+                    + std::to_string(kMaximumImageAllocationMiB) + " MiB"));
+
+        {
+            static std::mutex allocationLimitMutex;
+            std::lock_guard const lock(allocationLimitMutex);
+            int const currentLimit = QImageReader::allocationLimit();
+            if (currentLimit > 0 && currentLimit < int(requiredMiB))
+                QImageReader::setAllocationLimit(int(requiredMiB));
+        }
 
         return SingleFileTileSource(file, baseSize, std::move(options));
     }

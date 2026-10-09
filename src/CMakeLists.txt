@@ -32,21 +32,6 @@ add_executable_target(
         ${MAGIC_ENUM_MODULE_SRC_FILES}
 )
 
-set_source_files_properties(
-    "${PROJECT_SOURCE_DIR}/everon.png"
-    PROPERTIES
-        QT_RESOURCE_ALIAS "everon.png"
-)
-
-qt_add_resources(
-    mts
-    "assets"
-    PREFIX
-        "/assets"
-    FILES
-        "${PROJECT_SOURCE_DIR}/everon.png"
-)
-
 add_qml_module_target(
     mts
     URI Application

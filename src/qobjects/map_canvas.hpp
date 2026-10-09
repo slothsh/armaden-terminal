@@ -34,6 +34,8 @@ public:
     [[nodiscard]] auto zDepth() const -> float;
     void setZDepth(float depth);
 
+    Q_INVOKABLE void fitToMap();
+
 signals:
     void controllerChanged();
     void translationXChanged();
@@ -44,6 +46,7 @@ public slots:
     void handleTileUpdate();
 
 protected:
+    void componentComplete() override;
     QCanvasPainterItemRenderer* createItemRenderer() const override;
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
@@ -51,7 +54,11 @@ protected:
     void wheelEvent(QWheelEvent* event) override;
 
 private:
+    void maybeApplyInitialView();
+
     QPointer<MapController> m_controller;
+    QMetaObject::Connection m_readyConnection;
+    bool m_initialViewApplied = false;
     float m_translationX = 0.0f;
     float m_translationY = 0.0f;
     float m_zDepth = 0.0f;

@@ -21,10 +21,11 @@ import map;
 
 namespace {
 
-constexpr float minimumZDepth = -2.0f;
+constexpr float minimumZDepth = -4.0f;
 constexpr float maximumZDepth = 2.0f;
 constexpr float wheelDepthStep = 0.1f;
 constexpr int kMaximumBackfillUp = 4;
+constexpr double kFitMargin = 0.92;
 
 float scaleForDepth(float zDepth) {
     return std::exp(zDepth);
@@ -283,18 +284,65 @@ private:
 MapCanvas::MapCanvas(QQuickItem* parent)
     : QCanvasPainterItem(parent) {
     this->setAcceptedMouseButtons(Qt::MiddleButton);
+    this->connect(this, &QQuickItem::widthChanged, this, [this] { this->maybeApplyInitialView(); });
+    this->connect(this, &QQuickItem::heightChanged, this, [this] { this->maybeApplyInitialView(); });
 }
 
-auto MapCanvas::controller() const -> MapController* {
-    return m_controller.data();
+void MapCanvas::componentComplete() {
+    QCanvasPainterItem::componentComplete();
+    this->maybeApplyInitialView();
+}
+
+void MapCanvas::maybeApplyInitialView() {
+    if (m_initialViewApplied)
+        return;
+    if (m_controller == nullptr || m_controller->loader() == nullptr)
+        return;
+    if (this->width() <= 0.0 || this->height() <= 0.0)
+        return;
+    this->fitToMap();
+}
+
+void MapCanvas::fitToMap() {
+    if (m_controller == nullptr || m_controller->loader() == nullptr)
+        return;
+    if (this->width() <= 0.0 || this->height() <= 0.0)
+        return;
+
+    QRectF const bounds = m_controller->loader()->info().worldBounds;
+    if (bounds.isEmpty() || !(bounds.width() > 0.0) || !(bounds.height() > 0.0))
+        return;
+
+    double const scale = qMin(
+        double(this->width()) * kFitMargin / bounds.width(),
+        double(this->height()) * kFitMargin / bounds.height()
+    );
+    if (!(scale > 0.0))
+        return;
+
+    this->setZDepth(float(std::log(scale)));
+    float const applied = scaleForDepth(m_zDepth);
+    QPointF const center = bounds.center();
+    this->setTranslationX(float(-center.x() * applied));
+    this->setTranslationY(float(center.y() * applied));
+    m_initialViewApplied = true;
 }
 
 void MapCanvas::setController(MapController* controller) {
     if (m_controller.data() == controller)
         return;
     m_controller = controller;
+    QObject::disconnect(m_readyConnection);
+    if (m_controller != nullptr)
+        m_readyConnection = this->connect(m_controller.data(), &MapController::readyChanged, this, [this] { this->maybeApplyInitialView(); });
+    m_initialViewApplied = false;
     emit this->controllerChanged();
+    this->maybeApplyInitialView();
     this->update();
+}
+
+auto MapCanvas::controller() const -> MapController* {
+    return m_controller.data();
 }
 
 auto MapCanvas::translationX() const -> float {
