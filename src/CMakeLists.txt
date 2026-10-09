@@ -13,6 +13,8 @@ find_package(Qt6 6.11 REQUIRED COMPONENTS Quick CanvasPainter)
 qt_standard_project_setup(REQUIRES 6.11)
 
 add_subdirectory(qml/)
+add_subdirectory(third_party/)
+add_subdirectory(foundation/)
 add_subdirectory(core/)
 add_subdirectory(ecs/)
 add_subdirectory(imagery/)
@@ -23,13 +25,10 @@ add_executable_target(
     mts
     BASE_DIRS
         "${CMAKE_CURRENT_SOURCE_DIR}"
-        "${magic_enum_SOURCE_DIR}/module"
     SOURCE_FILES
         main.cpp
     MODULE_FILES
         ${LOGGING_MODULE_SRC_FILES}
-    THIRD_PARTY_MODULE_FILES
-        ${MAGIC_ENUM_MODULE_SRC_FILES}
 )
 
 add_qml_module_target(
@@ -49,7 +48,6 @@ target_include_directories(
     mts
     PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/include/"
-        "${magic_enum_SOURCE_DIR}/include/"
         "${CMAKE_CURRENT_SOURCE_DIR}/qobjects/"
 )
 
@@ -62,6 +60,7 @@ target_link_libraries(
         Qt6::CanvasPainter
         EnTT::EnTT
         lgc::langgraph
+        LibMagicEnum
         LibCore
         LibEcs
         LibImagery

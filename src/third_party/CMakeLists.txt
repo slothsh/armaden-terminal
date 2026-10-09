@@ -1,0 +1,22 @@
+add_library_target(
+    LibMagicEnum
+    STATIC
+    BASE_DIRS
+        "${magic_enum_SOURCE_DIR}/module"
+    THIRD_PARTY_MODULE_FILES
+        ${MAGIC_ENUM_MODULE_SRC_FILES}
+)
+
+set_target_properties(
+    LibMagicEnum
+    PROPERTIES
+        AUTOMOC OFF
+        AUTOUIC OFF
+        AUTORCC OFF
+)
+
+target_include_directories(
+    LibMagicEnum
+    PUBLIC
+        "${magic_enum_SOURCE_DIR}/include/"
+)
