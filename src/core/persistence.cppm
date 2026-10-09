@@ -25,6 +25,8 @@ struct SessionInfo {
     std::int64_t updatedAt = 0;
 };
 
+inline constexpr std::string_view kDefaultSessionTitle = "New session";
+
 struct Message {
     std::string id;
     SessionId session;
@@ -486,7 +488,9 @@ auto LanggraphSessionStore::createSession(std::string title) -> Result<SessionIn
 
     auto const value = detail::toJson(session).dump();
     auto const stored = m_impl->storage->put(
-        mts::agent::StorageKey{std::string(detail::sessionScope), session.id}, value);
+        mts::agent::StorageKey{std::string(detail::sessionScope), session.id},
+        value
+    );
     if (!stored) {
         return Result<SessionInfo>::err(mts::agent::toFoundation(stored.status()).error());
     }
@@ -611,7 +615,8 @@ auto LanggraphSessionStore::appendMessage(Message message) -> Status {
     auto const value = detail::toJson(message).dump();
     auto const stored = m_impl->storage->put(
         mts::agent::StorageKey{std::string(detail::messageScope), detail::messageKey(message.session, message.sequence)},
-        value);
+        value
+    );
     if (!stored) {
         return mts::agent::toFoundation(stored.status());
     }

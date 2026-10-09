@@ -26,6 +26,7 @@ import events;
 import persistence;
 import provider;
 import harness;
+import orchestration;
 import imagery;
 import map;
 
@@ -39,10 +40,13 @@ auto makeMapTools(MapController* controller, mts::config::AppConfig const& confi
     tools.info = [controller]() -> mts::agent::Result<mts::agent::json> {
         auto const* loader = controller != nullptr ? controller->loader() : nullptr;
         if (loader == nullptr) {
-            return mts::agent::Result<mts::agent::json>::fromStatus(mts::agent::Status::unavailable(
-                controller != nullptr && !controller->status().isEmpty()
+            return mts::agent::Result<mts::agent::json>::fromStatus(
+                mts::agent::Status::unavailable(
+                    controller != nullptr && !controller->status().isEmpty()
                     ? controller->status().toStdString()
-                    : "map is not loaded"));
+                    : "map is not loaded"
+                )
+            );
         }
 
         mts::map::MapInfo const& info = loader->info();
@@ -84,7 +88,8 @@ auto makeMapTools(MapController* controller, mts::config::AppConfig const& confi
     ) -> mts::agent::Result<mts::harness::MapToolSnapshot> {
         if (controller == nullptr || controller->loader() == nullptr || controller->snapshotService() == nullptr) {
             return mts::agent::Result<mts::harness::MapToolSnapshot>::fromStatus(
-                mts::agent::Status::unavailable("map imagery is not available"));
+                mts::agent::Status::unavailable("map imagery is not available")
+            );
         }
 
         mts::map::MapInfo const& info = controller->loader()->info();
@@ -208,6 +213,12 @@ mts::app::Application::Application(int argc, char** argv)
         );
     }
 
+    m_conversationService = std::make_unique<mts::orchestration::ConversationService>(
+        m_store.get(),
+        m_harness.get(),
+        m_initialStatus
+    );
+
     mts::app::AppContext const context{
         *m_pool,
         *m_bus,
@@ -217,6 +228,7 @@ mts::app::Application::Application(int argc, char** argv)
         m_visionProvider.get(),
         m_harness.get(),
         *m_mapController,
+        *m_conversationService,
         m_initialStatus,
     };
 
@@ -245,6 +257,7 @@ mts::app::Application::~Application() {
     delete m_chat;
     m_chat = nullptr;
 
+    m_conversationService.reset();
     m_pool.reset();
 
     m_harness.reset();

@@ -60,7 +60,8 @@ TEST_CASE("result values convert to foundation results", "[agent][adapter]") {
     REQUIRE(ok.value() == 7);
 
     Result<int> const failed = mts::agent::toFoundation(
-        mts::agent::Result<int>::fromStatus(mts::agent::Status::internal("boom")));
+        mts::agent::Result<int>::fromStatus(mts::agent::Status::internal("boom"))
+    );
 
     REQUIRE(failed.isErr());
     REQUIRE(failed.error().kindName() == "Internal");
@@ -72,7 +73,8 @@ TEST_CASE("void results convert to foundation status", "[agent][adapter]") {
     REQUIRE(ok.isOk());
 
     Status const failed = mts::agent::toFoundation(
-        mts::agent::Result<void>::fromStatus(mts::agent::Status::dataLoss("corrupt")));
+        mts::agent::Result<void>::fromStatus(mts::agent::Status::dataLoss("corrupt"))
+    );
 
     REQUIRE(failed.isErr());
     REQUIRE(failed.error().kindName() == "DataLoss");

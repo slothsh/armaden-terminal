@@ -817,7 +817,9 @@ private:
         std::string const identity = absolute.string() + "|" + std::to_string(sizeBytes)
             + "|" + std::to_string(modifiedTicks);
         QByteArray const digest = QCryptographicHash::hash(
-            QByteArray::fromStdString(identity), QCryptographicHash::Sha1).toHex();
+            QByteArray::fromStdString(identity),
+            QCryptographicHash::Sha1
+        ).toHex();
 
         m_pyramidDir = cacheRoot / "v1" / std::filesystem::path(digest.constData())
             / std::to_string(m_tileSize);

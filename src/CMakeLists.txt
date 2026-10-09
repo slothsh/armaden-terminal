@@ -20,6 +20,7 @@ add_subdirectory(core/)
 add_subdirectory(ecs/)
 add_subdirectory(imagery/)
 add_subdirectory(map/)
+add_subdirectory(orchestration/)
 
 # Add to build
 add_executable_target(
@@ -68,6 +69,7 @@ target_link_libraries(
         LibEcs
         LibImagery
         LibMap
+        LibOrchestration
     PRIVATE
         LibQml
 )

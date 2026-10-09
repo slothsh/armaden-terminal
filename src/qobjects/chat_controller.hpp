@@ -14,6 +14,12 @@ namespace mts::app {
 struct AppContext;
 }
 
+namespace mts::orchestration {
+class ConversationService;
+}
+
+class ConversationProjector;
+
 class ChatController : public QObject {
     Q_OBJECT
     QML_NAMED_ELEMENT(ChatController)
@@ -55,15 +61,9 @@ signals:
     auto draftChanged() -> void;
 
 private:
-    auto refreshSessions() -> void;
-    auto refreshRunning() -> void;
-    auto reloadConversation(QString const& id) -> void;
-    auto maybeNameSession(QString const& id) -> void;
-    auto setStatus(QString const& status) -> void;
-    auto appendError(QString const& message) -> void;
-
-    struct Impl;
-    std::unique_ptr<Impl> m_impl;
+    mts::orchestration::ConversationService* m_service = nullptr;
+    std::unique_ptr<ConversationProjector> m_projector;
     SessionListModel* m_sessions;
     ConversationModel* m_conversation;
+    MapController* m_mapController = nullptr;
 };

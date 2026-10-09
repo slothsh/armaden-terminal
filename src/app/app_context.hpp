@@ -18,6 +18,10 @@ namespace mts::model {
 class ProviderHandle;
 }
 
+namespace mts::orchestration {
+class ConversationService;
+}
+
 namespace mts::persistence {
 class SessionStoreHandle;
 }
@@ -39,6 +43,7 @@ struct AppContext {
     mts::model::ProviderHandle* visionProvider = nullptr;
     mts::harness::AgentHarness* harness = nullptr;
     MapController& mapController;
+    mts::orchestration::ConversationService& conversation;
     std::string initialStatus;
 };
 

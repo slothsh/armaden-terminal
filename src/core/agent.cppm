@@ -253,7 +253,8 @@ static_assert(foundation::ErrorKind<AgentErrorKind>);
 
     return foundation::Status::err(
         foundation::Error(agentErrorKind(status.code()), std::move(message))
-            .with("lgc.status", std::string(status.codeName())));
+            .with("lgc.status", std::string(status.codeName()))
+    );
 }
 
 template <typename T>

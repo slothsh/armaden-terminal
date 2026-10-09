@@ -122,7 +122,8 @@ struct MapTransform {
 
     [[nodiscard]] auto worldRect(QSize const& baseSize) const -> QRectF {
         return this->pixelRectToMetricRect(
-            QRectF(QPointF(0.0, 0.0), QSizeF(baseSize.width(), baseSize.height())));
+            QRectF(QPointF(0.0, 0.0), QSizeF(baseSize.width(), baseSize.height()))
+        );
     }
 };
 
@@ -383,8 +384,11 @@ private:
 
     [[nodiscard]] auto findLayer(std::string const& id) const -> MapLayer* {
         std::lock_guard const lock(m_mutex);
-        auto const it = std::find_if(m_layers.begin(), m_layers.end(),
-            [&id](std::unique_ptr<MapLayer> const& layer) { return layer->id() == id; });
+        auto const it = std::find_if(
+            m_layers.begin(),
+            m_layers.end(),
+            [&id](std::unique_ptr<MapLayer> const& layer) { return layer->id() == id; }
+        );
 
         return it == m_layers.end() ? nullptr : it->get();
     }
@@ -451,8 +455,12 @@ public:
         int const maxLevel = std::max(0, m_loaderMaxLevel(layers));
         int const level = options.level.value_or(autoLevel(baseRect, options.maxPixels, maxLevel));
         if (level < 0 || level > maxLevel) {
-            return mts::foundation::Result<MapSnapshot>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, 
-                    "snapshot level out of range: " + std::to_string(level)));
+            return mts::foundation::Result<MapSnapshot>::err(
+                mts::foundation::Error(
+                    MapErrorKind::InvalidArgument,
+                    "snapshot level out of range: " + std::to_string(level)
+                )
+            );
         }
 
         QRectF const levelRect = imagery::baseRectToLevelRect(baseRect, level);
@@ -542,8 +550,11 @@ private:
 
         std::vector<MapLayer*> selected;
         for (auto const& requested : options.layers) {
-            bool const known = std::any_of(all.begin(), all.end(),
-                [&requested](MapLayer* const layer) { return layer->id() == requested; });
+            bool const known = std::any_of(
+                all.begin(),
+                all.end(),
+                [&requested](MapLayer* const layer) { return layer->id() == requested; }
+            );
             if (!known) {
                 return {};
             }
@@ -953,15 +964,28 @@ auto MapLoader::create(
     for (auto const& spec : specs) {
         auto const resolved = detail::resolveLayerPath(spec.path, configDir);
         auto const source = imagery::SingleFileTileSource::create(
-            resolved, imagery::SingleFileTileSource::Options{info.tileSize, options.cacheDir});
+            resolved,
+            imagery::SingleFileTileSource::Options{info.tileSize, options.cacheDir}
+        );
         if (!source) {
-            return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, 
-                    "layer '" + spec.id + "': " + source.error().message()));
+            return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(
+                mts::foundation::Error(
+                    MapErrorKind::InvalidArgument,
+                    "layer '" + spec.id + "': " + source.error().message()
+                )
+            );
         }
 
         layers.push_back(std::make_unique<MapLayer>(
-            spec.id, spec.name, std::move(source.value()), spec.blend,
-            spec.opacity, spec.visible, spec.levelBias, pool));
+            spec.id,
+            spec.name,
+            std::move(source.value()),
+            spec.blend,
+            spec.opacity,
+            spec.visible,
+            spec.levelBias,
+            pool
+        ));
     }
 
     if (layers.empty()) {

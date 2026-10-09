@@ -263,13 +263,15 @@ auto makeVisionProvider(mts::config::AppConfig const& config) -> Result<Provider
     if (config.vision.model.empty()) {
         return Result<ProviderHandle>::err(
             ProviderErrorKind::InvalidArgument,
-            "vision model is not configured; set vision.model in the config to enable map image description");
+            "vision model is not configured; set vision.model in the config to enable map image description"
+        );
     }
 
     if (config.provider.apiKey.empty()) {
         return Result<ProviderHandle>::err(
             ProviderErrorKind::InvalidArgument,
-            "provider.apiKey is not configured; the vision model cannot be used without credentials");
+            "provider.apiKey is not configured; the vision model cannot be used without credentials"
+        );
     }
 
     auto providerConfig = config.provider;

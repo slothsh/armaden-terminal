@@ -76,6 +76,8 @@ public:
     auto run(SessionId session, std::shared_ptr<mts::runtime::Cancellation> cancellation) -> void;
 
 private:
+    auto scheduleSessionNaming(SessionId session) -> void;
+
     struct Impl;
     std::unique_ptr<Impl> m_impl;
 };
@@ -139,7 +141,8 @@ private:
 
         if (!response.value().isSuccessful()) {
             return mts::agent::Status::internal(
-                "game server returned HTTP " + std::to_string(response.value().statusCode_));
+                "game server returned HTTP " + std::to_string(response.value().statusCode_)
+            );
         }
 
         auto const parsed = mts::agent::json::parse(response.value().body_, nullptr, false);
@@ -463,7 +466,8 @@ export namespace mts::harness {
     tool.callable_ = [info = tools.info](mts::agent::json const&) -> mts::agent::Result<mts::agent::json> {
         if (!info) {
             return mts::agent::Result<mts::agent::json>::fromStatus(
-                mts::agent::Status::unavailable("map information is not available"));
+                mts::agent::Status::unavailable("map information is not available")
+            );
         }
 
         return info();
@@ -497,13 +501,15 @@ export namespace mts::harness {
     tool.callable_ = [tools, visionProvider](mts::agent::json const& input) -> mts::agent::Result<mts::agent::json> {
         if (!input.contains("instruction") || !input.at("instruction").is_string()) {
             return mts::agent::Result<mts::agent::json>::fromStatus(
-                mts::agent::Status::invalidArgument("describe_map requires a string 'instruction'"));
+                mts::agent::Status::invalidArgument("describe_map requires a string 'instruction'")
+            );
         }
 
         std::string const instruction = input.at("instruction").get<std::string>();
         if (instruction.empty()) {
             return mts::agent::Result<mts::agent::json>::fromStatus(
-                mts::agent::Status::invalidArgument("describe_map 'instruction' must not be empty"));
+                mts::agent::Status::invalidArgument("describe_map 'instruction' must not be empty")
+            );
         }
 
         std::optional<MapToolRegion> region;
@@ -514,13 +520,16 @@ export namespace mts::harness {
                   && input.contains("width") && input.contains("height"))) {
                 return mts::agent::Result<mts::agent::json>::fromStatus(
                     mts::agent::Status::invalidArgument(
-                        "describe_map requires all of x, y, width and height, or none of them for the whole map"));
+                        "describe_map requires all of x, y, width and height, or none of them for the whole map"
+                    )
+                );
             }
 
             for (char const* key : {"x", "y", "width", "height"}) {
                 if (!input.at(key).is_number()) {
                     return mts::agent::Result<mts::agent::json>::fromStatus(
-                        mts::agent::Status::invalidArgument(std::string("describe_map '") + key + "' must be a number"));
+                        mts::agent::Status::invalidArgument(std::string("describe_map '") + key + "' must be a number")
+                    );
                 }
             }
 
@@ -531,7 +540,8 @@ export namespace mts::harness {
             candidate.height = input.at("height").get<double>();
             if (!(candidate.width > 0.0) || !(candidate.height > 0.0)) {
                 return mts::agent::Result<mts::agent::json>::fromStatus(
-                    mts::agent::Status::invalidArgument("describe_map width and height must be positive"));
+                    mts::agent::Status::invalidArgument("describe_map width and height must be positive")
+                );
             }
 
             region = candidate;
@@ -541,7 +551,8 @@ export namespace mts::harness {
         if (input.contains("level")) {
             if (!input.at("level").is_number_integer()) {
                 return mts::agent::Result<mts::agent::json>::fromStatus(
-                    mts::agent::Status::invalidArgument("describe_map 'level' must be an integer"));
+                    mts::agent::Status::invalidArgument("describe_map 'level' must be an integer")
+                );
             }
 
             level = input.at("level").get<int>();
@@ -551,13 +562,15 @@ export namespace mts::harness {
         if (input.contains("layers")) {
             if (!input.at("layers").is_array()) {
                 return mts::agent::Result<mts::agent::json>::fromStatus(
-                    mts::agent::Status::invalidArgument("describe_map 'layers' must be an array of layer ids"));
+                    mts::agent::Status::invalidArgument("describe_map 'layers' must be an array of layer ids")
+                );
             }
 
             for (auto const& value : input.at("layers")) {
                 if (!value.is_string()) {
                     return mts::agent::Result<mts::agent::json>::fromStatus(
-                        mts::agent::Status::invalidArgument("describe_map 'layers' must contain only strings"));
+                        mts::agent::Status::invalidArgument("describe_map 'layers' must contain only strings")
+                    );
                 }
 
                 layers.push_back(value.get<std::string>());
@@ -567,12 +580,15 @@ export namespace mts::harness {
         if (visionProvider == nullptr) {
             return mts::agent::Result<mts::agent::json>::fromStatus(
                 mts::agent::Status::invalidArgument(
-                    "vision model is not configured; set vision.model in the config to enable map image description"));
+                    "vision model is not configured; set vision.model in the config to enable map image description"
+                )
+            );
         }
 
         if (!tools.snapshot) {
             return mts::agent::Result<mts::agent::json>::fromStatus(
-                mts::agent::Status::unavailable("map imagery is not available"));
+                mts::agent::Status::unavailable("map imagery is not available")
+            );
         }
 
         auto const snapshot = tools.snapshot(region, level, layers);
@@ -629,7 +645,8 @@ export namespace mts::harness {
         auto const response = visionProvider->stream(
             std::vector<mts::agent::BaseMessage>{message},
             [](mts::model::Chunk const&) {},
-            stopSource.get_token());
+            stopSource.get_token()
+        );
         timer.request_stop();
         if (!response) {
             return mts::agent::fromFoundation(response.error());
@@ -774,17 +791,18 @@ auto AgentHarness::runBlocking(SessionId const& session, mts::runtime::Cancellat
         return status.status();
     }
 
-    if (auto const status = graph.addConditionalEdges(
-            std::string("model"),
-            [](mts::agent::State const& state, mts::agent::Runtime&) -> mts::agent::Result<mts::agent::NodeId> {
-                if (mts::agent::toolsCondition(state)) {
-                    return std::string("tools");
-                }
+    auto const status = graph.addConditionalEdges(
+        std::string("model"),
+        [](mts::agent::State const& state, mts::agent::Runtime&) -> mts::agent::Result<mts::agent::NodeId> {
+            if (mts::agent::toolsCondition(state)) {
+                return std::string("tools");
+            }
 
-                return std::string(mts::agent::END);
-            },
-            {std::string("tools"), std::string(mts::agent::END)});
-        !status) {
+            return std::string(mts::agent::END);
+        },
+        {std::string("tools"), std::string(mts::agent::END)}
+    );
+    if (!status) {
         return status.status();
     }
 
@@ -944,6 +962,33 @@ auto AgentHarness::run(SessionId session, std::shared_ptr<mts::runtime::Cancella
         }
 
         static_cast<void>(this->runBlocking(session, *cancellation));
+        this->scheduleSessionNaming(session);
+    });
+}
+
+auto AgentHarness::scheduleSessionNaming(SessionId session) -> void {
+    auto const sessionInfo = m_impl->store->getSession(session);
+    if (!sessionInfo || sessionInfo.value().title != mts::persistence::kDefaultSessionTitle) {
+        return;
+    }
+
+    m_impl->pool->schedule([this, session = std::move(session)] {
+        mts::runtime::Cancellation cancellation;
+        auto const title = this->suggestSessionTitle(session, cancellation);
+        if (!title) {
+            return;
+        }
+
+        auto const current = m_impl->store->getSession(session);
+        if (!current || current.value().title != mts::persistence::kDefaultSessionTitle) {
+            return;
+        }
+
+        if (auto const status = m_impl->store->renameSession(session, title.value()); !status) {
+            return;
+        }
+
+        m_impl->bus->publish(mts::events::SessionUpdated{session, title.value()});
     });
 }
 
