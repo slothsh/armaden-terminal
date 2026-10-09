@@ -5,18 +5,8 @@
 export module runtime;
 
 import std;
-import foundation;
-import config;
 
 export namespace mts::runtime {
-
-struct RuntimeConfig {
-    std::uint32_t workers = 4;
-};
-
-[[nodiscard]] inline auto applyConfig(mts::config::ConfigView const& view, RuntimeConfig& target) -> mts::foundation::Status {
-    return view.section("runtime").readUInt32("workers", target.workers);
-}
 
 class ThreadPool {
 public:

@@ -1,9 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
 
 import std;
-import foundation;
+import core;
 
-using namespace mts::foundation;
+using namespace mts::core;
 
 namespace {
 
@@ -42,7 +42,7 @@ static_assert(UserError<CustomError>);
 
 }
 
-TEST_CASE("Result carries a value", "[foundation]") {
+TEST_CASE("Result carries a value", "[core]") {
     Result<int> const result = Result<int>::ok(42);
 
     REQUIRE(result.isOk());
@@ -52,7 +52,7 @@ TEST_CASE("Result carries a value", "[foundation]") {
     REQUIRE(*result == 42);
 }
 
-TEST_CASE("Result carries an error", "[foundation]") {
+TEST_CASE("Result carries an error", "[core]") {
     Result<int> const result = Result<int>::err(Error(TestErrorKind::NotFound, "missing"));
 
     REQUIRE(result.isErr());
@@ -62,7 +62,7 @@ TEST_CASE("Result carries an error", "[foundation]") {
     REQUIRE(result.error().message() == "missing");
 }
 
-TEST_CASE("Status is Result<void>", "[foundation]") {
+TEST_CASE("Status is Result<void>", "[core]") {
     Status const ok = Status::ok();
     REQUIRE(ok.isOk());
 
@@ -71,7 +71,7 @@ TEST_CASE("Status is Result<void>", "[foundation]") {
     REQUIRE(failed.error().kind<TestErrorKind>() == TestErrorKind::Internal);
 }
 
-TEST_CASE("each domain defines its own error kind", "[foundation]") {
+TEST_CASE("each domain defines its own error kind", "[core]") {
     Error const test = Error(TestErrorKind::InvalidArgument, "bad input");
     Error const network = Error(NetworkErrorKind::Timeout, "timed out");
 
@@ -81,7 +81,7 @@ TEST_CASE("each domain defines its own error kind", "[foundation]") {
     REQUIRE(network.kind<NetworkErrorKind>() == NetworkErrorKind::Timeout);
 }
 
-TEST_CASE("Error formats kind, message and context", "[foundation]") {
+TEST_CASE("Error formats kind, message and context", "[core]") {
     Error const error = Error(TestErrorKind::InvalidArgument, "bad input").with("field", "x");
 
     REQUIRE(error.format() == "InvalidArgument: bad input (field=x)");
@@ -90,7 +90,7 @@ TEST_CASE("Error formats kind, message and context", "[foundation]") {
     REQUIRE(error.context()[0].value == "x");
 }
 
-TEST_CASE("Error prints and formats at the boundary", "[foundation]") {
+TEST_CASE("Error prints and formats at the boundary", "[core]") {
     Error const error = Error(TestErrorKind::InvalidArgument, "bad input").with("field", "x");
 
     std::ostringstream stream;
@@ -102,7 +102,7 @@ TEST_CASE("Error prints and formats at the boundary", "[foundation]") {
     REQUIRE(std::format("error=[{}]", error) == "error=[InvalidArgument: bad input (field=x)]");
 }
 
-TEST_CASE("Error type-erases user errors", "[foundation]") {
+TEST_CASE("Error type-erases user errors", "[core]") {
     Error const error = Error(CustomError{});
 
     REQUIRE(error.kindName() == "Unavailable");
@@ -110,7 +110,7 @@ TEST_CASE("Error type-erases user errors", "[foundation]") {
     REQUIRE(error.format() == "Unavailable: custom(custom failure)");
 }
 
-TEST_CASE("Error is copyable and shares its payload", "[foundation]") {
+TEST_CASE("Error is copyable and shares its payload", "[core]") {
     Error const original = Error(TestErrorKind::DataLoss, "corrupt");
     Error const copy = original;
     Error const extended = original.with("offset", "12");

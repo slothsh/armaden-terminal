@@ -28,8 +28,9 @@ target_include_directories(
 target_link_libraries(
     LibMap
     PUBLIC
+        LibConfig
+        LibPlatform
         LibCore
-        LibFoundation
         LibJson
         LibEcs
         LibRender2d

@@ -1,7 +1,7 @@
 export module harness:config;
 
 import std;
-import foundation;
+import core;
 import config;
 
 export namespace mts::harness {
@@ -29,7 +29,7 @@ struct CompactionConfig {
     std::uint64_t maxBytes = 0;
 };
 
-[[nodiscard]] auto applyConfig(mts::config::ConfigView const& view, ServerConfig& target) -> mts::foundation::Status {
+[[nodiscard]] auto applyConfig(mts::config::ConfigView const& view, ServerConfig& target) -> mts::core::Status {
     auto const section = view.section("server");
     if (auto const status = section.readString("origin", target.origin); !status) {
         return status;
@@ -43,19 +43,19 @@ struct CompactionConfig {
         return status;
     }
 
-    return mts::foundation::Status::ok();
+    return mts::core::Status::ok();
 }
 
-[[nodiscard]] auto applyConfig(mts::config::ConfigView const& view, NamingConfig& target) -> mts::foundation::Status {
+[[nodiscard]] auto applyConfig(mts::config::ConfigView const& view, NamingConfig& target) -> mts::core::Status {
     auto const section = view.section("naming");
     if (auto const status = section.readString("model", target.model); !status) {
         return status;
     }
 
-    return mts::foundation::Status::ok();
+    return mts::core::Status::ok();
 }
 
-[[nodiscard]] auto applyConfig(mts::config::ConfigView const& view, BudgetConfig& target) -> mts::foundation::Status {
+[[nodiscard]] auto applyConfig(mts::config::ConfigView const& view, BudgetConfig& target) -> mts::core::Status {
     auto const section = view.section("budgets");
     if (auto const status = section.readUInt32("maxTurns", target.maxTurns); !status) {
         return status;
@@ -73,10 +73,10 @@ struct CompactionConfig {
         return status;
     }
 
-    return mts::foundation::Status::ok();
+    return mts::core::Status::ok();
 }
 
-[[nodiscard]] auto applyConfig(mts::config::ConfigView const& view, CompactionConfig& target) -> mts::foundation::Status {
+[[nodiscard]] auto applyConfig(mts::config::ConfigView const& view, CompactionConfig& target) -> mts::core::Status {
     auto const section = view.section("compaction");
     if (auto const status = section.readBool("enabled", target.enabled); !status) {
         return status;
@@ -90,7 +90,7 @@ struct CompactionConfig {
         return status;
     }
 
-    return mts::foundation::Status::ok();
+    return mts::core::Status::ok();
 }
 
 } // END OF NAMESPACE `mts::harness`

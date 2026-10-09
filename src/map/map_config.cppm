@@ -1,7 +1,7 @@
 export module map:config;
 
 import std;
-import foundation;
+import core;
 import config;
 
 export namespace mts::map {
@@ -10,7 +10,7 @@ struct MapConfig {
     std::string configPath = "config/maps/everon.json";
 };
 
-[[nodiscard]] inline auto applyConfig(mts::config::ConfigView const& view, MapConfig& target) -> mts::foundation::Status {
+[[nodiscard]] inline auto applyConfig(mts::config::ConfigView const& view, MapConfig& target) -> mts::core::Status {
     return view.section("map").readString("configPath", target.configPath);
 }
 

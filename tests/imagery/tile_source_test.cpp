@@ -1,7 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 import std;
-import foundation;
+import core;
 import runtime;
 import imagery;
 
@@ -37,9 +37,9 @@ public:
 
     auto startBuild(mts::runtime::ThreadPool&) -> void {}
 
-    [[nodiscard]] auto readTile(TileId const& tile) -> mts::foundation::Result<SharedImage> {
+    [[nodiscard]] auto readTile(TileId const& tile) -> mts::core::Result<SharedImage> {
         if (tile.x < 0 || tile.x >= this->m_tilesAcross || tile.y != 0) {
-            return mts::foundation::Result<SharedImage>::err(ImageryErrorKind::NotFound, "no tile");
+            return mts::core::Result<SharedImage>::err(ImageryErrorKind::NotFound, "no tile");
         }
 
         SharedImage image(this->m_tileSize, this->m_tileSize, QImage::Format_ARGB32_Premultiplied);

@@ -2,7 +2,7 @@ export module provider;
 
 import std;
 import agent;
-import foundation;
+import core;
 import config;
 
 export namespace mts::model {
@@ -11,10 +11,10 @@ using Message = mts::agent::BaseMessage;
 using Chunk = mts::agent::AIMessageChunk;
 using ToolBinding = mts::agent::ChatModelToolBinding;
 using ChunkHandler = std::function<void(Chunk const&)>;
-using Status = mts::foundation::Status;
+using Status = mts::core::Status;
 
 template <class Type>
-using Result = mts::foundation::Result<Type>;
+using Result = mts::core::Result<Type>;
 
 struct ProviderConfig {
     std::string origin = "https://openrouter.ai";
@@ -34,7 +34,7 @@ struct VisionConfig {
 [[nodiscard]] auto applyConfig(mts::config::ConfigView const& view, ProviderConfig& target) -> Status;
 [[nodiscard]] auto applyConfig(mts::config::ConfigView const& view, VisionConfig& target) -> Status;
 
-enum class ProviderErrorKind : foundation::u8 {
+enum class ProviderErrorKind : core::u8 {
     Unknown,
     InvalidArgument,
     NotFound,
@@ -47,7 +47,7 @@ enum class ProviderErrorKind : foundation::u8 {
     PermissionDenied,
 };
 
-static_assert(foundation::ErrorKind<ProviderErrorKind>);
+static_assert(core::ErrorKind<ProviderErrorKind>);
 
 template <class Provider>
 concept ModelProvider = requires(

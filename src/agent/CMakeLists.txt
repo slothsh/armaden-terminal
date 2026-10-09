@@ -1,16 +1,16 @@
-file(GLOB_RECURSE FOUNDATION_MODULE_SRC_FILES CONFIGURE_DEPENDS *.cppm)
+file(GLOB_RECURSE AGENT_MODULE_SRC_FILES CONFIGURE_DEPENDS *.cppm)
 
 add_library_target(
-    LibFoundation
+    LibAgent
     STATIC
     BASE_DIRS
         "${CMAKE_CURRENT_SOURCE_DIR}"
     MODULE_FILES
-        ${FOUNDATION_MODULE_SRC_FILES}
+        ${AGENT_MODULE_SRC_FILES}
 )
 
 set_target_properties(
-    LibFoundation
+    LibAgent
     PROPERTIES
         AUTOMOC OFF
         AUTOUIC OFF
@@ -18,14 +18,15 @@ set_target_properties(
 )
 
 target_include_directories(
-    LibFoundation
+    LibAgent
     PRIVATE
         "${CMAKE_SOURCE_DIR}/src/include"
 )
 
 target_link_libraries(
-    LibFoundation
+    LibAgent
     PUBLIC
-        spdlog::spdlog
+        LibCore
         LibMagicEnum
+        lgc::langgraph
 )

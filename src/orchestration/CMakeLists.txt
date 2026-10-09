@@ -26,6 +26,11 @@ target_include_directories(
 target_link_libraries(
     LibOrchestration
     PUBLIC
+        LibAgent
+        LibConfig
+        LibPersistence
+        LibProvider
+        LibEvents
+        LibPlatform
         LibCore
-        LibFoundation
 )

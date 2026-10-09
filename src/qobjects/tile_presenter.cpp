@@ -12,7 +12,7 @@
 #include <cmath>
 
 import std;
-import foundation;
+import core;
 import render2d;
 import imagery;
 import map;
@@ -234,7 +234,7 @@ auto TilePresenter::requestTile(mts::imagery::TileId const& tile, QString const&
     m_loader->requestTile(
         layerId.toStdString(),
         tile,
-        [canvas](mts::foundation::Result<mts::imagery::SharedImage> const&) {
+        [canvas](mts::core::Result<mts::imagery::SharedImage> const&) {
             if (canvas != nullptr) {
                 QMetaObject::invokeMethod(canvas, &MapCanvas::handleTileUpdate, Qt::QueuedConnection);
             }

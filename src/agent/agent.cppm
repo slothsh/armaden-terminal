@@ -19,7 +19,7 @@
 export module agent;
 
 import std;
-import foundation;
+import core;
 import magic_enum;
 
 export namespace mts::agent {
@@ -109,7 +109,7 @@ using ::lgc::StorageLimits;
 using ::lgc::SQLiteStorage;
 using ::lgc::SQLiteStorageOptions;
 
-enum class AgentErrorKind : foundation::u8 {
+enum class AgentErrorKind : core::u8 {
     Unknown,
     Cancelled,
     InvalidArgument,
@@ -128,7 +128,7 @@ enum class AgentErrorKind : foundation::u8 {
     Unauthenticated,
 };
 
-static_assert(foundation::ErrorKind<AgentErrorKind>);
+static_assert(core::ErrorKind<AgentErrorKind>);
 
 [[nodiscard]] constexpr auto agentErrorKind(lgc::StatusCode code) -> AgentErrorKind {
     switch (code) {
@@ -241,9 +241,9 @@ static_assert(foundation::ErrorKind<AgentErrorKind>);
     return lgc::StatusCode::Unknown;
 }
 
-[[nodiscard]] inline auto toFoundation(lgc::Status const& status) -> foundation::Status {
+[[nodiscard]] inline auto toFoundation(lgc::Status const& status) -> core::Status {
     if (status.isOk()) {
-        return foundation::Status::ok();
+        return core::Status::ok();
     }
 
     std::string message(status.message());
@@ -251,32 +251,32 @@ static_assert(foundation::ErrorKind<AgentErrorKind>);
         message = std::string(status.codeName());
     }
 
-    return foundation::Status::err(
-        foundation::Error(agentErrorKind(status.code()), std::move(message))
+    return core::Status::err(
+        core::Error(agentErrorKind(status.code()), std::move(message))
             .with("lgc.status", std::string(status.codeName()))
     );
 }
 
 template <typename T>
 requires (!std::is_void_v<T>)
-[[nodiscard]] inline auto toFoundation(lgc::Result<T> const& result) -> foundation::Result<T> {
+[[nodiscard]] inline auto toFoundation(lgc::Result<T> const& result) -> core::Result<T> {
     if (result.isOk()) {
-        return foundation::Result<T>::ok(result.value());
+        return core::Result<T>::ok(result.value());
     }
 
-    return foundation::Result<T>::err(toFoundation(result.status()).error());
+    return core::Result<T>::err(toFoundation(result.status()).error());
 }
 
-[[nodiscard]] inline auto toFoundation(lgc::Result<void> const& result) -> foundation::Status {
+[[nodiscard]] inline auto toFoundation(lgc::Result<void> const& result) -> core::Status {
     return toFoundation(result.status());
 }
 
-[[nodiscard]] inline auto fromFoundation(foundation::Status const& status) -> lgc::Status {
+[[nodiscard]] inline auto fromFoundation(core::Status const& status) -> lgc::Status {
     if (status.isOk()) {
         return lgc::Status::ok();
     }
 
-    foundation::Error const& error = status.error();
+    core::Error const& error = status.error();
     auto const kind = magic_enum::enum_cast<AgentErrorKind>(error.kindName());
     lgc::StatusCode const code = kind.has_value() ? toLgcStatusCode(*kind) : lgc::StatusCode::Internal;
 

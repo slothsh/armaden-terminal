@@ -1,7 +1,7 @@
 export module orchestration;
 
 import std;
-import foundation;
+import core;
 import runtime;
 import persistence;
 import harness;

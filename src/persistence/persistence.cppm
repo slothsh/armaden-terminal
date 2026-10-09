@@ -2,7 +2,7 @@ export module persistence;
 
 import std;
 import agent;
-import foundation;
+import core;
 
 export namespace mts::persistence {
 
@@ -37,12 +37,12 @@ struct Message {
     std::int64_t timestamp = 0;
 };
 
-using Status = mts::foundation::Status;
+using Status = mts::core::Status;
 
 template <class Type>
-using Result = mts::foundation::Result<Type>;
+using Result = mts::core::Result<Type>;
 
-enum class PersistenceErrorKind : mts::foundation::u8 {
+enum class PersistenceErrorKind : mts::core::u8 {
     Unknown,
     InvalidArgument,
     NotFound,
@@ -55,7 +55,7 @@ enum class PersistenceErrorKind : mts::foundation::u8 {
     PermissionDenied,
 };
 
-static_assert(mts::foundation::ErrorKind<PersistenceErrorKind>);
+static_assert(mts::core::ErrorKind<PersistenceErrorKind>);
 
 template <class Repository>
 concept SessionRepository = requires(

@@ -2,7 +2,7 @@ export module harness;
 
 import std;
 import agent;
-import foundation;
+import core;
 import config;
 import events;
 import persistence;

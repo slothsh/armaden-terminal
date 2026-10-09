@@ -18,7 +18,7 @@
 
 import std;
 import logging;
-import foundation;
+import core;
 import agent;
 import runtime;
 import config;
@@ -213,11 +213,11 @@ mts::app::Application::Application(int argc, char** argv)
     mts::model::VisionConfig visionConfig;
     mts::harness::ServerConfig serverConfig;
     mts::harness::NamingConfig namingConfig;
-    mts::runtime::RuntimeConfig runtimeConfig;
+    mts::config::RuntimeConfig runtimeConfig;
     mts::imagery::CacheConfig cacheConfig;
     mts::map::MapConfig mapConfig;
 
-    auto const reportConfigError = [this](mts::foundation::Status const& status) {
+    auto const reportConfigError = [this](mts::core::Status const& status) {
         if (!status && m_initialStatus.empty()) {
             m_initialStatus = std::string(status.error().message());
         }
@@ -227,7 +227,7 @@ mts::app::Application::Application(int argc, char** argv)
     reportConfigError(mts::model::applyConfig(view, visionConfig));
     reportConfigError(mts::harness::applyConfig(view, serverConfig));
     reportConfigError(mts::harness::applyConfig(view, namingConfig));
-    reportConfigError(mts::runtime::applyConfig(view, runtimeConfig));
+    reportConfigError(mts::config::applyConfig(view, runtimeConfig));
     reportConfigError(mts::imagery::applyConfig(view, cacheConfig));
     reportConfigError(mts::map::applyConfig(view, mapConfig));
 

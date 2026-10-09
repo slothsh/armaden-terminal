@@ -5,7 +5,7 @@
 export module map:loader;
 
 import std;
-import foundation;
+import core;
 import json;
 import runtime;
 import imagery;
@@ -26,7 +26,7 @@ public:
         std::filesystem::path const& configPath,
         Options options,
         mts::runtime::ThreadPool& pool
-    ) -> mts::foundation::Result<std::unique_ptr<MapLoader>>;
+    ) -> mts::core::Result<std::unique_ptr<MapLoader>>;
 
     [[nodiscard]] auto info() const -> MapInfo const& {
         return m_info;
@@ -106,15 +106,15 @@ public:
         std::string const& layerId,
         imagery::TileId const& tile,
         imagery::TileScheduler::Completion completion
-    ) const -> mts::foundation::Status {
+    ) const -> mts::core::Status {
         MapLayer* const target = this->findLayer(layerId);
         if (target == nullptr) {
-            return mts::foundation::Status::err(MapErrorKind::NotFound, "unknown map layer: " + layerId);
+            return mts::core::Status::err(MapErrorKind::NotFound, "unknown map layer: " + layerId);
         }
 
         target->requestTile(tile, std::move(completion));
 
-        return mts::foundation::Status::ok();
+        return mts::core::Status::ok();
     }
 
 private:
@@ -145,7 +145,7 @@ private:
 namespace mts::map::detail {
 
 using mts::json;
-using mts::foundation::Status;
+using mts::core::Status;
 
 [[nodiscard]] auto jsonDouble(json const& object, std::string_view key, double fallback, double& target) -> Status {
     if (!object.contains(key)) {
@@ -231,16 +231,16 @@ auto MapLoader::create(
     std::filesystem::path const& configPath,
     Options options,
     mts::runtime::ThreadPool& pool
-) -> mts::foundation::Result<std::unique_ptr<MapLoader>> {
+) -> mts::core::Result<std::unique_ptr<MapLoader>> {
     std::ifstream stream(configPath);
     if (!stream.is_open()) {
-        return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, "could not read map config: " + configPath.string()));
+        return mts::core::Result<std::unique_ptr<MapLoader>>::err(mts::core::Error(MapErrorKind::InvalidArgument, "could not read map config: " + configPath.string()));
     }
 
     std::string const text((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
     json const config = json::parse(text, nullptr, false);
     if (config.is_discarded() || !config.is_object()) {
-        return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, "map config is not valid JSON: " + configPath.string()));
+        return mts::core::Result<std::unique_ptr<MapLoader>>::err(mts::core::Error(MapErrorKind::InvalidArgument, "map config is not valid JSON: " + configPath.string()));
     }
 
     std::filesystem::path const configDir = configPath.parent_path();
@@ -248,44 +248,44 @@ auto MapLoader::create(
 
     MapInfo info;
     if (auto const status = detail::jsonString(config, "id", stem, info.id); !status) {
-        return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
+        return mts::core::Result<std::unique_ptr<MapLoader>>::err(status.error());
     }
 
     if (auto const status = detail::jsonString(config, "name", info.id, info.name); !status) {
-        return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
+        return mts::core::Result<std::unique_ptr<MapLoader>>::err(status.error());
     }
 
     if (auto const status = detail::jsonInt(config, "tileSize", 256, info.tileSize); !status) {
-        return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
+        return mts::core::Result<std::unique_ptr<MapLoader>>::err(status.error());
     }
 
     if (info.tileSize <= 0) {
-        return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, "map config tileSize must be positive"));
+        return mts::core::Result<std::unique_ptr<MapLoader>>::err(mts::core::Error(MapErrorKind::InvalidArgument, "map config tileSize must be positive"));
     }
 
     MapTransform transform;
     if (auto const status = detail::jsonDouble(config, "metersPerPixel", 1.0, transform.metersPerPixel); !status) {
-        return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
+        return mts::core::Result<std::unique_ptr<MapLoader>>::err(status.error());
     }
 
     if (transform.metersPerPixel <= 0.0) {
-        return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, "map config metersPerPixel must be positive"));
+        return mts::core::Result<std::unique_ptr<MapLoader>>::err(mts::core::Error(MapErrorKind::InvalidArgument, "map config metersPerPixel must be positive"));
     }
 
     if (auto const status = detail::jsonDouble(config, "originX", 0.0, transform.originX); !status) {
-        return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
+        return mts::core::Result<std::unique_ptr<MapLoader>>::err(status.error());
     }
 
     if (auto const status = detail::jsonDouble(config, "originY", 0.0, transform.originY); !status) {
-        return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
+        return mts::core::Result<std::unique_ptr<MapLoader>>::err(status.error());
     }
 
     if (auto const status = detail::jsonBool(config, "flipY", true, transform.flipY); !status) {
-        return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
+        return mts::core::Result<std::unique_ptr<MapLoader>>::err(status.error());
     }
 
     if (auto const status = detail::jsonString(config, "unitLabel", "m", transform.unitLabel); !status) {
-        return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
+        return mts::core::Result<std::unique_ptr<MapLoader>>::err(status.error());
     }
 
     info.transform = transform;
@@ -304,57 +304,57 @@ auto MapLoader::create(
     if (config.contains("layers")) {
         auto const& layers = config.at("layers");
         if (!layers.is_array()) {
-            return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, "map config layers must be an array"));
+            return mts::core::Result<std::unique_ptr<MapLoader>>::err(mts::core::Error(MapErrorKind::InvalidArgument, "map config layers must be an array"));
         }
 
         for (auto const& entry : layers) {
             if (!entry.is_object()) {
-                return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, "map config layer entries must be objects"));
+                return mts::core::Result<std::unique_ptr<MapLoader>>::err(mts::core::Error(MapErrorKind::InvalidArgument, "map config layer entries must be objects"));
             }
 
             LayerSpec spec;
             if (auto const status = detail::jsonString(entry, "id", {}, spec.id); !status) {
-                return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
+                return mts::core::Result<std::unique_ptr<MapLoader>>::err(status.error());
             }
 
             if (spec.id.empty()) {
-                return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, "map config layer id is required"));
+                return mts::core::Result<std::unique_ptr<MapLoader>>::err(mts::core::Error(MapErrorKind::InvalidArgument, "map config layer id is required"));
             }
 
             if (auto const status = detail::jsonString(entry, "name", spec.id, spec.name); !status) {
-                return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
+                return mts::core::Result<std::unique_ptr<MapLoader>>::err(status.error());
             }
 
             if (auto const status = detail::jsonString(entry, "path", {}, spec.path); !status) {
-                return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
+                return mts::core::Result<std::unique_ptr<MapLoader>>::err(status.error());
             }
 
             if (spec.path.empty()) {
-                return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, "map config layer path is required: " + spec.id));
+                return mts::core::Result<std::unique_ptr<MapLoader>>::err(mts::core::Error(MapErrorKind::InvalidArgument, "map config layer path is required: " + spec.id));
             }
 
             std::string blendText;
             if (auto const status = detail::jsonString(entry, "blendMode", "normal", blendText); !status) {
-                return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
+                return mts::core::Result<std::unique_ptr<MapLoader>>::err(status.error());
             }
 
             auto const blend = blendModeFromString(blendText);
             if (!blend) {
-                return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(blend.error());
+                return mts::core::Result<std::unique_ptr<MapLoader>>::err(blend.error());
             }
 
             spec.blend = blend.value();
 
             if (auto const status = detail::jsonDouble(entry, "opacity", 1.0, spec.opacity); !status) {
-                return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
+                return mts::core::Result<std::unique_ptr<MapLoader>>::err(status.error());
             }
 
             if (auto const status = detail::jsonBool(entry, "defaultVisible", true, spec.visible); !status) {
-                return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
+                return mts::core::Result<std::unique_ptr<MapLoader>>::err(status.error());
             }
 
             if (auto const status = detail::jsonInt(entry, "levelBias", 0, spec.levelBias); !status) {
-                return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
+                return mts::core::Result<std::unique_ptr<MapLoader>>::err(status.error());
             }
 
             specs.push_back(std::move(spec));
@@ -364,11 +364,11 @@ auto MapLoader::create(
         spec.id = "base";
         spec.name = info.name;
         if (auto const status = detail::jsonString(config, "path", {}, spec.path); !status) {
-            return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
+            return mts::core::Result<std::unique_ptr<MapLoader>>::err(status.error());
         }
 
         if (spec.path.empty()) {
-            return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, "map config requires a path or a layers array"));
+            return mts::core::Result<std::unique_ptr<MapLoader>>::err(mts::core::Error(MapErrorKind::InvalidArgument, "map config requires a path or a layers array"));
         }
 
         specs.push_back(std::move(spec));
@@ -383,8 +383,8 @@ auto MapLoader::create(
             imagery::SingleFileTileSource::Options{info.tileSize, options.cacheDir}
         );
         if (!source) {
-            return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(
-                mts::foundation::Error(
+            return mts::core::Result<std::unique_ptr<MapLoader>>::err(
+                mts::core::Error(
                     MapErrorKind::InvalidArgument,
                     "layer '" + spec.id + "': " + source.error().message()
                 )
@@ -404,7 +404,7 @@ auto MapLoader::create(
     }
 
     if (layers.empty()) {
-        return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, "map config defines no layers"));
+        return mts::core::Result<std::unique_ptr<MapLoader>>::err(mts::core::Error(MapErrorKind::InvalidArgument, "map config defines no layers"));
     }
 
     info.baseSize = layers.front()->source().baseSize();

@@ -12,8 +12,13 @@ qt_standard_project_setup(REQUIRES 6.11)
 add_subdirectory(qml/)
 add_subdirectory(third_party/)
 add_subdirectory(json/)
-add_subdirectory(foundation/)
 add_subdirectory(core/)
+add_subdirectory(platform/)
+add_subdirectory(agent/)
+add_subdirectory(config/)
+add_subdirectory(persistence/)
+add_subdirectory(provider/)
+add_subdirectory(events/)
 add_subdirectory(ecs/)
 add_subdirectory(render2d/)
 add_subdirectory(imagery/)
@@ -63,7 +68,12 @@ target_link_libraries(
         EnTT::EnTT
         lgc::langgraph
         LibMagicEnum
-        LibCore
+        LibPlatform
+        LibAgent
+        LibConfig
+        LibPersistence
+        LibProvider
+        LibEvents
         LibEcs
         LibRender2d
         LibImagery

@@ -1,9 +1,9 @@
-export module foundation;
+export module core;
 
 import std;
 import magic_enum;
 
-export namespace mts::foundation {
+export namespace mts::core {
 
 using i8 = std::int8_t;
 using i16 = std::int16_t;
@@ -342,17 +342,17 @@ private:
 
 using Status = Result<void>;
 
-} // END OF NAMESPACE `mts::foundation`
+} // END OF NAMESPACE `mts::core`
 
 export namespace std {
 
 template <>
-struct formatter<mts::foundation::Error> {
+struct formatter<mts::core::Error> {
     constexpr auto parse(std::format_parse_context& context) -> std::format_parse_context::iterator {
         return context.begin();
     }
 
-    auto format(mts::foundation::Error const& error, std::format_context& context) const -> std::format_context::iterator {
+    auto format(mts::core::Error const& error, std::format_context& context) const -> std::format_context::iterator {
         return std::format_to(context.out(), "{}", error.format());
     }
 };

@@ -3,7 +3,7 @@
 export module map:layer;
 
 import std;
-import foundation;
+import core;
 import runtime;
 import imagery;
 
@@ -86,7 +86,7 @@ public:
         imagery::TileScheduler::Completion completion
     ) -> void {
         if (auto const entry = m_cache.find(tile); entry && entry->state == imagery::TileState::Ready) {
-            mts::foundation::Result<imagery::SharedImage> const result = entry->image;
+            mts::core::Result<imagery::SharedImage> const result = entry->image;
             if (completion) {
                 completion(result);
             }
@@ -99,7 +99,7 @@ public:
         }
 
         m_scheduler.request(tile,
-            [this, tile, completion = std::move(completion)](mts::foundation::Result<imagery::SharedImage> const& result) {
+            [this, tile, completion = std::move(completion)](mts::core::Result<imagery::SharedImage> const& result) {
                 if (result) {
                     m_cache.store(tile, result.value());
                 } else if (result.error().kind<MapErrorKind>() == MapErrorKind::NotFound) {
@@ -114,7 +114,7 @@ public:
             });
     }
 
-    [[nodiscard]] auto fetchTile(imagery::TileId const& tile) -> mts::foundation::Result<imagery::SharedImage> {
+    [[nodiscard]] auto fetchTile(imagery::TileId const& tile) -> mts::core::Result<imagery::SharedImage> {
         if (auto const entry = m_cache.find(tile); entry && entry->state == imagery::TileState::Ready) {
             return entry->image;
         }

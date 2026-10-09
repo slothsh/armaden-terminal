@@ -9,7 +9,7 @@
 export module map:snapshot;
 
 import std;
-import foundation;
+import core;
 import runtime;
 import imagery;
 
@@ -56,27 +56,27 @@ public:
     [[nodiscard]] auto renderRegion(
         QRectF const& worldRect,
         SnapshotOptions const& options
-    ) const -> mts::foundation::Result<MapSnapshot> {
+    ) const -> mts::core::Result<MapSnapshot> {
         if (worldRect.isEmpty() || !(worldRect.width() > 0.0) || !(worldRect.height() > 0.0)) {
-            return mts::foundation::Result<MapSnapshot>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, "snapshot region must have positive extent"));
+            return mts::core::Result<MapSnapshot>::err(mts::core::Error(MapErrorKind::InvalidArgument, "snapshot region must have positive extent"));
         }
 
         if (options.maxPixels <= 0) {
-            return mts::foundation::Result<MapSnapshot>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, "snapshot maxPixels must be positive"));
+            return mts::core::Result<MapSnapshot>::err(mts::core::Error(MapErrorKind::InvalidArgument, "snapshot maxPixels must be positive"));
         }
 
         MapInfo const& info = m_loader->info();
         std::vector<MapLayer*> const layers = this->resolveLayers(options);
         if (layers.empty()) {
-            return mts::foundation::Result<MapSnapshot>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, "snapshot layer selection is empty"));
+            return mts::core::Result<MapSnapshot>::err(mts::core::Error(MapErrorKind::InvalidArgument, "snapshot layer selection is empty"));
         }
 
         QRectF const baseRect = info.transform.metricRectToPixelRect(worldRect);
         int const maxLevel = std::max(0, m_loaderMaxLevel(layers));
         int const level = options.level.value_or(autoLevel(baseRect, options.maxPixels, maxLevel));
         if (level < 0 || level > maxLevel) {
-            return mts::foundation::Result<MapSnapshot>::err(
-                mts::foundation::Error(
+            return mts::core::Result<MapSnapshot>::err(
+                mts::core::Error(
                     MapErrorKind::InvalidArgument,
                     "snapshot level out of range: " + std::to_string(level)
                 )
@@ -89,7 +89,7 @@ public:
             int(std::ceil(levelRect.height()))
         );
         if (std::max(levelSize.width(), levelSize.height()) > kMaximumIntermediateEdge) {
-            return mts::foundation::Result<MapSnapshot>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, 
+            return mts::core::Result<MapSnapshot>::err(mts::core::Error(MapErrorKind::InvalidArgument, 
                     "snapshot region too large at level " + std::to_string(level)
                     + "; request a coarser level or a smaller region"));
         }
@@ -114,7 +114,7 @@ public:
                 for (auto const& tile : tileIds) {
                     auto const decoded = layer->fetchTile(tile);
                     if (!decoded) {
-                        return mts::foundation::Result<MapSnapshot>::err(decoded.error());
+                        return mts::core::Result<MapSnapshot>::err(decoded.error());
                     }
 
                     QPointF const origin = imagery::tileOrigin(grid, tile) - levelRect.topLeft();

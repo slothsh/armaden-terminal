@@ -6,11 +6,11 @@
 export module map:transform;
 
 import std;
-import foundation;
+import core;
 
 export namespace mts::map {
 
-enum class MapErrorKind : foundation::u8 {
+enum class MapErrorKind : core::u8 {
     Unknown,
     InvalidArgument,
     NotFound,
@@ -23,7 +23,7 @@ enum class MapErrorKind : foundation::u8 {
     PermissionDenied,
 };
 
-static_assert(foundation::ErrorKind<MapErrorKind>);
+static_assert(core::ErrorKind<MapErrorKind>);
 
 enum class MapBlend : std::uint8_t {
     Normal,
@@ -32,7 +32,7 @@ enum class MapBlend : std::uint8_t {
     Overlay,
 };
 
-[[nodiscard]] auto blendModeFromString(std::string const& text) -> mts::foundation::Result<MapBlend> {
+[[nodiscard]] auto blendModeFromString(std::string const& text) -> mts::core::Result<MapBlend> {
     if (text == "normal") {
         return MapBlend::Normal;
     }
@@ -49,7 +49,7 @@ enum class MapBlend : std::uint8_t {
         return MapBlend::Overlay;
     }
 
-    return mts::foundation::Result<MapBlend>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, "unknown blend mode: " + text));
+    return mts::core::Result<MapBlend>::err(mts::core::Error(MapErrorKind::InvalidArgument, "unknown blend mode: " + text));
 }
 
 [[nodiscard]] auto blendModeToString(MapBlend blend) -> std::string {

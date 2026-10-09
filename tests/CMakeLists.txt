@@ -1,8 +1,8 @@
-add_test_target(foundation_test foundation/foundation_test.cpp)
-target_link_libraries(foundation_test PRIVATE LibFoundation)
+add_test_target(core_test core/core_test.cpp)
+target_link_libraries(core_test PRIVATE LibCore)
 
 add_test_target(agent_adapter_test agent/agent_adapter_test.cpp)
-target_link_libraries(agent_adapter_test PRIVATE LibCore)
+target_link_libraries(agent_adapter_test PRIVATE LibAgent)
 
 add_test_target(imagery_tile_source_test imagery/tile_source_test.cpp)
 target_link_libraries(imagery_tile_source_test PRIVATE LibImagery)
@@ -10,17 +10,17 @@ target_link_libraries(imagery_tile_source_test PRIVATE LibImagery)
 add_test_target(orchestration_conversation_service_test orchestration/conversation_service_test.cpp)
 target_link_libraries(orchestration_conversation_service_test PRIVATE LibOrchestration)
 
-add_test_target(core_events_test core/events_test.cpp)
-target_link_libraries(core_events_test PRIVATE LibCore)
+add_test_target(events_test events/events_test.cpp)
+target_link_libraries(events_test PRIVATE LibEvents)
 
-add_test_target(core_config_test core/config_test.cpp)
-target_link_libraries(core_config_test PRIVATE LibCore)
+add_test_target(config_test config/config_test.cpp)
+target_link_libraries(config_test PRIVATE LibProvider)
 
-add_test_target(core_persistence_test core/persistence_test.cpp)
-target_link_libraries(core_persistence_test PRIVATE LibCore)
+add_test_target(persistence_test persistence/persistence_test.cpp)
+target_link_libraries(persistence_test PRIVATE LibPersistence)
 
-add_test_target(core_provider_test core/provider_test.cpp)
-target_link_libraries(core_provider_test PRIVATE LibCore)
+add_test_target(provider_test provider/provider_test.cpp)
+target_link_libraries(provider_test PRIVATE LibProvider)
 
 add_test_target(agent_facade_test agent/agent_facade_test.cpp)
-target_link_libraries(agent_facade_test PRIVATE LibCore)
+target_link_libraries(agent_facade_test PRIVATE LibAgent)

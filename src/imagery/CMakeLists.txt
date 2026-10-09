@@ -28,6 +28,8 @@ target_include_directories(
 target_link_libraries(
     LibImagery
     PUBLIC
+        LibConfig
+        LibPlatform
         LibCore
         Qt6::Gui
 )

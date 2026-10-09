@@ -2,17 +2,17 @@
 
 import std;
 import agent;
-import foundation;
+import core;
 
-using namespace mts::foundation;
+using namespace mts::core;
 
-TEST_CASE("ok status converts to an ok foundation status", "[agent][adapter]") {
+TEST_CASE("ok status converts to an ok core status", "[agent][adapter]") {
     Status const converted = mts::agent::toFoundation(mts::agent::Status::ok());
 
     REQUIRE(converted.isOk());
 }
 
-TEST_CASE("lgc error status converts to a foundation error", "[agent][adapter]") {
+TEST_CASE("lgc error status converts to a core error", "[agent][adapter]") {
     Status const converted = mts::agent::toFoundation(mts::agent::Status::notFound("missing thing"));
 
     REQUIRE(converted.isErr());
@@ -28,7 +28,7 @@ TEST_CASE("empty lgc messages fall back to the code name", "[agent][adapter]") {
     REQUIRE(converted.error().message() == "unavailable");
 }
 
-TEST_CASE("foundation error converts back to an lgc status", "[agent][adapter]") {
+TEST_CASE("core error converts back to an lgc status", "[agent][adapter]") {
     Status const error = Status::err(Error(mts::agent::AgentErrorKind::Unavailable, "down"));
 
     mts::agent::Status const converted = mts::agent::fromFoundation(error);
@@ -53,7 +53,7 @@ TEST_CASE("status round-trips through the adapter", "[agent][adapter]") {
     }
 }
 
-TEST_CASE("result values convert to foundation results", "[agent][adapter]") {
+TEST_CASE("result values convert to core results", "[agent][adapter]") {
     Result<int> const ok = mts::agent::toFoundation(mts::agent::Result<int>::fromValue(7));
 
     REQUIRE(ok.isOk());
@@ -68,7 +68,7 @@ TEST_CASE("result values convert to foundation results", "[agent][adapter]") {
     REQUIRE(failed.error().message() == "boom");
 }
 
-TEST_CASE("void results convert to foundation status", "[agent][adapter]") {
+TEST_CASE("void results convert to core status", "[agent][adapter]") {
     Status const ok = mts::agent::toFoundation(mts::agent::Result<void>::ok());
     REQUIRE(ok.isOk());
 
