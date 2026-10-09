@@ -10,3 +10,4 @@ project(mindtosis VERSION 0.0.0 LANGUAGES CXX)
 prepare_testing()
 
 add_subdirectory(src/)
+add_subdirectory(tests/)

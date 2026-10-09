@@ -27,6 +27,3 @@ target_link_libraries(
         spdlog::spdlog
         LibMagicEnum
 )
-
-add_test_target(foundation_test foundation_test.cpp)
-target_link_libraries(foundation_test PRIVATE LibFoundation)

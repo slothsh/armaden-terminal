@@ -1,0 +1,2 @@
+add_test_target(foundation_test foundation/foundation_test.cpp)
+target_link_libraries(foundation_test PRIVATE LibFoundation)

@@ -179,6 +179,14 @@ auto Error::format() const -> std::string {
     return stream.str();
 }
 
+[[nodiscard]] auto to_string(Error const& error) -> std::string {
+    return error.format();
+}
+
+inline auto operator<<(std::ostream& stream, Error const& error) -> std::ostream& {
+    return stream << error.format();
+}
+
 template <typename T>
 class Result {
 public:
@@ -317,3 +325,18 @@ private:
 using Status = Result<void>;
 
 } // END OF NAMESPACE `mts::foundation`
+
+export namespace std {
+
+template <>
+struct formatter<mts::foundation::Error> {
+    constexpr auto parse(std::format_parse_context& context) -> std::format_parse_context::iterator {
+        return context.begin();
+    }
+
+    auto format(mts::foundation::Error const& error, std::format_context& context) const -> std::format_context::iterator {
+        return std::format_to(context.out(), "{}", error.format());
+    }
+};
+
+} // END OF NAMESPACE `std`

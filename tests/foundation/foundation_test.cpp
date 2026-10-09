@@ -90,6 +90,18 @@ TEST_CASE("Error formats kind, message and context", "[foundation]") {
     REQUIRE(error.context()[0].value == "x");
 }
 
+TEST_CASE("Error prints and formats at the boundary", "[foundation]") {
+    Error const error = Error(TestErrorKind::InvalidArgument, "bad input").with("field", "x");
+
+    std::ostringstream stream;
+    stream << error;
+
+    REQUIRE(stream.str() == "InvalidArgument: bad input (field=x)");
+    REQUIRE(to_string(error) == "InvalidArgument: bad input (field=x)");
+    REQUIRE(std::format("{}", error) == "InvalidArgument: bad input (field=x)");
+    REQUIRE(std::format("error=[{}]", error) == "error=[InvalidArgument: bad input (field=x)]");
+}
+
 TEST_CASE("Error type-erases user errors", "[foundation]") {
     Error const error = Error(CustomError{});
 
