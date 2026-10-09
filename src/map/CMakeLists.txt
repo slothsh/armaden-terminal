@@ -32,6 +32,7 @@ target_link_libraries(
         LibFoundation
         LibJson
         LibEcs
+        LibRender2d
         LibImagery
         Qt6::Gui
 )

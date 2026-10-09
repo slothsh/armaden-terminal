@@ -9,7 +9,7 @@ import foundation;
 import json;
 import runtime;
 import imagery;
-import ecs;
+import render2d;
 
 import :transform;
 import :layer;
@@ -56,14 +56,14 @@ public:
 
     [[nodiscard]] auto visibleTiles(
         QRectF const& canvasRect,
-        mts::ecs::Camera const& camera,
+        mts::render2d::Camera const& camera,
         double devicePixelRatio
     ) const -> std::vector<LayerTiles> {
         if (canvasRect.isEmpty()) {
             return {};
         }
 
-        QRectF const worldRect = mts::ecs::worldBounds(camera, canvasRect).normalized();
+        QRectF const worldRect = mts::render2d::worldBounds(camera, canvasRect).normalized();
         if (worldRect.isEmpty()) {
             return {};
         }

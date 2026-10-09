@@ -15,6 +15,7 @@ add_subdirectory(json/)
 add_subdirectory(foundation/)
 add_subdirectory(core/)
 add_subdirectory(ecs/)
+add_subdirectory(render2d/)
 add_subdirectory(imagery/)
 add_subdirectory(map/)
 add_subdirectory(orchestration/)
@@ -64,6 +65,7 @@ target_link_libraries(
         LibMagicEnum
         LibCore
         LibEcs
+        LibRender2d
         LibImagery
         LibMap
         LibOrchestration

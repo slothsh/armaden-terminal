@@ -1,5 +1,3 @@
-find_package(Qt6 6.11 REQUIRED COMPONENTS Gui CanvasPainter)
-
 file(GLOB_RECURSE ECS_MODULE_SRC_FILES CONFIGURE_DEPENDS *.cppm)
 
 add_library_target(
@@ -29,6 +27,4 @@ target_link_libraries(
     LibEcs
     PUBLIC
         EnTT::EnTT
-        Qt6::Gui
-        Qt6::CanvasPainter
 )

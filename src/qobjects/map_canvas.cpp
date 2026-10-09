@@ -17,6 +17,7 @@
 import std;
 import foundation;
 import ecs;
+import render2d;
 import imagery;
 import map;
 
@@ -78,13 +79,13 @@ public:
 
         if (!m_world.valid(m_camera)) {
             m_camera = m_world.create();
-            m_world.emplace<mts::ecs::Camera>(m_camera, mts::ecs::Camera{});
-            m_world.emplace<mts::ecs::MainCamera>(m_camera);
+            m_world.emplace<mts::render2d::Camera>(m_camera, mts::render2d::Camera{});
+            m_world.emplace<mts::render2d::MainCamera>(m_camera);
         }
 
         if (!m_world.valid(m_grid)) {
             m_grid = m_world.create();
-            m_world.emplace<mts::ecs::GridStyle>(m_grid, mts::ecs::GridStyle{});
+            m_world.emplace<mts::render2d::GridStyle>(m_grid, mts::render2d::GridStyle{});
         }
     }
 
@@ -115,7 +116,7 @@ public:
         }
 
         float const scale = scaleForDepth(canvas->zDepth());
-        auto& camera = m_world.get<mts::ecs::Camera>(m_camera);
+        auto& camera = m_world.get<mts::render2d::Camera>(m_camera);
         QPointF const center(-canvas->translationX() / scale, canvas->translationY() / scale);
         if (center != camera.center || scale != camera.scale) {
             m_lastCameraChangeAt = std::chrono::steady_clock::now();
@@ -129,7 +130,7 @@ public:
     auto paint(QCanvasPainter* painter) -> void override {
         QRectF const canvasRect(0, 0, this->width(), this->height());
         float const devicePixelRatio = qMax(1.0f, painter->devicePixelRatio());
-        mts::ecs::RenderContext const context{
+        mts::render2d::RenderContext const context{
             painter,
             canvasRect,
             devicePixelRatio,
@@ -143,8 +144,8 @@ public:
             return;
         }
 
-        mts::ecs::Camera const& camera = m_world.get<mts::ecs::Camera>(m_camera);
-        mts::ecs::drawGridSystem(context, m_world, camera);
+        mts::render2d::Camera const& camera = m_world.get<mts::render2d::Camera>(m_camera);
+        mts::render2d::drawGridSystem(context, m_world, camera);
 
         if (m_loader != nullptr) {
             this->paintMapLayers(painter, context, camera);
@@ -179,8 +180,8 @@ private:
 
     auto paintMapLayers(
         QCanvasPainter* painter,
-        mts::ecs::RenderContext const& context,
-        mts::ecs::Camera const& camera
+        mts::render2d::RenderContext const& context,
+        mts::render2d::Camera const& camera
     ) -> void {
         mts::map::MapLoader const* loader = m_loader;
         mts::map::MapInfo const& info = loader->info();
@@ -230,8 +231,8 @@ private:
 
     auto drawReadyTile(
         QCanvasPainter* painter,
-        mts::ecs::RenderContext const& context,
-        mts::ecs::Camera const& camera,
+        mts::render2d::RenderContext const& context,
+        mts::render2d::Camera const& camera,
         mts::map::MapInfo const& info,
         mts::imagery::LevelInfo const& grid,
         mts::map::MapLayer* layer,
@@ -261,14 +262,14 @@ private:
 
         QRectF const tileBase = mts::imagery::levelRectToBaseRect(mts::imagery::tileRect(grid, tile), tile.level);
         QRectF const tileWorld = info.transform.pixelRectToMetricRect(tileBase);
-        QRectF const destination = mts::ecs::screenRectForWorldRect(camera, context.canvasRect.size(), tileWorld);
+        QRectF const destination = mts::render2d::screenRectForWorldRect(camera, context.canvasRect.size(), tileWorld);
         painter->drawImage(it->image, destination);
     }
 
     auto paintBackfill(
         QCanvasPainter* painter,
-        mts::ecs::RenderContext const& context,
-        mts::ecs::Camera const& camera,
+        mts::render2d::RenderContext const& context,
+        mts::render2d::Camera const& camera,
         mts::map::MapInfo const& info,
         mts::map::MapLayer* layer,
         double opacity,
@@ -318,8 +319,8 @@ private:
 
             QRectF const ancestorWorld = info.transform.pixelRectToMetricRect(ancestorBase);
             QRectF const childWorld = info.transform.pixelRectToMetricRect(childBase);
-            QRectF const ancestorScreen = mts::ecs::screenRectForWorldRect(camera, context.canvasRect.size(), ancestorWorld);
-            QRectF const childScreen = mts::ecs::screenRectForWorldRect(camera, context.canvasRect.size(), childWorld);
+            QRectF const ancestorScreen = mts::render2d::screenRectForWorldRect(camera, context.canvasRect.size(), ancestorWorld);
+            QRectF const childScreen = mts::render2d::screenRectForWorldRect(camera, context.canvasRect.size(), childWorld);
 
             qreal const relativeLeft = (childBase.left() - ancestorBase.left()) / qMax(ancestorBase.width(), 1.0);
             qreal const relativeTop = (childBase.top() - ancestorBase.top()) / qMax(ancestorBase.height(), 1.0);
