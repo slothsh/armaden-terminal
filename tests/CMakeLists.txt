@@ -3,3 +3,6 @@ target_link_libraries(foundation_test PRIVATE LibFoundation)
 
 add_test_target(agent_adapter_test agent/agent_adapter_test.cpp)
 target_link_libraries(agent_adapter_test PRIVATE LibCore)
+
+add_test_target(imagery_tile_source_test imagery/tile_source_test.cpp)
+target_link_libraries(imagery_tile_source_test PRIVATE LibImagery)

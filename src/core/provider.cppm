@@ -97,6 +97,10 @@ private:
     std::variant<OpenRouterProvider, FakeModelProvider> m_provider;
 };
 
+static_assert(ModelProvider<OpenRouterProvider>);
+static_assert(ModelProvider<FakeModelProvider>);
+static_assert(ModelProvider<ProviderHandle>);
+
 [[nodiscard]] auto makeOpenRouterProvider(mts::config::ProviderConfig const& config) -> Result<OpenRouterProvider>;
 [[nodiscard]] auto makeProvider(mts::config::AppConfig const& config) -> Result<ProviderHandle>;
 [[nodiscard]] auto makeVisionProvider(mts::config::AppConfig const& config) -> Result<ProviderHandle>;

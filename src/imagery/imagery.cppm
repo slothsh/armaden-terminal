@@ -243,6 +243,103 @@ struct ViewportTiles {
     return result;
 }
 
+template <typename Type>
+concept TileSource = requires(Type& source, TileId const& tile, int level, mts::runtime::ThreadPool& pool) {
+    { source.tileSize() } -> std::convertible_to<int>;
+    { source.levelCount() } -> std::convertible_to<int>;
+    { source.levelInfo(level) } -> std::same_as<LevelInfo>;
+    { source.baseSize() } -> std::same_as<QSize>;
+    { source.readTile(tile) } -> std::same_as<mts::foundation::Result<SharedImage>>;
+    { source.levelReady(level) } -> std::convertible_to<bool>;
+    { source.startBuild(pool) } -> std::same_as<void>;
+};
+
+class AnyTileSource {
+public:
+    template <TileSource Type>
+    AnyTileSource(Type source)
+        : m_self(std::make_shared<Model<Type>>(std::move(source))) {}
+
+    [[nodiscard]] auto tileSize() const -> int {
+        return this->m_self->tileSize();
+    }
+
+    [[nodiscard]] auto levelCount() const -> int {
+        return this->m_self->levelCount();
+    }
+
+    [[nodiscard]] auto levelInfo(int level) const -> LevelInfo {
+        return this->m_self->levelInfo(level);
+    }
+
+    [[nodiscard]] auto baseSize() const -> QSize {
+        return this->m_self->baseSize();
+    }
+
+    [[nodiscard]] auto levelReady(int level) const -> bool {
+        return this->m_self->levelReady(level);
+    }
+
+    auto startBuild(mts::runtime::ThreadPool& pool) -> void {
+        this->m_self->startBuild(pool);
+    }
+
+    [[nodiscard]] auto readTile(TileId const& tile) -> mts::foundation::Result<SharedImage> {
+        return this->m_self->readTile(tile);
+    }
+
+private:
+    struct Concept {
+        virtual ~Concept() = default;
+
+        [[nodiscard]] virtual auto tileSize() const -> int = 0;
+        [[nodiscard]] virtual auto levelCount() const -> int = 0;
+        [[nodiscard]] virtual auto levelInfo(int level) const -> LevelInfo = 0;
+        [[nodiscard]] virtual auto baseSize() const -> QSize = 0;
+        [[nodiscard]] virtual auto levelReady(int level) const -> bool = 0;
+        virtual auto startBuild(mts::runtime::ThreadPool& pool) -> void = 0;
+        [[nodiscard]] virtual auto readTile(TileId const& tile) -> mts::foundation::Result<SharedImage> = 0;
+    };
+
+    template <typename Type>
+    struct Model final : Concept {
+        Type source;
+
+        explicit Model(Type input)
+            : source(std::move(input)) {}
+
+        [[nodiscard]] auto tileSize() const -> int override {
+            return this->source.tileSize();
+        }
+
+        [[nodiscard]] auto levelCount() const -> int override {
+            return this->source.levelCount();
+        }
+
+        [[nodiscard]] auto levelInfo(int level) const -> LevelInfo override {
+            return this->source.levelInfo(level);
+        }
+
+        [[nodiscard]] auto baseSize() const -> QSize override {
+            return this->source.baseSize();
+        }
+
+        [[nodiscard]] auto levelReady(int level) const -> bool override {
+            return this->source.levelReady(level);
+        }
+
+        auto startBuild(mts::runtime::ThreadPool& pool) -> void override {
+            this->source.startBuild(pool);
+        }
+
+        [[nodiscard]] auto readTile(TileId const& tile) -> mts::foundation::Result<SharedImage> override {
+            return this->source.readTile(tile);
+        }
+    };
+
+    std::shared_ptr<Concept> m_self;
+};
+
 class TileCache {
 public:
     struct Entry {
@@ -877,5 +974,8 @@ private:
     std::filesystem::path m_pyramidDir;
     std::shared_ptr<detail::PyramidBuildState> m_core;
 };
+
+static_assert(TileSource<SingleFileTileSource>);
+static_assert(TileSource<AnyTileSource>);
 
 } // END OF NAMESPACE `mts::imagery`

@@ -156,6 +156,13 @@ private:
     std::variant<InMemorySessionStore, LanggraphSessionStore> m_store;
 };
 
+static_assert(SessionRepository<InMemorySessionStore>);
+static_assert(ConversationStore<InMemorySessionStore>);
+static_assert(SessionRepository<LanggraphSessionStore>);
+static_assert(ConversationStore<LanggraphSessionStore>);
+static_assert(SessionRepository<SessionStoreHandle>);
+static_assert(ConversationStore<SessionStoreHandle>);
+
 [[nodiscard]] auto databasePath() -> std::filesystem::path;
 [[nodiscard]] auto makeSessionStore(std::filesystem::path const& databasePath) -> Result<SessionStoreHandle>;
 

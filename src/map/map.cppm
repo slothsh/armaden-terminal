@@ -142,7 +142,7 @@ public:
     MapLayer(
         std::string id,
         std::string name,
-        imagery::SingleFileTileSource source,
+        imagery::AnyTileSource source,
         MapBlend blend,
         double opacity,
         bool visible,
@@ -191,7 +191,7 @@ public:
         return m_levelBias;
     }
 
-    [[nodiscard]] auto source() const -> imagery::SingleFileTileSource const& {
+    [[nodiscard]] auto source() const -> imagery::AnyTileSource const& {
         return m_source;
     }
 
@@ -256,7 +256,7 @@ public:
 private:
     std::string m_id;
     std::string m_name;
-    imagery::SingleFileTileSource m_source;
+    imagery::AnyTileSource m_source;
     imagery::TileCache m_cache;
     imagery::TileScheduler m_scheduler;
     MapBlend m_blend;
