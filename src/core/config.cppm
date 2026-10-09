@@ -21,327 +21,215 @@ enum class ConfigErrorKind : foundation::u8 {
 
 static_assert(foundation::ErrorKind<ConfigErrorKind>);
 
-struct ProviderConfig {
-    std::string origin = "https://openrouter.ai";
-    std::string path = "/api/v1/chat/completions";
-    std::string model;
-    std::string apiKey;
-    std::string referer;
-    std::string title;
+class ConfigView {
+public:
+    ConfigView() = default;
+    explicit ConfigView(mts::agent::Config const& config, std::string prefix = {})
+        : m_config(&config)
+        , m_prefix(std::move(prefix)) {}
+
+    [[nodiscard]] auto section(std::string_view key) const -> ConfigView {
+        if (this->m_config == nullptr) {
+            return ConfigView{};
+        }
+
+        std::string prefix = this->m_prefix;
+        prefix += key;
+        prefix += '.';
+
+        return ConfigView{*this->m_config, std::move(prefix)};
+    }
+
+    [[nodiscard]] auto readString(std::string_view key, std::string& target) const -> foundation::Status {
+        auto const value = this->entry(key);
+        if (!value.has_value()) {
+            return foundation::Status::ok();
+        }
+
+        auto const text = value->asString();
+        if (!text) {
+            return foundation::Status::err(mts::agent::toFoundation(text.status()).error());
+        }
+
+        target = text.value();
+
+        return foundation::Status::ok();
+    }
+
+    [[nodiscard]] auto readBool(std::string_view key, bool& target) const -> foundation::Status {
+        auto const value = this->entry(key);
+        if (!value.has_value()) {
+            return foundation::Status::ok();
+        }
+
+        auto const flag = value->asBool();
+        if (!flag) {
+            return foundation::Status::err(mts::agent::toFoundation(flag.status()).error());
+        }
+
+        target = flag.value();
+
+        return foundation::Status::ok();
+    }
+
+    [[nodiscard]] auto readInt64(std::string_view key, std::int64_t& target) const -> foundation::Status {
+        auto const value = this->entry(key);
+        if (!value.has_value()) {
+            return foundation::Status::ok();
+        }
+
+        auto const number = value->asInt64();
+        if (!number) {
+            return foundation::Status::err(mts::agent::toFoundation(number.status()).error());
+        }
+
+        target = number.value();
+
+        return foundation::Status::ok();
+    }
+
+    [[nodiscard]] auto readUInt32(std::string_view key, std::uint32_t& target) const -> foundation::Status {
+        auto const value = this->entry(key);
+        if (!value.has_value()) {
+            return foundation::Status::ok();
+        }
+
+        auto const number = value->asInt64();
+        if (!number) {
+            return foundation::Status::err(mts::agent::toFoundation(number.status()).error());
+        }
+
+        std::int64_t const raw = number.value();
+        if (raw < 0 || static_cast<std::uint64_t>(raw) > std::numeric_limits<std::uint32_t>::max()) {
+            return foundation::Status::err(ConfigErrorKind::OutOfRange, std::string(key) + " is out of range");
+        }
+
+        target = static_cast<std::uint32_t>(raw);
+
+        return foundation::Status::ok();
+    }
+
+    [[nodiscard]] auto readUInt64(std::string_view key, std::uint64_t& target) const -> foundation::Status {
+        auto const value = this->entry(key);
+        if (!value.has_value()) {
+            return foundation::Status::ok();
+        }
+
+        auto const number = value->asInt64();
+        if (!number) {
+            return foundation::Status::err(mts::agent::toFoundation(number.status()).error());
+        }
+
+        std::int64_t const raw = number.value();
+        if (raw < 0) {
+            return foundation::Status::err(ConfigErrorKind::OutOfRange, std::string(key) + " is out of range");
+        }
+
+        target = static_cast<std::uint64_t>(raw);
+
+        return foundation::Status::ok();
+    }
+
+    [[nodiscard]] auto readDouble(std::string_view key, double& target) const -> foundation::Status {
+        auto const value = this->entry(key);
+        if (!value.has_value()) {
+            return foundation::Status::ok();
+        }
+
+        auto const number = value->asDouble();
+        if (!number) {
+            return foundation::Status::err(mts::agent::toFoundation(number.status()).error());
+        }
+
+        target = number.value();
+
+        return foundation::Status::ok();
+    }
+
+    [[nodiscard]] auto contains(std::string_view key) const -> bool {
+        return this->entry(key).has_value();
+    }
+
+    [[nodiscard]] auto valid() const -> bool {
+        return this->m_config != nullptr;
+    }
+
+private:
+    [[nodiscard]] auto fullKey(std::string_view key) const -> std::string {
+        std::string full = this->m_prefix;
+        full += key;
+
+        return full;
+    }
+
+    [[nodiscard]] auto entry(std::string_view key) const -> std::optional<mts::agent::ConfigValue> {
+        if (this->m_config == nullptr) {
+            return std::nullopt;
+        }
+
+        return this->m_config->get(this->fullKey(key));
+    }
+
+    mts::agent::Config const* m_config = nullptr;
+    std::string m_prefix;
 };
 
-struct ServerConfig {
-    std::string origin = "http://127.0.0.1:8000";
-    std::string graphqlPath = "api/command/graphql";
-    std::string schemaPath = "api/command/schema";
+class Config {
+public:
+    Config() = default;
+    explicit Config(mts::agent::Config config)
+        : m_config(std::move(config)) {}
+
+    [[nodiscard]] static auto fromJson(std::string_view jsonText) -> foundation::Result<Config> {
+        auto const parsed = mts::agent::ConfigLoader::fromJsonString(jsonText);
+        if (!parsed) {
+            return foundation::Result<Config>::err(mts::agent::toFoundation(parsed.status()).error());
+        }
+
+        return Config{parsed.value()};
+    }
+
+    [[nodiscard]] static auto fromFile(std::filesystem::path const& path) -> foundation::Result<Config> {
+        auto const parsed = mts::agent::ConfigLoader::fromJsonFile(path);
+        if (!parsed) {
+            return foundation::Result<Config>::err(mts::agent::toFoundation(parsed.status()).error());
+        }
+
+        return Config{parsed.value()};
+    }
+
+    auto merge(Config const& other) -> foundation::Status {
+        return mts::agent::toFoundation(this->m_config.merge(other.m_config));
+    }
+
+    [[nodiscard]] auto view() const -> ConfigView {
+        return ConfigView{this->m_config};
+    }
+
+    [[nodiscard]] auto raw() const -> mts::agent::Config const& {
+        return this->m_config;
+    }
+
+private:
+    mts::agent::Config m_config;
 };
 
-struct RuntimeConfig {
-    std::uint32_t workers = 4;
-};
-
-struct BudgetConfig {
-    std::uint32_t maxTurns = 16;
-    std::uint64_t maxInputTokens = 0;
-    std::uint64_t maxOutputTokens = 0;
-    double maxCost = 0.0;
-};
-
-struct CompactionConfig {
-    bool enabled = true;
-    std::uint32_t maxMessages = 40;
-    std::uint64_t maxBytes = 0;
-};
-
-struct NamingConfig {
-    std::string model;
-};
-
-struct VisionConfig {
-    std::string model;
-    std::uint32_t maxPixels = 1024;
-    std::uint32_t timeoutMs = 30000;
-};
-
-struct CacheConfig {
-    std::string tilesDir = "~/.cache/mindtosis/tiles";
-};
-
-struct MapConfig {
-    std::string configPath = "config/maps/everon.json";
-};
-
-struct AppConfig {
-    ProviderConfig provider;
-    ServerConfig server;
-    RuntimeConfig runtime;
-    BudgetConfig budgets;
-    CompactionConfig compaction;
-    NamingConfig naming;
-    CacheConfig cache;
-    MapConfig map;
-    VisionConfig vision;
-};
-
-[[nodiscard]] auto defaultConfig() -> AppConfig;
-[[nodiscard]] auto parseConfig(std::string_view jsonText) -> mts::foundation::Result<AppConfig>;
-[[nodiscard]] auto loadConfig(std::filesystem::path const& path) -> mts::foundation::Result<AppConfig>;
-[[nodiscard]] auto loadConfigOrDefaults(std::filesystem::path const& path, std::string& error) -> AppConfig;
-[[nodiscard]] auto configPath() -> std::filesystem::path;
-
-} // END OF NAMESPACE `mts::config`
-
-namespace mts::config::detail {
-
-using mts::agent::Config;
-using mts::foundation::Status;
-
-auto readString(Config const& config, std::string_view key, std::string& target) -> Status {
-    auto const value = config.get(key);
-    if (!value) {
-        return Status::ok();
-    }
-
-    auto const text = value->asString();
-    if (!text) {
-        return mts::agent::toFoundation(text.status());
-    }
-
-    target = text.value();
-
-    return Status::ok();
-}
-
-auto readBool(Config const& config, std::string_view key, bool& target) -> Status {
-    auto const value = config.get(key);
-    if (!value) {
-        return Status::ok();
-    }
-
-    auto const flag = value->asBool();
-    if (!flag) {
-        return mts::agent::toFoundation(flag.status());
-    }
-
-    target = flag.value();
-
-    return Status::ok();
-}
-
-auto readDouble(Config const& config, std::string_view key, double& target) -> Status {
-    auto const value = config.get(key);
-    if (!value) {
-        return Status::ok();
-    }
-
-    auto const number = value->asDouble();
-    if (!number) {
-        return mts::agent::toFoundation(number.status());
-    }
-
-    target = number.value();
-
-    return Status::ok();
-}
-
-auto readUInt32(Config const& config, std::string_view key, std::uint32_t& target) -> Status {
-    auto const value = config.get(key);
-    if (!value) {
-        return Status::ok();
-    }
-
-    auto const number = value->asInt64();
-    if (!number) {
-        return mts::agent::toFoundation(number.status());
-    }
-
-    std::int64_t const raw = number.value();
-    if (raw < 0 || static_cast<std::uint64_t>(raw) > std::numeric_limits<std::uint32_t>::max()) {
-        return Status::err(ConfigErrorKind::OutOfRange, std::string(key) + " is out of range");
-    }
-
-    target = static_cast<std::uint32_t>(raw);
-
-    return Status::ok();
-}
-
-auto readUInt64(Config const& config, std::string_view key, std::uint64_t& target) -> Status {
-    auto const value = config.get(key);
-    if (!value) {
-        return Status::ok();
-    }
-
-    auto const number = value->asInt64();
-    if (!number) {
-        return mts::agent::toFoundation(number.status());
-    }
-
-    std::int64_t const raw = number.value();
-    if (raw < 0) {
-        return Status::err(ConfigErrorKind::OutOfRange, std::string(key) + " is out of range");
-    }
-
-    target = static_cast<std::uint64_t>(raw);
-
-    return Status::ok();
-}
-
-auto applyConfig(Config const& config, mts::config::AppConfig& app) -> Status {
-    if (auto const status = readString(config, "provider.origin", app.provider.origin); !status) {
-        return status;
-    }
-
-    if (auto const status = readString(config, "provider.path", app.provider.path); !status) {
-        return status;
-    }
-
-    if (auto const status = readString(config, "provider.model", app.provider.model); !status) {
-        return status;
-    }
-
-    if (auto const status = readString(config, "provider.apiKey", app.provider.apiKey); !status) {
-        return status;
-    }
-
-    if (auto const status = readString(config, "provider.referer", app.provider.referer); !status) {
-        return status;
-    }
-
-    if (auto const status = readString(config, "provider.title", app.provider.title); !status) {
-        return status;
-    }
-
-    if (auto const status = readString(config, "server.origin", app.server.origin); !status) {
-        return status;
-    }
-
-    if (auto const status = readString(config, "server.graphqlPath", app.server.graphqlPath); !status) {
-        return status;
-    }
-
-    if (auto const status = readString(config, "server.schemaPath", app.server.schemaPath); !status) {
-        return status;
-    }
-
-    if (auto const status = readUInt32(config, "runtime.workers", app.runtime.workers); !status) {
-        return status;
-    }
-
-    if (auto const status = readUInt32(config, "budgets.maxTurns", app.budgets.maxTurns); !status) {
-        return status;
-    }
-
-    if (auto const status = readUInt64(config, "budgets.maxInputTokens", app.budgets.maxInputTokens); !status) {
-        return status;
-    }
-
-    if (auto const status = readUInt64(config, "budgets.maxOutputTokens", app.budgets.maxOutputTokens); !status) {
-        return status;
-    }
-
-    if (auto const status = readDouble(config, "budgets.maxCost", app.budgets.maxCost); !status) {
-        return status;
-    }
-
-    if (auto const status = readBool(config, "compaction.enabled", app.compaction.enabled); !status) {
-        return status;
-    }
-
-    if (auto const status = readUInt32(config, "compaction.maxMessages", app.compaction.maxMessages); !status) {
-        return status;
-    }
-
-    if (auto const status = readUInt64(config, "compaction.maxBytes", app.compaction.maxBytes); !status) {
-        return status;
-    }
-
-    if (auto const status = readString(config, "naming.model", app.naming.model); !status) {
-        return status;
-    }
-
-    if (auto const status = readString(config, "cache.tilesDir", app.cache.tilesDir); !status) {
-        return status;
-    }
-
-    if (auto const status = readString(config, "map.configPath", app.map.configPath); !status) {
-        return status;
-    }
-
-    if (auto const status = readString(config, "vision.model", app.vision.model); !status) {
-        return status;
-    }
-
-    if (auto const status = readUInt32(config, "vision.maxPixels", app.vision.maxPixels); !status) {
-        return status;
-    }
-
-    if (auto const status = readUInt32(config, "vision.timeoutMs", app.vision.timeoutMs); !status) {
-        return status;
-    }
-
-    return Status::ok();
-}
-
-} // END OF NAMESPACE `mts::config::detail`
-
-export namespace mts::config {
-
-auto defaultConfig() -> AppConfig {
-    return AppConfig{};
-}
-
-auto parseConfig(std::string_view jsonText) -> mts::foundation::Result<AppConfig> {
-    auto const parsed = mts::agent::ConfigLoader::fromJsonString(jsonText);
-    if (!parsed) {
-        return mts::foundation::Result<AppConfig>::err(mts::agent::toFoundation(parsed.status()).error());
-    }
-
-    AppConfig app;
-    if (auto const status = detail::applyConfig(parsed.value(), app); !status) {
-        return mts::foundation::Result<AppConfig>::err(status.error());
-    }
-
-    return app;
-}
-
-auto loadConfig(std::filesystem::path const& path) -> mts::foundation::Result<AppConfig> {
-    auto const parsed = mts::agent::ConfigLoader::fromJsonFile(path);
-    if (!parsed) {
-        return mts::foundation::Result<AppConfig>::err(mts::agent::toFoundation(parsed.status()).error());
-    }
-
-    AppConfig app;
-    if (auto const status = detail::applyConfig(parsed.value(), app); !status) {
-        return mts::foundation::Result<AppConfig>::err(status.error());
-    }
-
-    return app;
-}
-
-auto loadConfigOrDefaults(std::filesystem::path const& path, std::string& error) -> AppConfig {
+[[nodiscard]] auto loadConfigOrDefaults(std::filesystem::path const& path, std::string& error) -> Config {
     error.clear();
 
     std::error_code existsError;
     if (!std::filesystem::exists(path, existsError)) {
-        return defaultConfig();
+        return Config{};
     }
 
-    auto const loaded = loadConfig(path);
+    auto const loaded = Config::fromFile(path);
     if (!loaded) {
         error = std::string(loaded.error().message());
 
-        return defaultConfig();
+        return Config{};
     }
 
     return loaded.value();
-}
-
-auto configPath() -> std::filesystem::path {
-    if (char const* env = std::getenv("MINDTOIS_CONFIG"); env != nullptr && *env != '\0') {
-        return std::filesystem::path(env);
-    }
-
-    return std::filesystem::path("config/mindtosis.json");
 }
 
 } // END OF NAMESPACE `mts::config`

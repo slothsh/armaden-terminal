@@ -81,6 +81,8 @@ Do NOT add documentation comments to ANY code. This will only be required on req
   - Public surface: declare the partition as `export module M:P;` and re-export it from the primary with `export import :P;`.
   - Internal helpers: declare the partition as `export module M:P;` but import it in the primary with a plain `import :P;` (never `export`). Partitions are only importable inside their own module, so the primary's failure to re-export keeps the helpers out of the public surface.
 
+- Logging injection (deliberate force-include): every translation unit is force-included with a generated header that defines the per-TU `ModuleScope` (its `LIBRARY_NAME`/`MODULE_NAME`) and then includes `logging.hpp`. Calls are `mts::log::info(...)` etc. with `Scope = ModuleScope` defaulted, so logs carry rich per-TU module info without an explicit template argument. This requires the logging API to be a force-included header (a module is parsed once and cannot see the caller's `ModuleScope`); do not replace it with an explicit `mts::log::info<ModuleScope>(...)` or move the API into a module.
+
 - When using a new library and a module facade has not been exported for it yet, query the user for instructions on how to treat it.
 
 ## MANDATORY: Design Conventions

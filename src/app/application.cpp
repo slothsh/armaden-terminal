@@ -27,15 +27,71 @@ import persistence;
 import provider;
 import harness;
 import orchestration;
+import logging;
 import imagery;
 import map;
 
 namespace {
 
-auto makeMapTools(MapController* controller, mts::config::AppConfig const& config) -> mts::harness::MapTools {
+struct Paths {
+    std::filesystem::path configFile;
+    std::filesystem::path databaseFile;
+    std::filesystem::path home;
+};
+
+auto environmentValue(char const* name) -> std::optional<std::string> {
+    if (char const* value = std::getenv(name); value != nullptr && *value != '\0') {
+        return std::string(value);
+    }
+
+    return std::nullopt;
+}
+
+auto expandHome(std::string const& path, std::filesystem::path const& home) -> std::filesystem::path {
+    if (path.empty() || path.front() != '~' || home.empty()) {
+        return std::filesystem::path(path);
+    }
+
+    if (path.size() == 1) {
+        return home;
+    }
+
+    if (path.at(1) == '/' || path.at(1) == std::filesystem::path::preferred_separator) {
+        return home / std::filesystem::path(path.substr(2));
+    }
+
+    return std::filesystem::path(path);
+}
+
+auto resolvePaths() -> Paths {
+    auto const home = environmentValue("HOME");
+
+    Paths paths;
+    paths.configFile = std::filesystem::path("config/mindtosis.json");
+    paths.databaseFile = std::filesystem::path("mindtosis.db");
+    if (home.has_value()) {
+        paths.home = std::filesystem::path(*home);
+    }
+
+    if (auto const value = environmentValue("MINDTOIS_CONFIG"); value.has_value()) {
+        paths.configFile = std::filesystem::path(*value);
+    }
+
+    if (auto const value = environmentValue("MINDTOIS_DB"); value.has_value()) {
+        paths.databaseFile = std::filesystem::path(*value);
+    } else if (auto const value = environmentValue("XDG_DATA_HOME"); value.has_value()) {
+        paths.databaseFile = std::filesystem::path(*value) / "mindtosis" / "mindtosis.db";
+    } else if (home.has_value()) {
+        paths.databaseFile = paths.home / ".local" / "share" / "mindtosis" / "mindtosis.db";
+    }
+
+    return paths;
+}
+
+auto makeMapTools(MapController* controller, mts::model::VisionConfig const& vision) -> mts::harness::MapTools {
     mts::harness::MapTools tools;
-    tools.visionTimeoutMs = int(config.vision.timeoutMs);
-    int const maxPixels = int(config.vision.maxPixels);
+    tools.visionTimeoutMs = int(vision.timeoutMs);
+    int const maxPixels = int(vision.maxPixels);
 
     tools.info = [controller]() -> mts::agent::Result<mts::agent::json> {
         auto const* loader = controller != nullptr ? controller->loader() : nullptr;
@@ -147,47 +203,73 @@ mts::app::Application::Application(int argc, char** argv)
     m_application = std::make_unique<QGuiApplication>(argc, argv);
     m_engine = std::make_unique<QQmlApplicationEngine>();
 
+    Paths const paths = resolvePaths();
+
     std::string configError;
-    auto const config = mts::config::loadConfigOrDefaults(mts::config::configPath(), configError);
+    auto const config = mts::config::loadConfigOrDefaults(paths.configFile, configError);
+    auto const view = config.view();
+
+    mts::model::ProviderConfig providerConfig;
+    mts::model::VisionConfig visionConfig;
+    mts::harness::ServerConfig serverConfig;
+    mts::harness::NamingConfig namingConfig;
+    mts::runtime::RuntimeConfig runtimeConfig;
+    mts::imagery::CacheConfig cacheConfig;
+    mts::map::MapConfig mapConfig;
+
+    auto const reportConfigError = [this](mts::foundation::Status const& status) {
+        if (!status && m_initialStatus.empty()) {
+            m_initialStatus = std::string(status.error().message());
+        }
+    };
+
+    reportConfigError(mts::model::applyConfig(view, providerConfig));
+    reportConfigError(mts::model::applyConfig(view, visionConfig));
+    reportConfigError(mts::harness::applyConfig(view, serverConfig));
+    reportConfigError(mts::harness::applyConfig(view, namingConfig));
+    reportConfigError(mts::runtime::applyConfig(view, runtimeConfig));
+    reportConfigError(mts::imagery::applyConfig(view, cacheConfig));
+    reportConfigError(mts::map::applyConfig(view, mapConfig));
+
     if (!configError.empty()) {
         m_initialStatus = configError;
-    } else if (config.provider.model.empty() || config.provider.apiKey.empty()) {
+    } else if (m_initialStatus.empty() && (providerConfig.model.empty() || providerConfig.apiKey.empty())) {
         m_initialStatus = "No model configured; using the offline provider. Create config/mindtosis.json.";
     }
 
-    auto const workers = config.runtime.workers == 0 ? 4u : config.runtime.workers;
+    auto const workers = runtimeConfig.workers == 0 ? 4u : runtimeConfig.workers;
     m_pool = std::make_unique<mts::runtime::ThreadPool>(workers);
     m_bus = std::make_unique<mts::events::EventBus>(m_pool.get());
 
-    auto store = mts::persistence::makeSessionStore(mts::persistence::databasePath());
+    auto store = mts::persistence::makeSessionStore(paths.databaseFile);
     if (store) {
         m_store = std::make_unique<mts::persistence::SessionStoreHandle>(std::move(store.value()));
     } else {
         m_initialStatus = std::string(store.error().message());
     }
 
-    auto provider = mts::model::makeProvider(config);
+    auto provider = mts::model::makeProvider(providerConfig);
     if (provider) {
         m_provider = std::make_unique<mts::model::ProviderHandle>(std::move(provider.value()));
     } else {
         m_initialStatus = std::string(provider.error().message());
     }
 
-    if (!config.provider.apiKey.empty()) {
-        auto namingConfig = config;
-        if (!config.naming.model.empty()) {
-            namingConfig.provider.model = config.naming.model;
+    if (!providerConfig.apiKey.empty()) {
+        auto namingProviderConfig = providerConfig;
+        if (!namingConfig.model.empty()) {
+            namingProviderConfig.model = namingConfig.model;
         }
 
-        if (!namingConfig.provider.model.empty()) {
-            if (auto naming = mts::model::makeProvider(namingConfig); naming) {
+        if (!namingProviderConfig.model.empty()) {
+            if (auto naming = mts::model::makeProvider(namingProviderConfig); naming) {
                 m_namingProvider = std::make_unique<mts::model::ProviderHandle>(std::move(naming.value()));
             }
         }
     }
 
-    if (!config.vision.model.empty()) {
-        auto vision = mts::model::makeVisionProvider(config);
+    if (!visionConfig.model.empty()) {
+        auto vision = mts::model::makeVisionProvider(providerConfig, visionConfig);
         if (vision) {
             m_visionProvider = std::make_unique<mts::model::ProviderHandle>(std::move(vision.value()));
         } else {
@@ -195,10 +277,12 @@ mts::app::Application::Application(int argc, char** argv)
         }
     }
 
+    std::filesystem::path const mapConfigFile = expandHome(mapConfig.configPath, paths.home);
+    std::filesystem::path const tilesCacheDir = expandHome(cacheConfig.tilesDir, paths.home);
     m_mapController = std::make_unique<MapController>(
         *m_pool,
-        mts::imagery::expandHomePath(config.map.configPath),
-        mts::imagery::expandHomePath(config.cache.tilesDir),
+        mapConfigFile,
+        tilesCacheDir,
         m_application.get()
     );
     if (!m_mapController->status().isEmpty()) {
@@ -206,10 +290,10 @@ mts::app::Application::Application(int argc, char** argv)
     }
 
     if (m_store != nullptr && m_provider != nullptr) {
-        auto mapTools = makeMapTools(m_mapController.get(), config);
+        auto mapTools = makeMapTools(m_mapController.get(), visionConfig);
         m_harness = std::make_unique<mts::harness::AgentHarness>(
             *m_provider, m_namingProvider.get(), m_visionProvider.get(), *m_store,
-            *m_pool, *m_bus, config.server, std::move(mapTools)
+            *m_pool, *m_bus, serverConfig, std::move(mapTools)
         );
     }
 

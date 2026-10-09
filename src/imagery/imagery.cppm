@@ -12,6 +12,7 @@ export module imagery;
 import std;
 import foundation;
 import runtime;
+import config;
 
 export namespace mts::imagery {
 
@@ -22,6 +23,15 @@ using ::QSize;
 using ::QSizeF;
 
 using SharedImage = QImage;
+
+struct CacheConfig {
+    std::string tilesDir = "~/.cache/mindtosis/tiles";
+};
+
+[[nodiscard]] inline auto applyConfig(mts::config::ConfigView const& view, CacheConfig& target) -> mts::foundation::Status {
+    return view.section("cache").readString("tilesDir", target.tilesDir);
+}
+
 
 enum class ImageryErrorKind : foundation::u8 {
     Unknown,
@@ -584,33 +594,6 @@ private:
     std::shared_ptr<std::atomic_bool> m_alive;
 };
 
-[[nodiscard]] auto expandHomePath(std::string const& path) -> std::filesystem::path {
-    if (path.empty() || path.front() != '~') {
-        return std::filesystem::path(path);
-    }
-
-    std::string const home = []() -> std::string {
-        if (char const* env = std::getenv("HOME"); env != nullptr && *env != '\0') {
-            return std::string(env);
-        }
-
-        return {};
-    }();
-    if (home.empty()) {
-        return std::filesystem::path(path);
-    }
-
-    if (path.size() == 1) {
-        return std::filesystem::path(home);
-    }
-
-    if (path.at(1) == '/' || path.at(1) == std::filesystem::path::preferred_separator) {
-        return std::filesystem::path(home) / std::filesystem::path(path.substr(2));
-    }
-
-    return std::filesystem::path(path);
-}
-
 struct TileBuildProgress {
     bool building = false;
     bool ready = false;
@@ -804,9 +787,7 @@ private:
         }
         m_levelCount = levels;
 
-        std::filesystem::path const cacheRoot = options.cacheDir.empty()
-            ? expandHomePath("~/.cache/mindtosis/tiles")
-            : expandHomePath(options.cacheDir.string());
+        std::filesystem::path const cacheRoot = options.cacheDir;
 
         std::error_code pathError;
         auto const absolute = std::filesystem::absolute(m_file, pathError);

@@ -165,7 +165,6 @@ static_assert(ConversationStore<LanggraphSessionStore>);
 static_assert(SessionRepository<SessionStoreHandle>);
 static_assert(ConversationStore<SessionStoreHandle>);
 
-[[nodiscard]] auto databasePath() -> std::filesystem::path;
 [[nodiscard]] auto makeSessionStore(std::filesystem::path const& databasePath) -> Result<SessionStoreHandle>;
 
 } // END OF NAMESPACE `mts::persistence`
@@ -739,22 +738,6 @@ auto SessionStoreHandle::clearMessages(SessionId const& id) -> Status {
     return std::visit([&id](auto& store) {
         return store.clearMessages(id);
     }, m_store);
-}
-
-auto databasePath() -> std::filesystem::path {
-    if (char const* env = std::getenv("MINDTOIS_DB"); env != nullptr && *env != '\0') {
-        return std::filesystem::path(env);
-    }
-
-    if (char const* dataHome = std::getenv("XDG_DATA_HOME"); dataHome != nullptr && *dataHome != '\0') {
-        return std::filesystem::path(dataHome) / "mindtosis" / "mindtosis.db";
-    }
-
-    if (char const* home = std::getenv("HOME"); home != nullptr && *home != '\0') {
-        return std::filesystem::path(home) / ".local" / "share" / "mindtosis" / "mindtosis.db";
-    }
-
-    return std::filesystem::path("mindtosis.db");
 }
 
 auto makeSessionStore(std::filesystem::path const& path) -> Result<SessionStoreHandle> {

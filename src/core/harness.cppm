@@ -10,6 +10,7 @@ import provider;
 import runtime;
 
 export import :tools;
+export import :config;
 import :messages;
 import :naming;
 
@@ -61,7 +62,7 @@ public:
         mts::persistence::SessionStoreHandle& store,
         mts::runtime::ThreadPool& pool,
         mts::events::EventBus& bus,
-        mts::config::ServerConfig const& server,
+        ServerConfig const& server,
         MapTools mapTools = {}
     );
     ~AgentHarness();
@@ -110,7 +111,7 @@ AgentHarness::AgentHarness(
     mts::persistence::SessionStoreHandle& store,
     mts::runtime::ThreadPool& pool,
     mts::events::EventBus& bus,
-    mts::config::ServerConfig const& server,
+    ServerConfig const& server,
     MapTools mapTools
 )
     : m_impl(std::make_unique<Impl>()) {

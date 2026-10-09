@@ -1,6 +1,6 @@
 #include <spdlog/common.h>
-#include <spdlog/spdlog.h>
 #include <spdlog/formatter.h>
+#include <spdlog/spdlog.h>
 
 export module logging;
 

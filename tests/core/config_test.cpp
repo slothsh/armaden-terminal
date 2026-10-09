@@ -1,28 +1,56 @@
 #include <catch2/catch_test_macros.hpp>
 
 import std;
+import foundation;
 import config;
+import provider;
 
-TEST_CASE("config parses provider and vision fields", "[core][config]") {
-    auto const parsed = mts::config::parseConfig(
-        R"({"provider":{"model":"main-model","apiKey":"secret"},"vision":{"model":"vision-model"}})");
-
+TEST_CASE("config view reads the provider and vision sections", "[core][config]") {
+    auto const parsed = mts::config::Config::fromJson(
+        R"({"provider":{"model":"main-model","apiKey":"secret"},"vision":{"model":"vision-model"}})"
+    );
     REQUIRE(parsed.isOk());
-    REQUIRE(parsed.value().provider.model == "main-model");
-    REQUIRE(parsed.value().provider.apiKey == "secret");
-    REQUIRE(parsed.value().vision.model == "vision-model");
+
+    auto const view = parsed.value().view();
+
+    mts::model::ProviderConfig provider;
+    mts::model::VisionConfig vision;
+    REQUIRE(mts::model::applyConfig(view, provider).isOk());
+    REQUIRE(mts::model::applyConfig(view, vision).isOk());
+
+    REQUIRE(provider.model == "main-model");
+    REQUIRE(provider.apiKey == "secret");
+    REQUIRE(vision.model == "vision-model");
 }
 
-TEST_CASE("config rejects malformed JSON", "[core][config]") {
-    auto const parsed = mts::config::parseConfig("{ not json");
+TEST_CASE("config view rejects malformed JSON", "[core][config]") {
+    auto const parsed = mts::config::Config::fromJson("{ not json");
 
     REQUIRE(parsed.isErr());
 }
 
-TEST_CASE("default config supplies stable defaults", "[core][config]") {
-    auto const defaults = mts::config::defaultConfig();
+TEST_CASE("domain config keeps defaults when its section is absent", "[core][config]") {
+    auto const parsed = mts::config::Config::fromJson(R"({})");
+    REQUIRE(parsed.isOk());
 
-    REQUIRE(defaults.provider.origin == "https://openrouter.ai");
-    REQUIRE(defaults.provider.model.empty());
-    REQUIRE(defaults.provider.apiKey.empty());
+    auto const view = parsed.value().view();
+
+    mts::model::ProviderConfig provider;
+    REQUIRE(mts::model::applyConfig(view, provider).isOk());
+    REQUIRE(provider.origin == "https://openrouter.ai");
+    REQUIRE(provider.model.empty());
+}
+
+TEST_CASE("config merges an overlay for dynamic reloads", "[core][config]") {
+    auto base = mts::config::Config::fromJson(R"({"provider":{"model":"base","apiKey":"key"}})");
+    auto overlay = mts::config::Config::fromJson(R"({"provider":{"model":"override"}})");
+    REQUIRE(base.isOk());
+    REQUIRE(overlay.isOk());
+
+    REQUIRE(base.value().merge(overlay.value()).isOk());
+
+    mts::model::ProviderConfig provider;
+    REQUIRE(mts::model::applyConfig(base.value().view(), provider).isOk());
+    REQUIRE(provider.model == "override");
+    REQUIRE(provider.apiKey == "key");
 }

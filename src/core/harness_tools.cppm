@@ -4,6 +4,7 @@ import std;
 import agent;
 import foundation;
 import config;
+import :config;
 import events;
 import persistence;
 import provider;
@@ -75,7 +76,7 @@ class GameGraphqlClient {
 public:
     GameGraphqlClient() = default;
 
-    GameGraphqlClient(std::shared_ptr<mts::agent::IHttpClient> client, mts::config::ServerConfig config)
+    GameGraphqlClient(std::shared_ptr<mts::agent::IHttpClient> client, mts::harness::ServerConfig config)
         : m_client(std::move(client))
         , m_config(std::move(config)) {}
 
@@ -115,10 +116,10 @@ private:
     }
 
     std::shared_ptr<mts::agent::IHttpClient> m_client;
-    mts::config::ServerConfig m_config;
+    mts::harness::ServerConfig m_config;
 };
 
-inline auto makeGameGraphqlClient(mts::config::ServerConfig const& config) -> GameGraphqlClient {
+inline auto makeGameGraphqlClient(mts::harness::ServerConfig const& config) -> GameGraphqlClient {
     auto const clientConfig = mts::agent::HttpClientConfig::fromOrigin(config.origin);
     if (!clientConfig) {
         return {};
