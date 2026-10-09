@@ -6,6 +6,7 @@
 #include <QtQml/qqmlregistration.h>
 
 #include "map_controller.hpp"
+#include "map_view.hpp"
 
 class QCanvasPainterItemRenderer;
 class QMouseEvent;
@@ -35,6 +36,8 @@ public:
     [[nodiscard]] auto zDepth() const -> float;
     auto setZDepth(float depth) -> void;
 
+    [[nodiscard]] auto view() const -> MapView const&;
+
     Q_INVOKABLE auto fitToMap() -> void;
 
 signals:
@@ -61,9 +64,7 @@ private:
     QTimer* m_idleTimer = nullptr;
     QMetaObject::Connection m_readyConnection;
     bool m_initialViewApplied = false;
-    float m_translationX = 0.0f;
-    float m_translationY = 0.0f;
-    float m_zDepth = 0.0f;
+    MapView m_view;
     QPointF m_lastDragPosition;
     bool m_dragging = false;
 };
