@@ -1,20 +1,11 @@
 #include <stdexec/execution.hpp>
 #include <exec/static_thread_pool.hpp>
 #include <exec/start_detached.hpp>
-#include <exec/task.hpp>
 
 export module runtime;
 
 import std;
 import agent;
-
-template <class Type>
-using Task = exec::task<Type>;
-
-template <class Sender>
-auto syncWait(Sender&& sender) -> decltype(auto) {
-    return stdexec::sync_wait(std::forward<Sender>(sender));
-}
 
 export namespace mts::runtime {
 

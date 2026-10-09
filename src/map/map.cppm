@@ -176,16 +176,6 @@ public:
         return m_levelBias;
     }
 
-    auto setVisible(bool visible) -> void {
-        std::lock_guard const lock(m_mutex);
-        m_visible = visible;
-    }
-
-    auto setOpacity(double opacity) -> void {
-        std::lock_guard const lock(m_mutex);
-        m_opacity = qBound(0.0, opacity, 1.0);
-    }
-
     [[nodiscard]] auto source() const -> imagery::SingleFileTileSource const& {
         return m_source;
     }
@@ -198,17 +188,12 @@ public:
         m_source.startBuild(pool);
     }
 
-    [[nodiscard]] auto buildProgress() const -> imagery::TileBuildProgress {
-        return m_source.buildProgress();
-    }
-
     [[nodiscard]] auto levelReady(int level) const -> bool {
         return m_source.levelReady(level);
     }
 
     auto requestTile(
         imagery::TileId const& tile,
-        imagery::TileScheduler::Generation generation,
         imagery::TileScheduler::Completion completion
     ) -> void {
         if (auto const entry = m_cache.find(tile); entry && entry->state == imagery::TileState::Ready) {
@@ -224,7 +209,7 @@ public:
             m_cache.markQueued(tile);
         }
 
-        m_scheduler.request(tile, generation,
+        m_scheduler.request(tile,
             [this, tile, completion = std::move(completion)](mts::agent::Result<imagery::SharedImage> const& result) {
                 if (result) {
                     m_cache.store(tile, result.value());
@@ -238,14 +223,6 @@ public:
                     completion(result);
                 }
             });
-    }
-
-    auto setGeneration(imagery::TileScheduler::Generation generation) -> void {
-        m_scheduler.setGeneration(generation);
-    }
-
-    auto cancelPending() -> void {
-        m_scheduler.cancelPending();
     }
 
     [[nodiscard]] auto fetchTile(imagery::TileId const& tile) -> mts::agent::Result<imagery::SharedImage> {
@@ -298,10 +275,6 @@ public:
         return m_info;
     }
 
-    [[nodiscard]] auto transform() const -> MapTransform const& {
-        return m_info.transform;
-    }
-
     [[nodiscard]] auto layers() const -> std::vector<MapLayer*> {
         std::lock_guard const lock(m_mutex);
         std::vector<MapLayer*> snapshot;
@@ -317,51 +290,11 @@ public:
         return this->findLayer(id);
     }
 
-    auto setLayerVisible(std::string const& id, bool visible) const -> void {
-        std::lock_guard const lock(m_mutex);
-        auto const it = std::find_if(m_layers.begin(), m_layers.end(),
-            [&id](std::unique_ptr<MapLayer> const& layer) { return layer->id() == id; });
-        if (it != m_layers.end()) {
-            (*it)->setVisible(visible);
-        }
-    }
-
-    auto setLayerOpacity(std::string const& id, double opacity) const -> void {
-        std::lock_guard const lock(m_mutex);
-        auto const it = std::find_if(m_layers.begin(), m_layers.end(),
-            [&id](std::unique_ptr<MapLayer> const& layer) { return layer->id() == id; });
-        if (it != m_layers.end()) {
-            (*it)->setOpacity(opacity);
-        }
-    }
-
     auto startBuild() const -> void {
         std::lock_guard const lock(m_mutex);
         for (auto const& layer : m_layers) {
             layer->startBuild(*m_pool);
         }
-    }
-
-    [[nodiscard]] auto building() const -> bool {
-        std::lock_guard const lock(m_mutex);
-
-        return std::any_of(m_layers.begin(), m_layers.end(),
-            [](std::unique_ptr<MapLayer> const& layer) {
-                auto const progress = layer->buildProgress();
-
-                return progress.building && !progress.ready && !progress.failed;
-            });
-    }
-
-    [[nodiscard]] auto allReady() const -> bool {
-        std::lock_guard const lock(m_mutex);
-
-        return std::all_of(m_layers.begin(), m_layers.end(),
-            [](std::unique_ptr<MapLayer> const& layer) {
-                auto const progress = layer->buildProgress();
-
-                return progress.ready || progress.failed;
-            });
     }
 
     [[nodiscard]] auto visibleTiles(
@@ -415,7 +348,6 @@ public:
     auto requestTile(
         std::string const& layerId,
         imagery::TileId const& tile,
-        imagery::TileScheduler::Generation generation,
         imagery::TileScheduler::Completion completion
     ) const -> mts::agent::Status {
         MapLayer* const target = this->findLayer(layerId);
@@ -423,23 +355,9 @@ public:
             return mts::agent::Status::notFound("unknown map layer: " + layerId);
         }
 
-        target->requestTile(tile, generation, std::move(completion));
+        target->requestTile(tile, std::move(completion));
 
         return mts::agent::Status::ok();
-    }
-
-    auto setGeneration(imagery::TileScheduler::Generation generation) const -> void {
-        std::lock_guard const lock(m_mutex);
-        for (auto const& layer : m_layers) {
-            layer->setGeneration(generation);
-        }
-    }
-
-    auto cancelPending() const -> void {
-        std::lock_guard const lock(m_mutex);
-        for (auto const& layer : m_layers) {
-            layer->cancelPending();
-        }
     }
 
 private:
@@ -580,10 +498,6 @@ public:
         snapshot.pixelSize = output.size();
 
         return snapshot;
-    }
-
-    [[nodiscard]] auto snapshotDirectory() const -> std::filesystem::path const& {
-        return m_mapDir;
     }
 
 private:

@@ -1,6 +1,5 @@
 #include <entt/entt.hpp>
 #include <cmath>
-#include <QCanvasImage>
 #include <QCanvasPainter>
 #include <QColor>
 #include <QPointF>
@@ -32,16 +31,6 @@ struct GridStyle {
     QColor lineColor = QColor(28, 28, 28);
     QColor axisColor = QColor(82, 82, 82);
     bool drawAxes = true;
-};
-
-struct Sprite {
-    QCanvasImage image;
-    float width = 0.0f;
-    float height = 0.0f;
-};
-
-struct RenderLayer {
-    int value = 0;
 };
 
 struct RenderContext {
@@ -140,24 +129,6 @@ auto drawGridSystem(RenderContext const& context, registry& world, Camera const&
         if (axisOrigin.y() >= context.canvasRect.top() && axisOrigin.y() <= context.canvasRect.bottom()) {
             context.painter->fillRect(context.canvasRect.left(), axisOrigin.y(), context.canvasRect.width(), context.lineWidth);
         }
-    }
-}
-
-auto drawSpriteSystem(RenderContext const& context, registry& world, Camera const& camera) -> void {
-    auto const spriteView = world.view<Sprite const>();
-    QSizeF const canvasSize = context.canvasRect.size();
-
-    for (auto const entity : spriteView) {
-        auto const& sprite = spriteView.get<Sprite const>(entity);
-        if (sprite.image.isNull() || sprite.width <= 0.0f || sprite.height <= 0.0f) {
-            continue;
-        }
-
-        QPointF const topLeft = mapWorldToScreen(camera, canvasSize, QPointF(-sprite.width * 0.5f, sprite.height * 0.5f));
-        context.painter->drawImage(
-            sprite.image,
-            QRectF(topLeft, QSizeF(sprite.width * camera.scale, sprite.height * camera.scale))
-        );
     }
 }
 

@@ -353,7 +353,6 @@ private:
         loader->requestTile(
             layerId.toStdString(),
             tile,
-            1,
             [canvas](mts::agent::Result<mts::imagery::SharedImage> const&) {
                 if (canvas != nullptr) {
                     QMetaObject::invokeMethod(canvas, &MapCanvas::handleTileUpdate, Qt::QueuedConnection);

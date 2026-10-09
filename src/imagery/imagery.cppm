@@ -63,11 +63,6 @@ struct LevelInfo {
         return QSize(width, height);
     }
 
-    [[nodiscard]] auto contains(TileId const& tile) const -> bool {
-        return tile.level == level
-            && tile.x >= 0 && tile.x < tilesAcross
-            && tile.y >= 0 && tile.y < tilesDown;
-    }
 };
 
 [[nodiscard]] auto levelPixelScale(int level) -> double {
@@ -120,13 +115,6 @@ struct LevelInfo {
     float const height = std::max(0, std::min(level.tileSize, extent.height() - tile.y * level.tileSize));
 
     return QRectF(origin, QSizeF(width, height));
-}
-
-[[nodiscard]] auto tileAt(LevelInfo const& level, QPointF const& levelPixel) -> TileId {
-    int const tileX = qBound(0, int(std::floor(levelPixel.x() / float(level.tileSize))), level.tilesAcross - 1);
-    int const tileY = qBound(0, int(std::floor(levelPixel.y() / float(level.tileSize))), level.tilesDown - 1);
-
-    return TileId{level.level, tileX, tileY};
 }
 
 [[nodiscard]] auto tilesForRect(LevelInfo const& level, QRectF const& levelPixelRect) -> std::vector<TileId> {
@@ -240,18 +228,6 @@ struct ViewportTiles {
     return result;
 }
 
-template <class Type>
-concept TileSource = requires(
-    Type&& source,
-    TileId const& tile,
-    int level
-) {
-    { source.tileSize() } -> std::convertible_to<int>;
-    { source.levelCount() } -> std::convertible_to<int>;
-    { source.levelInfo(level) } -> std::same_as<LevelInfo>;
-    { source.readTile(tile) } -> std::same_as<mts::agent::Result<SharedImage>>;
-};
-
 class TileCache {
 public:
     struct Entry {
@@ -260,8 +236,6 @@ public:
         std::string error;
         qsizetype bytes = 0;
     };
-
-    using Listener = std::function<void(TileId const&, TileState)>;
 
     explicit TileCache(qsizetype byteBudget = 128 * 1024 * 1024)
         : m_byteBudget(std::max<qsizetype>(byteBudget, 0)) {}
@@ -289,112 +263,30 @@ public:
     }
 
     auto markQueued(TileId const& tile) -> void {
-        std::vector<Notification> notifications;
-        {
-            std::lock_guard const lock(m_mutex);
-            this->replaceRecord(tile, Entry{TileState::Queued, SharedImage{}, {}, 0});
-            notifications.emplace_back(tile, TileState::Queued);
-        }
-
-        this->notify(notifications);
+        std::lock_guard const lock(m_mutex);
+        this->replaceRecord(tile, Entry{TileState::Queued, SharedImage{}, {}, 0});
     }
 
     auto store(TileId const& tile, SharedImage image) -> void {
-        std::vector<Notification> notifications;
-        {
-            std::lock_guard const lock(m_mutex);
-            qsizetype const bytes = image.sizeInBytes();
-            this->replaceRecord(tile, Entry{TileState::Ready, std::move(image), {}, bytes});
-            m_byteUsage += bytes;
-            notifications.emplace_back(tile, TileState::Ready);
-            this->evictOverBudget(notifications, tile);
-        }
-
-        this->notify(notifications);
+        std::lock_guard const lock(m_mutex);
+        qsizetype const bytes = image.sizeInBytes();
+        this->replaceRecord(tile, Entry{TileState::Ready, std::move(image), {}, bytes});
+        m_byteUsage += bytes;
+        this->evictOverBudget(tile);
     }
 
     auto markFailed(TileId const& tile, std::string error) -> void {
-        std::vector<Notification> notifications;
-        {
-            std::lock_guard const lock(m_mutex);
-            this->replaceRecord(tile, Entry{TileState::Failed, SharedImage{}, std::move(error), 0});
-            notifications.emplace_back(tile, TileState::Failed);
-        }
-
-        this->notify(notifications);
+        std::lock_guard const lock(m_mutex);
+        this->replaceRecord(tile, Entry{TileState::Failed, SharedImage{}, std::move(error), 0});
     }
 
     auto evict(TileId const& tile) -> void {
-        std::vector<Notification> notifications;
-        {
-            std::lock_guard const lock(m_mutex);
-            this->eraseRecord(tile, notifications);
-        }
-
-        this->notify(notifications);
-    }
-
-    auto clear() -> void {
-        std::vector<Notification> notifications;
-        {
-            std::lock_guard const lock(m_mutex);
-            notifications.reserve(m_records.size());
-            for (auto const& record : m_records) {
-                notifications.emplace_back(record.first, TileState::Missing);
-            }
-            m_records.clear();
-            m_index.clear();
-            m_byteUsage = 0;
-        }
-
-        this->notify(notifications);
-    }
-
-    auto setByteBudget(qsizetype budget) -> void {
-        std::vector<Notification> notifications;
-        {
-            std::lock_guard const lock(m_mutex);
-            m_byteBudget = std::max<qsizetype>(budget, 0);
-            this->evictOverBudget(notifications, std::nullopt);
-        }
-
-        this->notify(notifications);
-    }
-
-    [[nodiscard]] auto byteBudget() const -> qsizetype {
         std::lock_guard const lock(m_mutex);
-
-        return m_byteBudget;
-    }
-
-    [[nodiscard]] auto byteUsage() const -> qsizetype {
-        std::lock_guard const lock(m_mutex);
-
-        return m_byteUsage;
-    }
-
-    [[nodiscard]] auto size() const -> std::size_t {
-        std::lock_guard const lock(m_mutex);
-
-        return m_index.size();
-    }
-
-    auto addListener(Listener listener) -> std::size_t {
-        std::lock_guard const lock(m_mutex);
-        std::size_t const id = m_nextListenerId++;
-        m_listeners.emplace(id, std::move(listener));
-
-        return id;
-    }
-
-    auto removeListener(std::size_t id) -> void {
-        std::lock_guard const lock(m_mutex);
-        m_listeners.erase(id);
+        this->eraseRecord(tile);
     }
 
 private:
     using Records = std::list<std::pair<TileId, Entry>>;
-    using Notification = std::pair<TileId, TileState>;
 
     auto insertRecord(TileId const& tile, Entry&& entry) -> void {
         m_records.emplace_front(tile, std::move(entry));
@@ -412,7 +304,7 @@ private:
         this->insertRecord(tile, std::move(entry));
     }
 
-    auto eraseRecord(TileId const& tile, std::vector<Notification>& notifications) -> void {
+    auto eraseRecord(TileId const& tile) -> void {
         auto const it = m_index.find(tile);
         if (it == m_index.end()) {
             return;
@@ -421,10 +313,9 @@ private:
         m_byteUsage -= it->second->second.bytes;
         m_records.erase(it->second);
         m_index.erase(it);
-        notifications.emplace_back(tile, TileState::Missing);
     }
 
-    auto evictOverBudget(std::vector<Notification>& notifications, std::optional<TileId> const& pinned) -> void {
+    auto evictOverBudget(std::optional<TileId> const& pinned) -> void {
         auto it = m_records.end();
         while (m_byteUsage > m_byteBudget && m_index.size() > 1) {
             if (it == m_records.begin()) {
@@ -438,29 +329,7 @@ private:
 
             m_byteUsage -= it->second.bytes;
             m_index.erase(it->first);
-            notifications.emplace_back(it->first, TileState::Missing);
             it = m_records.erase(it);
-        }
-    }
-
-    auto notify(std::vector<Notification> const& notifications) const -> void {
-        if (notifications.empty()) {
-            return;
-        }
-
-        std::vector<Listener> listeners;
-        {
-            std::lock_guard const lock(m_mutex);
-            listeners.reserve(m_listeners.size());
-            for (auto const& [id, listener] : m_listeners) {
-                listeners.push_back(listener);
-            }
-        }
-
-        for (auto const& listener : listeners) {
-            for (auto const& [tile, state] : notifications) {
-                listener(tile, state);
-            }
         }
     }
 
@@ -469,15 +338,12 @@ private:
     mutable Records m_records;
     mutable std::unordered_map<TileId, Records::iterator, TileIdHash> m_index;
     qsizetype m_byteUsage = 0;
-    std::unordered_map<std::size_t, Listener> m_listeners;
-    std::size_t m_nextListenerId = 1;
 };
 
 class TileScheduler {
 public:
     using Decoder = std::function<mts::agent::Result<SharedImage>(TileId const&)>;
     using Completion = std::function<void(mts::agent::Result<SharedImage> const&)>;
-    using Generation = std::uint64_t;
 
     TileScheduler(mts::runtime::ThreadPool& pool, Decoder decoder)
         : m_pool(&pool)
@@ -497,7 +363,7 @@ public:
     TileScheduler(TileScheduler const&) = delete;
     auto operator=(TileScheduler const&) -> TileScheduler& = delete;
 
-    auto request(TileId const& tile, Generation generation, Completion completion) -> void {
+    auto request(TileId const& tile, Completion completion) -> void {
         std::shared_ptr<Inflight> dispatchEntry;
         {
             std::lock_guard const lock(m_mutex);
@@ -517,7 +383,7 @@ public:
             }
 
             std::lock_guard const entryLock(it->second->mutex);
-            it->second->requests.push_back(Request{generation, std::move(completion)});
+            it->second->requests.push_back(Request{std::move(completion)});
             dispatchEntry = it->second->decodeStarted ? nullptr : it->second;
             it->second->decodeStarted = true;
         }
@@ -527,47 +393,8 @@ public:
         }
     }
 
-    auto setGeneration(Generation generation) -> void {
-        std::lock_guard const lock(m_mutex);
-        m_generation = std::max(m_generation, generation);
-        for (auto const& [tile, entry] : m_inflight) {
-            std::lock_guard const entryLock(entry->mutex);
-            std::erase_if(entry->requests, [generation](Request const& request) {
-                return request.generation < generation;
-            });
-        }
-    }
-
-    [[nodiscard]] auto generation() const -> Generation {
-        std::lock_guard const lock(m_mutex);
-
-        return m_generation;
-    }
-
-    auto cancelPending() -> void {
-        std::lock_guard const lock(m_mutex);
-        for (auto const& [tile, entry] : m_inflight) {
-            std::lock_guard const entryLock(entry->mutex);
-            entry->cancelled = true;
-            entry->requests.clear();
-        }
-    }
-
-    [[nodiscard]] auto pending(TileId const& tile) const -> bool {
-        std::lock_guard const lock(m_mutex);
-
-        return m_inflight.contains(tile);
-    }
-
-    [[nodiscard]] auto pendingCount() const -> std::size_t {
-        std::lock_guard const lock(m_mutex);
-
-        return m_inflight.size();
-    }
-
 private:
     struct Request {
-        Generation generation = 0;
         Completion completion;
     };
 
@@ -647,7 +474,6 @@ private:
     std::condition_variable m_drained;
     std::unordered_map<TileId, std::shared_ptr<Inflight>, TileIdHash> m_inflight;
     std::shared_ptr<std::atomic_bool> m_alive;
-    Generation m_generation = 0;
 };
 
 [[nodiscard]] auto expandHomePath(std::string const& path) -> std::filesystem::path {
@@ -696,8 +522,6 @@ struct PyramidBuildState {
         Failed,
     };
 
-    using Listener = std::function<void(TileBuildProgress const&)>;
-
     [[nodiscard]] auto progress(int levelCount) const -> TileBuildProgress {
         std::lock_guard const lock(mutex);
 
@@ -712,27 +536,10 @@ struct PyramidBuildState {
         return progress;
     }
 
-    auto notify(TileBuildProgress const& progress) const -> void {
-        std::vector<Listener> snapshot;
-        {
-            std::lock_guard const lock(mutex);
-            snapshot.reserve(listeners.size());
-            for (auto const& [id, listener] : listeners) {
-                snapshot.push_back(listener);
-            }
-        }
-
-        for (auto const& listener : snapshot) {
-            listener(progress);
-        }
-    }
-
     mutable std::mutex mutex;
     State state = State::Idle;
     std::string error;
     std::atomic<int> levelsReady{0};
-    std::unordered_map<std::size_t, Listener> listeners;
-    std::size_t nextListenerId = 1;
 };
 
 } // END OF NAMESPACE detail
@@ -812,14 +619,6 @@ public:
         return m_baseSize;
     }
 
-    [[nodiscard]] auto filePath() const -> std::filesystem::path const& {
-        return m_file;
-    }
-
-    [[nodiscard]] auto pyramidDirectory() const -> std::filesystem::path const& {
-        return m_pyramidDir;
-    }
-
     auto startBuild(mts::runtime::ThreadPool& pool) -> void {
         {
             std::lock_guard const lock(m_core->mutex);
@@ -846,12 +645,6 @@ public:
                 });
             }
         }
-
-        m_core->notify(m_core->progress(m_levelCount));
-    }
-
-    [[nodiscard]] auto buildProgress() const -> TileBuildProgress {
-        return m_core->progress(m_levelCount);
     }
 
     [[nodiscard]] auto levelReady(int level) const -> bool {
@@ -859,19 +652,6 @@ public:
         std::error_code error;
 
         return std::filesystem::exists(this->levelMarkerPath(clamped), error) && !error;
-    }
-
-    auto addProgressListener(detail::PyramidBuildState::Listener listener) -> std::size_t {
-        std::lock_guard const lock(m_core->mutex);
-        std::size_t const id = m_core->nextListenerId++;
-        m_core->listeners.emplace(id, std::move(listener));
-
-        return id;
-    }
-
-    auto removeProgressListener(std::size_t id) -> void {
-        std::lock_guard const lock(m_core->mutex);
-        m_core->listeners.erase(id);
     }
 
     [[nodiscard]] auto readTile(TileId const& tile) -> mts::agent::Result<SharedImage> {
@@ -1011,16 +791,11 @@ private:
 
     static auto failPyramidBuild(
         std::shared_ptr<detail::PyramidBuildState> const& core,
-        int levelCount,
         std::string message
     ) -> void {
-        {
-            std::lock_guard const lock(core->mutex);
-            core->state = detail::PyramidBuildState::State::Failed;
-            core->error = std::move(message);
-        }
-
-        core->notify(core->progress(levelCount));
+        std::lock_guard const lock(core->mutex);
+        core->state = detail::PyramidBuildState::State::Failed;
+        core->error = std::move(message);
     }
 
     static auto runPyramidBuild(
@@ -1034,7 +809,7 @@ private:
         QImageReader reader(QString::fromStdString(file.string()));
         QImage const base = reader.read();
         if (base.isNull()) {
-            failPyramidBuild(core, levelCount, "could not decode map source: " + reader.errorString().toStdString());
+            failPyramidBuild(core, "could not decode map source: " + reader.errorString().toStdString());
             return;
         }
 
@@ -1061,7 +836,7 @@ private:
             );
             QImage const levelImage = levelImageFor(base, baseSize, level);
             if (levelImage.isNull()) {
-                failPyramidBuild(core, levelCount, "could not scale source to level " + std::to_string(level));
+                failPyramidBuild(core, "could not scale source to level " + std::to_string(level));
                 return;
             }
 
@@ -1070,7 +845,7 @@ private:
             for (int y = 0; y < tilesDown; ++y) {
                 for (int x = 0; x < tilesAcross; ++x) {
                     if (!writeTile(levelImage, levelSize, pyramidDir, tileSize, level, x, y)) {
-                        failPyramidBuild(core, levelCount,
+                        failPyramidBuild(core,
                             "could not write tile " + std::to_string(x) + "_" + std::to_string(y)
                             + " at level " + std::to_string(level));
                         return;
@@ -1080,20 +855,17 @@ private:
 
             std::ofstream markerFile(marker, std::ios::out | std::ios::trunc);
             if (!markerFile.is_open()) {
-                failPyramidBuild(core, levelCount, "could not write level marker " + marker.string());
+                failPyramidBuild(core, "could not write level marker " + marker.string());
                 return;
             }
 
             core->levelsReady.fetch_add(1, std::memory_order_acq_rel);
-            core->notify(core->progress(levelCount));
         }
 
         {
             std::lock_guard const lock(core->mutex);
             core->state = detail::PyramidBuildState::State::Ready;
         }
-
-        core->notify(core->progress(levelCount));
     }
 
     std::filesystem::path m_file;

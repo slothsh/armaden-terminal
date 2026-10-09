@@ -34,9 +34,7 @@ public:
     auto roleNames() const -> QHash<int, QByteArray> override;
 
     auto replace(QList<SessionEntry> const& entries) -> void;
-    auto upsert(SessionEntry const& entry) -> void;
     auto setRunning(QString const& id, bool running) -> void;
-    auto indexOf(QString const& id) const -> int;
 
 private:
     QList<SessionEntry> m_entries;

@@ -51,22 +51,6 @@ auto SessionListModel::replace(QList<SessionEntry> const& entries) -> void {
     endResetModel();
 }
 
-auto SessionListModel::upsert(SessionEntry const& entry) -> void {
-    for (int row = 0; row < m_entries.size(); ++row) {
-        if (m_entries.at(row).id == entry.id) {
-            m_entries[row] = entry;
-
-            QModelIndex const changed = index(row);
-            emit dataChanged(changed, changed);
-            return;
-        }
-    }
-
-    beginInsertRows(QModelIndex(), m_entries.size(), m_entries.size());
-    m_entries.append(entry);
-    endInsertRows();
-}
-
 auto SessionListModel::setRunning(QString const& id, bool running) -> void {
     for (int row = 0; row < m_entries.size(); ++row) {
         if (m_entries.at(row).id != id) {
@@ -83,14 +67,4 @@ auto SessionListModel::setRunning(QString const& id, bool running) -> void {
         emit dataChanged(changed, changed, {RunningRole});
         return;
     }
-}
-
-auto SessionListModel::indexOf(QString const& id) const -> int {
-    for (int row = 0; row < m_entries.size(); ++row) {
-        if (m_entries.at(row).id == id) {
-            return row;
-        }
-    }
-
-    return -1;
 }
