@@ -9,6 +9,7 @@
 
 class QCanvasPainterItemRenderer;
 class QMouseEvent;
+class QTimer;
 class QWheelEvent;
 
 class MapCanvas : public QCanvasPainterItem {
@@ -57,6 +58,7 @@ private:
     void maybeApplyInitialView();
 
     QPointer<MapController> m_controller;
+    QTimer* m_idleTimer = nullptr;
     QMetaObject::Connection m_readyConnection;
     bool m_initialViewApplied = false;
     float m_translationX = 0.0f;

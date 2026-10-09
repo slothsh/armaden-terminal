@@ -52,9 +52,13 @@ struct LevelInfo {
     int tilesAcross = 1;
     int tilesDown = 1;
     int tileSize = 256;
+    int pixelWidth = 0;
+    int pixelHeight = 0;
 
     [[nodiscard]] auto pixelSize() const -> QSize {
-        return QSize(tilesAcross * tileSize, tilesDown * tileSize);
+        int const width = pixelWidth > 0 ? pixelWidth : tilesAcross * tileSize;
+        int const height = pixelHeight > 0 ? pixelHeight : tilesDown * tileSize;
+        return QSize(width, height);
     }
 
     [[nodiscard]] auto contains(TileId const& tile) const -> bool {
@@ -69,14 +73,18 @@ struct LevelInfo {
 }
 
 [[nodiscard]] auto levelInfoForBase(QSize const& basePixelSize, int tileSize, int level) -> LevelInfo {
-    double const levelTileExtent = double(tileSize) * levelPixelScale(level);
-    int const tilesAcross = int(std::ceil(double(basePixelSize.width()) / levelTileExtent));
-    int const tilesDown = int(std::ceil(double(basePixelSize.height()) / levelTileExtent));
+    double const scale = levelPixelScale(level);
+    int const pixelWidth = int(std::ceil(double(basePixelSize.width()) / scale));
+    int const pixelHeight = int(std::ceil(double(basePixelSize.height()) / scale));
+    int const tilesAcross = int(std::ceil(double(pixelWidth) / double(tileSize)));
+    int const tilesDown = int(std::ceil(double(pixelHeight) / double(tileSize)));
     return LevelInfo{
         level,
         std::clamp(tilesAcross, 1, std::numeric_limits<int>::max()),
         std::clamp(tilesDown, 1, std::numeric_limits<int>::max()),
         tileSize,
+        pixelWidth,
+        pixelHeight,
     };
 }
 
@@ -101,10 +109,11 @@ struct LevelInfo {
 }
 
 [[nodiscard]] auto tileRect(LevelInfo const& level, TileId const& tile) -> QRectF {
-    return QRectF(
-        tileOrigin(level, tile),
-        QSizeF(float(level.tileSize), float(level.tileSize))
-    );
+    QPointF const origin = tileOrigin(level, tile);
+    QSize const extent = level.pixelSize();
+    float const width = std::max(0, std::min(level.tileSize, extent.width() - tile.x * level.tileSize));
+    float const height = std::max(0, std::min(level.tileSize, extent.height() - tile.y * level.tileSize));
+    return QRectF(origin, QSizeF(width, height));
 }
 
 [[nodiscard]] auto tileAt(LevelInfo const& level, QPointF const& levelPixel) -> TileId {

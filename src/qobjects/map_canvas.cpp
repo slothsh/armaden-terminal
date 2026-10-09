@@ -10,6 +10,7 @@
 #include <QMouseEvent>
 #include <QRectF>
 #include <QSet>
+#include <QTimer>
 #include <QString>
 #include <QWheelEvent>
 
@@ -24,8 +25,12 @@ namespace {
 constexpr float minimumZDepth = -4.0f;
 constexpr float maximumZDepth = 2.0f;
 constexpr float wheelDepthStep = 0.1f;
-constexpr int kMaximumBackfillUp = 4;
+constexpr int kMaximumBackfillUp = 16;
 constexpr double kFitMargin = 0.92;
+constexpr auto kIdleReleaseDelay = std::chrono::milliseconds(1000);
+constexpr int kIdleReleaseTimerMs = 1200;
+constexpr qsizetype kMaximumCachedImages = 1200;
+constexpr qsizetype kMaximumCachedImageBytes = 384LL * 1024LL * 1024LL;
 
 float scaleForDepth(float zDepth) {
     return std::exp(zDepth);
@@ -73,6 +78,9 @@ public:
     }
 
     void synchronizeData(QCanvasPainterItem* item) override {
+        if (QCanvasPainter* const painter = this->painter(); painter != nullptr)
+            this->removePendingImages(painter);
+
         auto const* canvas = static_cast<MapCanvas const*>(item);
         MapController* const controller = canvas->controller();
         if (controller != m_controller) {
@@ -94,7 +102,10 @@ public:
 
         float const scale = scaleForDepth(canvas->zDepth());
         auto& camera = m_world.get<mts::ecs::Camera>(m_camera);
-        camera.center = QPointF(-canvas->translationX() / scale, canvas->translationY() / scale);
+        QPointF const center(-canvas->translationX() / scale, canvas->translationY() / scale);
+        if (center != camera.center || scale != camera.scale)
+            m_lastCameraChangeAt = std::chrono::steady_clock::now();
+        camera.center = center;
         camera.scale = scale;
         camera.rotation = 0.0f;
     }
@@ -133,6 +144,17 @@ private:
         m_requested.clear();
     }
 
+    void removePendingImages(QCanvasPainter* painter) {
+        auto const now = std::chrono::steady_clock::now();
+        if ((now - m_lastCameraChangeAt) < kIdleReleaseDelay)
+            return;
+        if (painter->activeImageCount() <= kMaximumCachedImages
+            && painter->activeImageMemoryUsage() <= kMaximumCachedImageBytes)
+            return;
+        painter->cleanupResources();
+        m_images.clear();
+    }
+
     void paintMapLayers(QCanvasPainter* painter, mts::ecs::RenderContext const& context, mts::ecs::Camera const& camera) {
         mts::map::MapLoader const* loader = m_loader;
         mts::map::MapInfo const& info = loader->info();
@@ -154,11 +176,10 @@ private:
                 auto const state = layer->cache().state(tile);
                 if (state == mts::imagery::TileState::Ready) {
                     this->drawReadyTile(painter, context, camera, info, grid, layer, opacity, tile, key, seen);
-                } else if (state == mts::imagery::TileState::Missing) {
-                    this->requestTile(loader, QString::fromStdString(entry.layerId), tile);
-                    this->paintBackfill(painter, context, camera, info, layer, opacity, entry.viewport.levelRect, tile, seen);
-                } else if (state == mts::imagery::TileState::Queued) {
-                    this->paintBackfill(painter, context, camera, info, layer, opacity, entry.viewport.levelRect, tile, seen);
+                } else {
+                    if (state == mts::imagery::TileState::Missing && layer->levelReady(tile.level))
+                        this->requestTile(loader, QString::fromStdString(entry.layerId), tile);
+                    this->paintBackfill(painter, context, camera, info, layer, opacity, tile, seen);
                 }
             }
         }
@@ -169,7 +190,6 @@ private:
                 ++it;
                 continue;
             }
-            painter->removeImage(it->image);
             it = m_images.erase(it);
         }
         m_requested.clear();
@@ -187,7 +207,6 @@ private:
                        QSet<QString>& seen) {
         auto it = m_images.find(key);
         if (it != m_images.end() && qAbs(it->opacity - opacity) > 0.001) {
-            painter->removeImage(it->image);
             it = m_images.erase(it);
         }
         if (it == m_images.end()) {
@@ -210,16 +229,22 @@ private:
                        mts::map::MapInfo const& info,
                        mts::map::MapLayer* layer,
                        double opacity,
-                       QRectF const& levelRect,
                        mts::imagery::TileId const& tile,
                        QSet<QString>& seen) {
-        for (int up = 1; up <= kMaximumBackfillUp && tile.level - up >= 0; ++up) {
+        int const maxLevel = layer->source().levelCount() - 1;
+        int const maxUp = std::min(kMaximumBackfillUp, maxLevel - tile.level);
+        for (int up = 1; up <= maxUp; ++up) {
             int const factor = 1 << up;
-            mts::imagery::TileId const ancestor{tile.level - up, tile.x / factor, tile.y / factor};
+            mts::imagery::TileId const ancestor{tile.level + up, tile.x / factor, tile.y / factor};
+            if (!layer->levelReady(ancestor.level))
+                continue;
 
             auto const cached = layer->cache().find(ancestor);
-            if (!cached || cached->state != mts::imagery::TileState::Ready)
+            if (!cached || cached->state != mts::imagery::TileState::Ready) {
+                if (layer->cache().state(ancestor) == mts::imagery::TileState::Missing)
+                    this->requestTile(m_loader, QString::fromStdString(layer->id()), ancestor);
                 continue;
+            }
 
             mts::imagery::LevelInfo const ancestorGrid = mts::imagery::levelInfoForBase(info.baseSize, info.tileSize, ancestor.level);
             QRectF const childBase = mts::imagery::levelRectToBaseRect(mts::imagery::tileRect(mts::imagery::levelInfoForBase(info.baseSize, info.tileSize, tile.level), tile), tile.level);
@@ -227,10 +252,8 @@ private:
 
             QString const key = tileKey(QString::fromStdString(layer->id()), ancestor) + "#backfill";
             auto it = m_images.find(key);
-            if (it != m_images.end() && qAbs(it->opacity - opacity) > 0.001) {
-                painter->removeImage(it->image);
+            if (it != m_images.end() && qAbs(it->opacity - opacity) > 0.001)
                 it = m_images.erase(it);
-            }
             if (it == m_images.end())
                 it = m_images.insert(key, TileSlot{painter->addImage(prepareTileForLayer(cached->image, opacity)), opacity});
             seen.insert(key);
@@ -276,13 +299,27 @@ private:
     mts::ecs::entity m_camera = mts::ecs::null;
     mts::ecs::entity m_grid = mts::ecs::null;
     QHash<QString, TileSlot> m_images;
+    std::chrono::steady_clock::time_point m_lastCameraChangeAt = std::chrono::steady_clock::now();
     QSet<QString> m_requested;
 };
 
 }
 
+namespace {
+
+void restartIdleTimer(QTimer* timer) {
+    if (timer != nullptr)
+        timer->start();
+}
+
+}
+
 MapCanvas::MapCanvas(QQuickItem* parent)
-    : QCanvasPainterItem(parent) {
+    : QCanvasPainterItem(parent)
+    , m_idleTimer(new QTimer(this)) {
+    m_idleTimer->setSingleShot(true);
+    m_idleTimer->setInterval(kIdleReleaseTimerMs);
+    this->connect(m_idleTimer, &QTimer::timeout, this, [this] { this->update(); });
     this->setAcceptedMouseButtons(Qt::MiddleButton);
     this->connect(this, &QQuickItem::widthChanged, this, [this] { this->maybeApplyInitialView(); });
     this->connect(this, &QQuickItem::heightChanged, this, [this] { this->maybeApplyInitialView(); });
@@ -354,6 +391,7 @@ void MapCanvas::setTranslationX(float translation) {
         return;
     m_translationX = translation;
     emit this->translationXChanged();
+    restartIdleTimer(m_idleTimer);
     this->update();
 }
 
@@ -366,6 +404,7 @@ void MapCanvas::setTranslationY(float translation) {
         return;
     m_translationY = translation;
     emit this->translationYChanged();
+    restartIdleTimer(m_idleTimer);
     this->update();
 }
 
@@ -379,6 +418,7 @@ void MapCanvas::setZDepth(float depth) {
         return;
     m_zDepth = clampedDepth;
     emit this->zDepthChanged();
+    restartIdleTimer(m_idleTimer);
     this->update();
 }
 
