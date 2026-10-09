@@ -1,2 +1,5 @@
 add_test_target(foundation_test foundation/foundation_test.cpp)
 target_link_libraries(foundation_test PRIVATE LibFoundation)
+
+add_test_target(agent_adapter_test agent/agent_adapter_test.cpp)
+target_link_libraries(agent_adapter_test PRIVATE LibCore)

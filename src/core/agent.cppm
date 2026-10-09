@@ -18,6 +18,10 @@
 
 export module agent;
 
+import std;
+import foundation;
+import magic_enum;
+
 export namespace mts::agent {
 
 using ::nlohmann::json;
@@ -104,5 +108,178 @@ using ::lgc::StorageListResult;
 using ::lgc::StorageLimits;
 using ::lgc::SQLiteStorage;
 using ::lgc::SQLiteStorageOptions;
+
+enum class AgentErrorKind : foundation::u8 {
+    Unknown,
+    Cancelled,
+    InvalidArgument,
+    DeadlineExceeded,
+    NotFound,
+    AlreadyExists,
+    PermissionDenied,
+    ResourceExhausted,
+    FailedPrecondition,
+    Aborted,
+    OutOfRange,
+    Unimplemented,
+    Internal,
+    Unavailable,
+    DataLoss,
+    Unauthenticated,
+};
+
+static_assert(foundation::ErrorKind<AgentErrorKind>);
+
+[[nodiscard]] constexpr auto agentErrorKind(lgc::StatusCode code) -> AgentErrorKind {
+    switch (code) {
+        case lgc::StatusCode::Ok:
+            return AgentErrorKind::Unknown;
+
+        case lgc::StatusCode::Cancelled:
+            return AgentErrorKind::Cancelled;
+
+        case lgc::StatusCode::Unknown:
+            return AgentErrorKind::Unknown;
+
+        case lgc::StatusCode::InvalidArgument:
+            return AgentErrorKind::InvalidArgument;
+
+        case lgc::StatusCode::DeadlineExceeded:
+            return AgentErrorKind::DeadlineExceeded;
+
+        case lgc::StatusCode::NotFound:
+            return AgentErrorKind::NotFound;
+
+        case lgc::StatusCode::AlreadyExists:
+            return AgentErrorKind::AlreadyExists;
+
+        case lgc::StatusCode::PermissionDenied:
+            return AgentErrorKind::PermissionDenied;
+
+        case lgc::StatusCode::ResourceExhausted:
+            return AgentErrorKind::ResourceExhausted;
+
+        case lgc::StatusCode::FailedPrecondition:
+            return AgentErrorKind::FailedPrecondition;
+
+        case lgc::StatusCode::Aborted:
+            return AgentErrorKind::Aborted;
+
+        case lgc::StatusCode::OutOfRange:
+            return AgentErrorKind::OutOfRange;
+
+        case lgc::StatusCode::Unimplemented:
+            return AgentErrorKind::Unimplemented;
+
+        case lgc::StatusCode::Internal:
+            return AgentErrorKind::Internal;
+
+        case lgc::StatusCode::Unavailable:
+            return AgentErrorKind::Unavailable;
+
+        case lgc::StatusCode::DataLoss:
+            return AgentErrorKind::DataLoss;
+
+        case lgc::StatusCode::Unauthenticated:
+            return AgentErrorKind::Unauthenticated;
+    }
+
+    return AgentErrorKind::Unknown;
+}
+
+[[nodiscard]] constexpr auto toLgcStatusCode(AgentErrorKind kind) -> lgc::StatusCode {
+    switch (kind) {
+        case AgentErrorKind::Unknown:
+            return lgc::StatusCode::Unknown;
+
+        case AgentErrorKind::Cancelled:
+            return lgc::StatusCode::Cancelled;
+
+        case AgentErrorKind::InvalidArgument:
+            return lgc::StatusCode::InvalidArgument;
+
+        case AgentErrorKind::DeadlineExceeded:
+            return lgc::StatusCode::DeadlineExceeded;
+
+        case AgentErrorKind::NotFound:
+            return lgc::StatusCode::NotFound;
+
+        case AgentErrorKind::AlreadyExists:
+            return lgc::StatusCode::AlreadyExists;
+
+        case AgentErrorKind::PermissionDenied:
+            return lgc::StatusCode::PermissionDenied;
+
+        case AgentErrorKind::ResourceExhausted:
+            return lgc::StatusCode::ResourceExhausted;
+
+        case AgentErrorKind::FailedPrecondition:
+            return lgc::StatusCode::FailedPrecondition;
+
+        case AgentErrorKind::Aborted:
+            return lgc::StatusCode::Aborted;
+
+        case AgentErrorKind::OutOfRange:
+            return lgc::StatusCode::OutOfRange;
+
+        case AgentErrorKind::Unimplemented:
+            return lgc::StatusCode::Unimplemented;
+
+        case AgentErrorKind::Internal:
+            return lgc::StatusCode::Internal;
+
+        case AgentErrorKind::Unavailable:
+            return lgc::StatusCode::Unavailable;
+
+        case AgentErrorKind::DataLoss:
+            return lgc::StatusCode::DataLoss;
+
+        case AgentErrorKind::Unauthenticated:
+            return lgc::StatusCode::Unauthenticated;
+    }
+
+    return lgc::StatusCode::Unknown;
+}
+
+[[nodiscard]] inline auto toFoundation(lgc::Status const& status) -> foundation::Status {
+    if (status.isOk()) {
+        return foundation::Status::ok();
+    }
+
+    std::string message(status.message());
+    if (message.empty()) {
+        message = std::string(status.codeName());
+    }
+
+    return foundation::Status::err(
+        foundation::Error(agentErrorKind(status.code()), std::move(message))
+            .with("lgc.status", std::string(status.codeName())));
+}
+
+template <typename T>
+requires (!std::is_void_v<T>)
+[[nodiscard]] inline auto toFoundation(lgc::Result<T> const& result) -> foundation::Result<T> {
+    if (result.isOk()) {
+        return foundation::Result<T>::ok(result.value());
+    }
+
+    return foundation::Result<T>::err(toFoundation(result.status()).error());
+}
+
+[[nodiscard]] inline auto toFoundation(lgc::Result<void> const& result) -> foundation::Status {
+    return toFoundation(result.status());
+}
+
+[[nodiscard]] inline auto fromFoundation(foundation::Status const& status) -> lgc::Status {
+    if (status.isOk()) {
+        return lgc::Status::ok();
+    }
+
+    foundation::Error const& error = status.error();
+    auto const kind = magic_enum::enum_cast<AgentErrorKind>(error.kindName());
+    lgc::StatusCode const code = kind.has_value() ? toLgcStatusCode(*kind) : lgc::StatusCode::Internal;
+
+    return lgc::Status(code, std::string(error.message()));
+}
 
 } // END OF NAMESPACE `mts::agent`
