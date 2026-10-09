@@ -38,21 +38,21 @@ public:
 
     explicit ConversationModel(QObject* parent = nullptr);
 
-    int rowCount(QModelIndex const& parent = QModelIndex()) const override;
-    QVariant data(QModelIndex const& index, int role) const override;
-    QHash<int, QByteArray> roleNames() const override;
+    auto rowCount(QModelIndex const& parent = QModelIndex()) const -> int override;
+    auto data(QModelIndex const& index, int role) const -> QVariant override;
+    auto roleNames() const -> QHash<int, QByteArray> override;
 
-    int count() const;
+    auto count() const -> int;
 
 signals:
-    void countChanged();
+    auto countChanged() -> void;
 
 public:
-    void clear();
-    void append(ConversationBlock const& block);
-    void appendText(int row, QString const& text);
-    void setText(int row, QString const& text);
-    int lastRow() const;
+    auto clear() -> void;
+    auto append(ConversationBlock const& block) -> void;
+    auto appendText(int row, QString const& text) -> void;
+    auto setText(int row, QString const& text) -> void;
+    auto lastRow() const -> int;
 
 private:
     QList<ConversationBlock> m_blocks;

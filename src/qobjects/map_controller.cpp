@@ -5,15 +5,18 @@ import runtime;
 import imagery;
 import map;
 
-MapController::MapController(mts::runtime::ThreadPool& pool,
-                             std::filesystem::path mapConfigPath,
-                             std::filesystem::path cacheDir,
-                             QObject* parent)
+MapController::MapController(
+    mts::runtime::ThreadPool& pool,
+    std::filesystem::path mapConfigPath,
+    std::filesystem::path cacheDir,
+    QObject* parent
+)
     : QObject(parent)
     , m_pool(pool) {
     auto loader = mts::map::MapLoader::create(mapConfigPath, {cacheDir}, m_pool);
     if (!loader) {
         m_status = QString::fromStdString(loader.status().message());
+
         emit this->statusChanged();
         return;
     }
@@ -21,8 +24,10 @@ MapController::MapController(mts::runtime::ThreadPool& pool,
     m_loader = std::move(loader.value());
     m_snapshots = std::make_unique<mts::map::MapSnapshotService>(m_loader.get(), cacheDir);
     m_loader->startBuild();
+
     m_name = QString::fromStdString(m_loader->info().name);
     m_ready = true;
+
     emit this->nameChanged();
     emit this->readyChanged();
 }

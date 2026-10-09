@@ -97,31 +97,35 @@ public:
         std::lock_guard const lock(m_mutex);
         std::size_t const id = m_nextId++;
         m_entries.push_back(Entry{id, std::move(handler)});
+
         return id;
     }
 
-    void unsubscribe(std::size_t id) {
+    auto unsubscribe(std::size_t id) -> void {
         std::lock_guard const lock(m_mutex);
         std::erase_if(m_entries, [id](Entry const& entry) {
             return entry.id == id;
         });
     }
 
-    void publish(Event const& event) const {
+    auto publish(Event const& event) const -> void {
         std::vector<Handler> handlers;
         {
             std::lock_guard const lock(m_mutex);
             handlers.reserve(m_entries.size());
-            for (Entry const& entry : m_entries)
+            for (Entry const& entry : m_entries) {
                 handlers.push_back(entry.handler);
+            }
         }
 
-        for (Handler const& handler : handlers)
+        for (Handler const& handler : handlers) {
             handler(event);
+        }
     }
 
     [[nodiscard]] auto size() const -> std::size_t {
         std::lock_guard const lock(m_mutex);
+
         return m_entries.size();
     }
 
@@ -142,9 +146,9 @@ public:
         : m_pool(pool) {}
 
     EventBus(EventBus const&) = delete;
-    EventBus& operator=(EventBus const&) = delete;
+    auto operator=(EventBus const&) -> EventBus& = delete;
     EventBus(EventBus&&) = delete;
-    EventBus& operator=(EventBus&&) = delete;
+    auto operator=(EventBus&&) -> EventBus& = delete;
 
     template <class Event>
     [[nodiscard]] auto subscribe(typename Signal<Event>::Handler handler) -> std::size_t {
@@ -152,12 +156,12 @@ public:
     }
 
     template <class Event>
-    void unsubscribe(std::size_t id) {
+    auto unsubscribe(std::size_t id) -> void {
         std::get<Signal<Event>>(m_signals).unsubscribe(id);
     }
 
     template <class Event>
-    void publish(Event event) {
+    auto publish(Event event) -> void {
         if (m_pool == nullptr) {
             std::get<Signal<Event>>(m_signals).publish(event);
             return;
@@ -170,17 +174,19 @@ public:
 
 private:
     runtime::ThreadPool* m_pool;
-    std::tuple<Signal<SessionCreated>,
-               Signal<SessionUpdated>,
-               Signal<RunStarted>,
-               Signal<RunFinished>,
-               Signal<RunFailed>,
-               Signal<MessageAdded>,
-               Signal<TokenDelta>,
-               Signal<ToolCallStarted>,
-               Signal<ToolCallFinished>,
-               Signal<BudgetExceeded>,
-               Signal<CompactionApplied>> m_signals;
+    std::tuple<
+        Signal<SessionCreated>,
+        Signal<SessionUpdated>,
+        Signal<RunStarted>,
+        Signal<RunFinished>,
+        Signal<RunFailed>,
+        Signal<MessageAdded>,
+        Signal<TokenDelta>,
+        Signal<ToolCallStarted>,
+        Signal<ToolCallFinished>,
+        Signal<BudgetExceeded>,
+        Signal<CompactionApplied>
+    > m_signals;
 };
 
-}
+} // END OF NAMESPACE `mts::events`

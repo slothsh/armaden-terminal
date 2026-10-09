@@ -11,7 +11,10 @@ class LogFormatter final : public spdlog::formatter {
 public:
     ~LogFormatter() = default;
 
-    auto format(spdlog::details::log_msg const& message, spdlog::memory_buf_t& destination) -> void override {
+    auto format(
+        spdlog::details::log_msg const& message,
+        spdlog::memory_buf_t& destination
+    ) -> void override {
         auto const local_time = std::chrono::zoned_time{
             std::chrono::current_zone(),
             std::chrono::floor<std::chrono::seconds>(message.time)
@@ -55,7 +58,6 @@ public:
     auto clone() const -> std::unique_ptr<spdlog::formatter> override {
         return std::make_unique<LogFormatter>();
     }
-
 };
 
 export auto initialize_logging() -> void {

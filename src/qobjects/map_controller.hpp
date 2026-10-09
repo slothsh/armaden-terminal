@@ -8,12 +8,17 @@
 #include <memory>
 
 namespace mts::map {
+
 class MapLoader;
 class MapSnapshotService;
-}
+
+} // END OF NAMESPACE `mts::map`
+
 namespace mts::runtime {
+
 class ThreadPool;
-}
+
+} // END OF NAMESPACE `mts::runtime`
 
 class MapController : public QObject {
     Q_OBJECT
@@ -24,10 +29,12 @@ class MapController : public QObject {
     Q_PROPERTY(QString status READ status NOTIFY statusChanged)
 
 public:
-    MapController(mts::runtime::ThreadPool& pool,
-                  std::filesystem::path mapConfigPath,
-                  std::filesystem::path cacheDir,
-                  QObject* parent = nullptr);
+    MapController(
+        mts::runtime::ThreadPool& pool,
+        std::filesystem::path mapConfigPath,
+        std::filesystem::path cacheDir,
+        QObject* parent = nullptr
+    );
     ~MapController() override;
 
     [[nodiscard]] auto ready() const -> bool;
@@ -37,9 +44,9 @@ public:
     [[nodiscard]] auto snapshotService() const -> mts::map::MapSnapshotService const*;
 
 signals:
-    void readyChanged();
-    void nameChanged();
-    void statusChanged();
+    auto readyChanged() -> void;
+    auto nameChanged() -> void;
+    auto statusChanged() -> void;
 
 private:
     mts::runtime::ThreadPool& m_pool;

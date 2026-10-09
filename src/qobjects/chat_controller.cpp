@@ -29,37 +29,58 @@ namespace {
 
 std::string const kDefaultSessionTitle = "New session";
 
-int blockKindFor(mts::persistence::MessageKind kind) {
+auto blockKindFor(mts::persistence::MessageKind kind) -> int {
     switch (kind) {
-        case mts::persistence::MessageKind::UserText: return ConversationModel::UserText;
-        case mts::persistence::MessageKind::AssistantText: return ConversationModel::AssistantText;
-        case mts::persistence::MessageKind::Reasoning: return ConversationModel::Reasoning;
-        case mts::persistence::MessageKind::ToolCall: return ConversationModel::ToolCall;
-        case mts::persistence::MessageKind::ToolResult: return ConversationModel::ToolResult;
-        case mts::persistence::MessageKind::Error: return ConversationModel::Error;
+        case mts::persistence::MessageKind::UserText:
+            return ConversationModel::UserText;
+
+        case mts::persistence::MessageKind::AssistantText:
+            return ConversationModel::AssistantText;
+
+        case mts::persistence::MessageKind::Reasoning:
+            return ConversationModel::Reasoning;
+
+        case mts::persistence::MessageKind::ToolCall:
+            return ConversationModel::ToolCall;
+
+        case mts::persistence::MessageKind::ToolResult:
+            return ConversationModel::ToolResult;
+
+        case mts::persistence::MessageKind::Error:
+            return ConversationModel::Error;
     }
+
     return ConversationModel::AssistantText;
 }
 
-int blockKindForEvent(mts::events::MessageKind kind) {
+auto blockKindForEvent(mts::events::MessageKind kind) -> int {
     switch (kind) {
-        case mts::events::MessageKind::UserText: return ConversationModel::UserText;
-        case mts::events::MessageKind::AssistantText: return ConversationModel::AssistantText;
-        case mts::events::MessageKind::Reasoning: return ConversationModel::Reasoning;
-        case mts::events::MessageKind::Error: return ConversationModel::Error;
+        case mts::events::MessageKind::UserText:
+            return ConversationModel::UserText;
+
+        case mts::events::MessageKind::AssistantText:
+            return ConversationModel::AssistantText;
+
+        case mts::events::MessageKind::Reasoning:
+            return ConversationModel::Reasoning;
+
+        case mts::events::MessageKind::Error:
+            return ConversationModel::Error;
     }
+
     return ConversationModel::AssistantText;
 }
 
-ConversationBlock blockFor(mts::persistence::Message const& message) {
+auto blockFor(mts::persistence::Message const& message) -> ConversationBlock {
     ConversationBlock block;
     block.kind = blockKindFor(message.kind);
     block.text = QString::fromStdString(message.text);
     block.payload = QString::fromStdString(message.payload);
+
     return block;
 }
 
-}
+} // END OF NAMESPACE anonymous
 
 struct PendingRun {
     QList<ConversationBlock> blocks;
@@ -99,30 +120,35 @@ ChatController::ChatController(QObject* parent)
     , m_conversation(new ConversationModel(this)) {
     std::string configError;
     auto const config = mts::config::loadConfigOrDefaults(mts::config::configPath(), configError);
-    if (!configError.empty())
+    if (!configError.empty()) {
         setStatus(QString::fromStdString(configError));
-    else if (config.provider.model.empty() || config.provider.apiKey.empty())
+    } else if (config.provider.model.empty() || config.provider.apiKey.empty()) {
         setStatus(QStringLiteral("No model configured; using the offline provider. Create config/mindtosis.json."));
+    }
 
     auto const workers = config.runtime.workers == 0 ? 4u : config.runtime.workers;
     m_impl->pool = std::make_unique<mts::runtime::ThreadPool>(workers);
 
     auto store = mts::persistence::makeSessionStore(mts::persistence::databasePath());
-    if (store)
+    if (store) {
         m_impl->store = std::make_unique<mts::persistence::SessionStoreHandle>(std::move(store.value()));
-    else
+    } else {
         setStatus(QString::fromStdString(store.status().message()));
+    }
 
     auto provider = mts::model::makeProvider(config);
-    if (provider)
+    if (provider) {
         m_impl->provider = std::make_unique<mts::model::ProviderHandle>(std::move(provider.value()));
-    else
+    } else {
         setStatus(QString::fromStdString(provider.status().message()));
+    }
 
     if (!config.provider.apiKey.empty()) {
         auto namingConfig = config;
-        if (!config.naming.model.empty())
+        if (!config.naming.model.empty()) {
             namingConfig.provider.model = config.naming.model;
+        }
+
         if (!namingConfig.provider.model.empty()) {
             if (auto naming = mts::model::makeProvider(namingConfig); naming) {
                 m_impl->namingProviderOwned = std::make_unique<mts::model::ProviderHandle>(std::move(naming.value()));
@@ -145,9 +171,11 @@ ChatController::ChatController(QObject* parent)
         *m_impl->pool,
         mts::imagery::expandHomePath(config.map.configPath),
         mts::imagery::expandHomePath(config.cache.tilesDir),
-        this);
-    if (!m_impl->mapController->status().isEmpty())
+        this
+    );
+    if (!m_impl->mapController->status().isEmpty()) {
         setStatus(m_impl->mapController->status());
+    }
 
     if (m_impl->store != nullptr && m_impl->provider != nullptr) {
         mts::harness::MapTools mapTools;
@@ -155,11 +183,12 @@ ChatController::ChatController(QObject* parent)
         mapTools.info = [this]() -> mts::agent::Result<mts::agent::json> {
             auto const* controller = m_impl->mapController.get();
             auto const* loader = controller != nullptr ? controller->loader() : nullptr;
-            if (loader == nullptr)
+            if (loader == nullptr) {
                 return mts::agent::Result<mts::agent::json>::fromStatus(mts::agent::Status::unavailable(
                     controller != nullptr && !controller->status().isEmpty()
                         ? controller->status().toStdString()
                         : "map is not loaded"));
+            }
 
             mts::map::MapInfo const& info = loader->info();
             mts::agent::json result = mts::agent::json::object();
@@ -177,6 +206,7 @@ ChatController::ChatController(QObject* parent)
                 {"width", info.worldBounds.width()},
                 {"height", info.worldBounds.height()},
             };
+
             mts::agent::json layers = mts::agent::json::array();
             for (auto const* layer : loader->layers()) {
                 layers.push_back(mts::agent::json{
@@ -188,17 +218,20 @@ ChatController::ChatController(QObject* parent)
                 });
             }
             result["layers"] = std::move(layers);
+
             return result;
         };
+
         mapTools.snapshot = [this, maxPixels = int(config.vision.maxPixels)](
-                                std::optional<mts::harness::MapToolRegion> const& region,
-                                std::optional<int> level,
-                                std::vector<std::string> const& layers)
-            -> mts::agent::Result<mts::harness::MapToolSnapshot> {
+            std::optional<mts::harness::MapToolRegion> const& region,
+            std::optional<int> level,
+            std::vector<std::string> const& layers
+        ) -> mts::agent::Result<mts::harness::MapToolSnapshot> {
             auto const* controller = m_impl->mapController.get();
-            if (controller == nullptr || controller->loader() == nullptr || controller->snapshotService() == nullptr)
+            if (controller == nullptr || controller->loader() == nullptr || controller->snapshotService() == nullptr) {
                 return mts::agent::Result<mts::harness::MapToolSnapshot>::fromStatus(
                     mts::agent::Status::unavailable("map imagery is not available"));
+            }
 
             mts::map::MapInfo const& info = controller->loader()->info();
             QRectF worldRect = info.worldBounds;
@@ -214,8 +247,9 @@ ChatController::ChatController(QObject* parent)
             options.layers = layers;
             options.maxPixels = maxPixels;
             auto const snapshot = controller->snapshotService()->renderRegion(worldRect, options);
-            if (!snapshot)
+            if (!snapshot) {
                 return snapshot.status();
+            }
 
             QByteArray png;
             QBuffer buffer(&png);
@@ -233,6 +267,7 @@ ChatController::ChatController(QObject* parent)
                 worldRect.left(), worldRect.top(), worldRect.width(), worldRect.height()};
             out.unitLabel = info.transform.unitLabel;
             out.pngBase64 = png.toBase64().toStdString();
+
             return out;
         };
 
@@ -241,29 +276,33 @@ ChatController::ChatController(QObject* parent)
             *m_impl->pool, m_impl->bus, config.server, std::move(mapTools)
         );
 
-        (void)m_impl->bus.subscribe<mts::events::RunStarted>([this](mts::events::RunStarted const& event) {
+        static_cast<void>(m_impl->bus.subscribe<mts::events::RunStarted>([this](mts::events::RunStarted const& event) {
             QString const id = QString::fromStdString(event.session);
             QMetaObject::invokeMethod(this, [this, id] {
                 m_impl->inFlight.insert(id);
                 m_sessions->setRunning(id, true);
                 refreshRunning();
             }, Qt::QueuedConnection);
-        });
-        (void)m_impl->bus.subscribe<mts::events::RunFinished>([this](mts::events::RunFinished const& event) {
+        }));
+
+        static_cast<void>(m_impl->bus.subscribe<mts::events::RunFinished>([this](mts::events::RunFinished const& event) {
             QString const id = QString::fromStdString(event.session);
             QMetaObject::invokeMethod(this, [this, id] {
                 m_impl->inFlight.remove(id);
                 m_impl->cancellations.remove(id);
                 m_impl->pending.remove(id);
                 m_sessions->setRunning(id, false);
-                if (id == m_impl->activeSession)
+                if (id == m_impl->activeSession) {
                     reloadConversation(id);
+                }
+
                 refreshRunning();
                 refreshSessions();
                 maybeNameSession(id);
             }, Qt::QueuedConnection);
-        });
-        (void)m_impl->bus.subscribe<mts::events::RunFailed>([this](mts::events::RunFailed const& event) {
+        }));
+
+        static_cast<void>(m_impl->bus.subscribe<mts::events::RunFailed>([this](mts::events::RunFailed const& event) {
             QString const id = QString::fromStdString(event.session);
             QString const message = QString::fromStdString(event.message);
             QMetaObject::invokeMethod(this, [this, id, message] {
@@ -275,11 +314,13 @@ ChatController::ChatController(QObject* parent)
                     m_impl->streamingRow = -1;
                     appendError(message);
                 }
+
                 refreshRunning();
                 refreshSessions();
             }, Qt::QueuedConnection);
-        });
-        (void)m_impl->bus.subscribe<mts::events::TokenDelta>([this](mts::events::TokenDelta const& event) {
+        }));
+
+        static_cast<void>(m_impl->bus.subscribe<mts::events::TokenDelta>([this](mts::events::TokenDelta const& event) {
             QString const id = QString::fromStdString(event.session);
             QString const delta = QString::fromStdString(event.delta);
             QMetaObject::invokeMethod(this, [this, id, delta] {
@@ -290,8 +331,9 @@ ChatController::ChatController(QObject* parent)
                 }
                 pending.blocks[pending.streamingIndex].text += delta;
 
-                if (id != m_impl->activeSession)
+                if (id != m_impl->activeSession) {
                     return;
+                }
 
                 if (m_impl->streamingRow < 0) {
                     m_conversation->append(ConversationBlock{ConversationModel::AssistantText, {}, {}});
@@ -299,14 +341,17 @@ ChatController::ChatController(QObject* parent)
                 }
                 m_conversation->appendText(m_impl->streamingRow, delta);
             }, Qt::QueuedConnection);
-        });
-        (void)m_impl->bus.subscribe<mts::events::MessageAdded>([this](mts::events::MessageAdded const& event) {
+        }));
+
+        static_cast<void>(m_impl->bus.subscribe<mts::events::MessageAdded>([this](mts::events::MessageAdded const& event) {
             QString const id = QString::fromStdString(event.session);
             int const kind = blockKindForEvent(event.kind);
             QString const text = QString::fromStdString(event.text);
             QMetaObject::invokeMethod(this, [this, id, kind, text] {
-                if (id != m_impl->activeSession)
+                if (id != m_impl->activeSession) {
                     return;
+                }
+
                 if (kind == ConversationModel::AssistantText && m_impl->streamingRow >= 0) {
                     m_conversation->setText(m_impl->streamingRow, text);
                     m_impl->streamingRow = -1;
@@ -314,49 +359,60 @@ ChatController::ChatController(QObject* parent)
                     m_conversation->append(ConversationBlock{kind, text, {}});
                 }
             }, Qt::QueuedConnection);
-        });
-        (void)m_impl->bus.subscribe<mts::events::ToolCallStarted>([this](mts::events::ToolCallStarted const& event) {
+        }));
+
+        static_cast<void>(m_impl->bus.subscribe<mts::events::ToolCallStarted>([this](mts::events::ToolCallStarted const& event) {
             QString const id = QString::fromStdString(event.session);
             QString const name = QString::fromStdString(event.name);
             QString const args = QString::fromStdString(event.arguments);
             QMetaObject::invokeMethod(this, [this, id, name, args] {
-                if (id != m_impl->activeSession)
+                if (id != m_impl->activeSession) {
                     return;
+                }
+
                 m_impl->streamingRow = -1;
                 m_conversation->append(ConversationBlock{ConversationModel::ToolCall, name, args});
             }, Qt::QueuedConnection);
-        });
-        (void)m_impl->bus.subscribe<mts::events::ToolCallFinished>([this](mts::events::ToolCallFinished const& event) {
+        }));
+
+        static_cast<void>(m_impl->bus.subscribe<mts::events::ToolCallFinished>([this](mts::events::ToolCallFinished const& event) {
             QString const id = QString::fromStdString(event.session);
             QString const name = QString::fromStdString(event.name);
             QString const result = QString::fromStdString(event.result);
             QMetaObject::invokeMethod(this, [this, id, name, result] {
-                if (id != m_impl->activeSession)
+                if (id != m_impl->activeSession) {
                     return;
+                }
+
                 m_conversation->append(ConversationBlock{ConversationModel::ToolResult, name, result});
             }, Qt::QueuedConnection);
-        });
+        }));
     }
 
     refreshSessions();
     if (m_sessions->rowCount() > 0) {
         auto const first = m_sessions->index(0);
-        if (first.isValid())
+        if (first.isValid()) {
             selectSession(m_sessions->data(first, SessionListModel::SessionIdRole).toString());
+        }
     }
 }
 
 ChatController::~ChatController() {
-    if (m_impl == nullptr)
+    if (m_impl == nullptr) {
         return;
+    }
 
     for (auto const& cancellation : std::as_const(m_impl->cancellations)) {
-        if (cancellation != nullptr)
+        if (cancellation != nullptr) {
             cancellation->cancel();
+        }
     }
+
     for (auto const& cancellation : std::as_const(m_impl->namingCancellations)) {
-        if (cancellation != nullptr)
+        if (cancellation != nullptr) {
             cancellation->cancel();
+        }
     }
 
     // Join the pool here, while the harness/provider/store/bus it references are
@@ -364,41 +420,43 @@ ChatController::~ChatController() {
     m_impl->pool.reset();
 }
 
-SessionListModel* ChatController::sessions() const {
+auto ChatController::sessions() const -> SessionListModel* {
     return m_sessions;
 }
 
-MapController* ChatController::mapController() const {
+auto ChatController::mapController() const -> MapController* {
     return m_impl->mapController.get();
 }
 
-ConversationModel* ChatController::conversation() const {
+auto ChatController::conversation() const -> ConversationModel* {
     return m_conversation;
 }
 
-bool ChatController::running() const {
+auto ChatController::running() const -> bool {
     return m_impl->running;
 }
 
-QString ChatController::status() const {
+auto ChatController::status() const -> QString {
     return m_impl->status;
 }
 
-QString ChatController::activeSession() const {
+auto ChatController::activeSession() const -> QString {
     return m_impl->activeSession;
 }
 
-QString ChatController::draft() const {
+auto ChatController::draft() const -> QString {
     return m_impl->draft;
 }
 
-void ChatController::refreshSessions() {
-    if (m_impl->store == nullptr)
+auto ChatController::refreshSessions() -> void {
+    if (m_impl->store == nullptr) {
         return;
+    }
 
     auto const sessions = m_impl->store->listSessions();
-    if (!sessions)
+    if (!sessions) {
         return;
+    }
 
     QList<SessionEntry> entries;
     entries.reserve(static_cast<qsizetype>(sessions.value().size()));
@@ -410,48 +468,61 @@ void ChatController::refreshSessions() {
         entry.running = m_impl->inFlight.contains(entry.id);
         entries.append(entry);
     }
+
     m_sessions->replace(entries);
 }
 
-void ChatController::refreshRunning() {
+auto ChatController::refreshRunning() -> void {
     bool const running = !m_impl->activeSession.isEmpty() && m_impl->inFlight.contains(m_impl->activeSession);
-    if (m_impl->running == running)
+    if (m_impl->running == running) {
         return;
+    }
+
     m_impl->running = running;
+
     emit runningChanged();
 }
 
-void ChatController::reloadConversation(QString const& id) {
+auto ChatController::reloadConversation(QString const& id) -> void {
     m_conversation->clear();
     m_impl->streamingRow = -1;
 
-    if (m_impl->store == nullptr)
+    if (m_impl->store == nullptr) {
         return;
+    }
 
     auto const messages = m_impl->store->loadMessages(id.toStdString());
-    if (!messages)
+    if (!messages) {
         return;
+    }
 
-    for (auto const& message : messages.value())
+    for (auto const& message : messages.value()) {
         m_conversation->append(blockFor(message));
+    }
 }
 
-void ChatController::setStatus(QString const& status) {
-    if (m_impl->status == status)
+auto ChatController::setStatus(QString const& status) -> void {
+    if (m_impl->status == status) {
         return;
+    }
+
     m_impl->status = status;
+
     emit statusChanged();
 }
 
-void ChatController::appendError(QString const& message) {
-    if (message.isEmpty())
+auto ChatController::appendError(QString const& message) -> void {
+    if (message.isEmpty()) {
         return;
+    }
+
     m_conversation->append(ConversationBlock{ConversationModel::Error, message, {}});
 }
 
-void ChatController::createSession() {
-    if (m_impl->store == nullptr)
+auto ChatController::createSession() -> void {
+    if (m_impl->store == nullptr) {
         return;
+    }
 
     auto const session = m_impl->store->createSession(kDefaultSessionTitle);
     if (!session) {
@@ -463,9 +534,10 @@ void ChatController::createSession() {
     selectSession(QString::fromStdString(session.value().id));
 }
 
-void ChatController::deleteSession(QString const& id) {
-    if (m_impl->store == nullptr)
+auto ChatController::deleteSession(QString const& id) -> void {
+    if (m_impl->store == nullptr) {
         return;
+    }
 
     if (auto const status = m_impl->store->deleteSession(id.toStdString()); !status) {
         setStatus(QString::fromStdString(status.message()));
@@ -473,8 +545,9 @@ void ChatController::deleteSession(QString const& id) {
     }
 
     if (auto it = m_impl->cancellations.find(id); it != m_impl->cancellations.end()) {
-        if (it.value() != nullptr)
+        if (it.value() != nullptr) {
             it.value()->cancel();
+        }
         m_impl->cancellations.erase(it);
     }
     m_impl->inFlight.remove(id);
@@ -486,6 +559,7 @@ void ChatController::deleteSession(QString const& id) {
         m_impl->activeSession.clear();
         m_impl->streamingRow = -1;
         m_conversation->clear();
+
         emit activeSessionChanged();
 
         if (m_sessions->rowCount() > 0) {
@@ -497,9 +571,10 @@ void ChatController::deleteSession(QString const& id) {
     }
 }
 
-void ChatController::renameSession(QString const& id, QString const& title) {
-    if (m_impl->store == nullptr)
+auto ChatController::renameSession(QString const& id, QString const& title) -> void {
+    if (m_impl->store == nullptr) {
         return;
+    }
 
     if (auto const status = m_impl->store->renameSession(id.toStdString(), title.toStdString()); !status) {
         setStatus(QString::fromStdString(status.message()));
@@ -509,15 +584,19 @@ void ChatController::renameSession(QString const& id, QString const& title) {
     refreshSessions();
 }
 
-void ChatController::maybeNameSession(QString const& id) {
-    if (m_impl->store == nullptr || m_impl->harness == nullptr)
+auto ChatController::maybeNameSession(QString const& id) -> void {
+    if (m_impl->store == nullptr || m_impl->harness == nullptr) {
         return;
-    if (m_impl->namingCancellations.contains(id))
+    }
+
+    if (m_impl->namingCancellations.contains(id)) {
         return;
+    }
 
     auto const session = m_impl->store->getSession(id.toStdString());
-    if (!session || session.value().title != kDefaultSessionTitle)
+    if (!session || session.value().title != kDefaultSessionTitle) {
         return;
+    }
 
     auto cancellation = std::make_shared<mts::runtime::Cancellation>();
     m_impl->namingCancellations.insert(id, cancellation);
@@ -527,29 +606,36 @@ void ChatController::maybeNameSession(QString const& id) {
         auto const title = harness->suggestSessionTitle(id.toStdString(), *cancellation);
         QMetaObject::invokeMethod(this, [this, id, title] {
             m_impl->namingCancellations.remove(id);
-            if (!title || m_impl->store == nullptr)
+            if (!title || m_impl->store == nullptr) {
                 return;
+            }
+
             auto const current = m_impl->store->getSession(id.toStdString());
-            if (!current || current.value().title != kDefaultSessionTitle)
+            if (!current || current.value().title != kDefaultSessionTitle) {
                 return;
+            }
+
             renameSession(id, QString::fromStdString(title.value()));
         }, Qt::QueuedConnection);
     });
 }
 
-void ChatController::clearHistory() {
-    if (m_impl->store == nullptr)
+auto ChatController::clearHistory() -> void {
+    if (m_impl->store == nullptr) {
         return;
+    }
 
     auto const sessions = m_impl->store->listSessions();
     if (sessions) {
-        for (auto const& session : sessions.value())
-            (void)m_impl->store->deleteSession(session.id);
+        for (auto const& session : sessions.value()) {
+            static_cast<void>(m_impl->store->deleteSession(session.id));
+        }
     }
 
     for (auto const& cancellation : std::as_const(m_impl->cancellations)) {
-        if (cancellation != nullptr)
+        if (cancellation != nullptr) {
             cancellation->cancel();
+        }
     }
     m_impl->cancellations.clear();
     m_impl->pending.clear();
@@ -559,15 +645,17 @@ void ChatController::clearHistory() {
     m_impl->streamingRow = -1;
     m_conversation->clear();
     m_impl->draft.clear();
+
     emit activeSessionChanged();
     emit draftChanged();
     refreshSessions();
 }
 
-void ChatController::selectSession(QString const& id) {
+auto ChatController::selectSession(QString const& id) -> void {
     m_impl->activeSession = id;
     m_impl->streamingRow = -1;
     m_conversation->clear();
+
     emit activeSessionChanged();
 
     int persisted = 0;
@@ -581,37 +669,50 @@ void ChatController::selectSession(QString const& id) {
             }
         }
 
-        if (auto const session = m_impl->store->getSession(id.toStdString()); session)
+        if (auto const session = m_impl->store->getSession(id.toStdString()); session) {
             draft = QString::fromStdString(session.value().draft);
+        }
     }
 
     if (auto const it = m_impl->pending.constFind(id); it != m_impl->pending.constEnd()) {
-        for (auto const& block : it->blocks)
+        for (auto const& block : it->blocks) {
             m_conversation->append(block);
-        if (it->streamingIndex >= 0)
+        }
+
+        if (it->streamingIndex >= 0) {
             m_impl->streamingRow = persisted + it->streamingIndex;
+        }
     }
 
     m_impl->draft = draft;
+
     refreshRunning();
     emit draftChanged();
 }
 
-void ChatController::saveDraft(QString const& text) {
+auto ChatController::saveDraft(QString const& text) -> void {
     m_impl->draft = text;
-    if (m_impl->store != nullptr && !m_impl->activeSession.isEmpty())
-        (void)m_impl->store->saveDraft(m_impl->activeSession.toStdString(), text.toStdString());
+    if (m_impl->store != nullptr && !m_impl->activeSession.isEmpty()) {
+        static_cast<void>(m_impl->store->saveDraft(m_impl->activeSession.toStdString(), text.toStdString()));
+    }
 }
 
-void ChatController::sendMessage(QString const& text) {
-    if (m_impl->harness == nullptr || m_impl->inFlight.contains(m_impl->activeSession))
+auto ChatController::sendMessage(QString const& text) -> void {
+    if (m_impl->harness == nullptr || m_impl->inFlight.contains(m_impl->activeSession)) {
         return;
-    if (text.trimmed().isEmpty())
+    }
+
+    if (text.trimmed().isEmpty()) {
         return;
-    if (m_impl->activeSession.isEmpty())
+    }
+
+    if (m_impl->activeSession.isEmpty()) {
         createSession();
-    if (m_impl->activeSession.isEmpty())
+    }
+
+    if (m_impl->activeSession.isEmpty()) {
         return;
+    }
 
     if (auto const status = m_impl->harness->submitUserMessage(
             m_impl->activeSession.toStdString(), text.toStdString());
@@ -626,23 +727,26 @@ void ChatController::sendMessage(QString const& text) {
     m_impl->inFlight.insert(id);
     m_sessions->setRunning(id, true);
     saveDraft(QString());
+
     emit draftChanged();
     refreshRunning();
     m_impl->harness->run(id.toStdString(), cancellation);
 }
 
-void ChatController::cancel() {
-    if (auto it = m_impl->cancellations.find(m_impl->activeSession); it != m_impl->cancellations.end() && it.value() != nullptr)
+auto ChatController::cancel() -> void {
+    if (auto it = m_impl->cancellations.find(m_impl->activeSession); it != m_impl->cancellations.end() && it.value() != nullptr) {
         it.value()->cancel();
-}
-
-void ChatController::cancelAll() {
-    for (auto const& cancellation : std::as_const(m_impl->cancellations)) {
-        if (cancellation != nullptr)
-            cancellation->cancel();
     }
 }
 
-bool ChatController::hasInFlight() const {
+auto ChatController::cancelAll() -> void {
+    for (auto const& cancellation : std::as_const(m_impl->cancellations)) {
+        if (cancellation != nullptr) {
+            cancellation->cancel();
+        }
+    }
+}
+
+auto ChatController::hasInFlight() const -> bool {
     return !m_impl->inFlight.isEmpty();
 }

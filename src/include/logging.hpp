@@ -46,7 +46,7 @@ static auto emit(
     );
 }
 
-}
+} // END OF NAMESPACE `detail`
 
 template<typename Scope = ModuleScope, typename... Args>
 static auto info(
@@ -126,4 +126,4 @@ static auto critical(
     );
 }
 
-}
+} // END OF NAMESPACE `mts::log`

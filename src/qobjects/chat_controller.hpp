@@ -25,38 +25,38 @@ public:
     explicit ChatController(QObject* parent = nullptr);
     ~ChatController() override;
 
-    SessionListModel* sessions() const;
-    ConversationModel* conversation() const;
-    MapController* mapController() const;
-    bool running() const;
-    QString status() const;
-    QString activeSession() const;
-    QString draft() const;
+    auto sessions() const -> SessionListModel*;
+    auto conversation() const -> ConversationModel*;
+    auto mapController() const -> MapController*;
+    auto running() const -> bool;
+    auto status() const -> QString;
+    auto activeSession() const -> QString;
+    auto draft() const -> QString;
 
-    Q_INVOKABLE void createSession();
-    Q_INVOKABLE void selectSession(QString const& id);
-    Q_INVOKABLE void deleteSession(QString const& id);
-    Q_INVOKABLE void renameSession(QString const& id, QString const& title);
-    Q_INVOKABLE void clearHistory();
-    Q_INVOKABLE void sendMessage(QString const& text);
-    Q_INVOKABLE void saveDraft(QString const& text);
-    Q_INVOKABLE void cancel();
-    Q_INVOKABLE void cancelAll();
-    Q_INVOKABLE bool hasInFlight() const;
+    Q_INVOKABLE auto createSession() -> void;
+    Q_INVOKABLE auto selectSession(QString const& id) -> void;
+    Q_INVOKABLE auto deleteSession(QString const& id) -> void;
+    Q_INVOKABLE auto renameSession(QString const& id, QString const& title) -> void;
+    Q_INVOKABLE auto clearHistory() -> void;
+    Q_INVOKABLE auto sendMessage(QString const& text) -> void;
+    Q_INVOKABLE auto saveDraft(QString const& text) -> void;
+    Q_INVOKABLE auto cancel() -> void;
+    Q_INVOKABLE auto cancelAll() -> void;
+    Q_INVOKABLE auto hasInFlight() const -> bool;
 
 signals:
-    void runningChanged();
-    void statusChanged();
-    void activeSessionChanged();
-    void draftChanged();
+    auto runningChanged() -> void;
+    auto statusChanged() -> void;
+    auto activeSessionChanged() -> void;
+    auto draftChanged() -> void;
 
 private:
-    void refreshSessions();
-    void refreshRunning();
-    void reloadConversation(QString const& id);
-    void maybeNameSession(QString const& id);
-    void setStatus(QString const& status);
-    void appendError(QString const& message);
+    auto refreshSessions() -> void;
+    auto refreshRunning() -> void;
+    auto reloadConversation(QString const& id) -> void;
+    auto maybeNameSession(QString const& id) -> void;
+    auto setStatus(QString const& status) -> void;
+    auto appendError(QString const& message) -> void;
 
     struct Impl;
     std::unique_ptr<Impl> m_impl;

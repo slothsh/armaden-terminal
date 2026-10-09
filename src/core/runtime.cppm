@@ -24,11 +24,11 @@ public:
     ~ThreadPool();
 
     ThreadPool(ThreadPool const&) = delete;
-    ThreadPool& operator=(ThreadPool const&) = delete;
+    auto operator=(ThreadPool const&) -> ThreadPool& = delete;
     ThreadPool(ThreadPool&&) noexcept;
-    ThreadPool& operator=(ThreadPool&&) noexcept;
+    auto operator=(ThreadPool&&) noexcept -> ThreadPool&;
 
-    void schedule(std::function<void()> function);
+    auto schedule(std::function<void()> function) -> void;
 
 private:
     struct Impl;
@@ -41,22 +41,22 @@ public:
     ~Cancellation();
 
     Cancellation(Cancellation const&) = delete;
-    Cancellation& operator=(Cancellation const&) = delete;
+    auto operator=(Cancellation const&) -> Cancellation& = delete;
     Cancellation(Cancellation&&) noexcept;
-    Cancellation& operator=(Cancellation&&) noexcept;
+    auto operator=(Cancellation&&) noexcept -> Cancellation&;
 
-    [[nodiscard]] std::stop_token token() const noexcept;
-    [[nodiscard]] bool cancelled() const noexcept;
-    void cancel();
+    [[nodiscard]] auto token() const noexcept -> std::stop_token;
+    [[nodiscard]] auto cancelled() const noexcept -> bool;
+    auto cancel() -> void;
 
-    [[nodiscard]] mts::agent::CancellationToken agentToken();
+    [[nodiscard]] auto agentToken() -> mts::agent::CancellationToken;
 
 private:
     struct Impl;
     std::unique_ptr<Impl> m_impl;
 };
 
-}
+} // END OF NAMESPACE `mts::runtime`
 
 struct mts::runtime::ThreadPool::Impl {
     exec::static_thread_pool pool;
@@ -72,9 +72,9 @@ mts::runtime::ThreadPool::~ThreadPool() = default;
 
 mts::runtime::ThreadPool::ThreadPool(ThreadPool&&) noexcept = default;
 
-mts::runtime::ThreadPool& mts::runtime::ThreadPool::operator=(ThreadPool&&) noexcept = default;
+auto mts::runtime::ThreadPool::operator=(ThreadPool&&) noexcept -> ThreadPool& = default;
 
-void mts::runtime::ThreadPool::schedule(std::function<void()> function) {
+auto mts::runtime::ThreadPool::schedule(std::function<void()> function) -> void {
     exec::start_detached(
         stdexec::schedule(m_impl->pool.get_scheduler())
         | stdexec::then(std::move(function))
@@ -86,13 +86,14 @@ namespace {
 struct AgentCancelBridge {
     std::shared_ptr<mts::agent::CancellationSource> source;
 
-    void operator()() const {
-        if (source)
+    auto operator()() const -> void {
+        if (source) {
             source->cancel();
+        }
     }
 };
 
-}
+} // END OF NAMESPACE anonymous
 
 struct mts::runtime::Cancellation::Impl {
     std::stop_source source;
@@ -107,21 +108,21 @@ mts::runtime::Cancellation::~Cancellation() = default;
 
 mts::runtime::Cancellation::Cancellation(Cancellation&&) noexcept = default;
 
-mts::runtime::Cancellation& mts::runtime::Cancellation::operator=(Cancellation&&) noexcept = default;
+auto mts::runtime::Cancellation::operator=(Cancellation&&) noexcept -> Cancellation& = default;
 
-std::stop_token mts::runtime::Cancellation::token() const noexcept {
+auto mts::runtime::Cancellation::token() const noexcept -> std::stop_token {
     return m_impl->source.get_token();
 }
 
-bool mts::runtime::Cancellation::cancelled() const noexcept {
+auto mts::runtime::Cancellation::cancelled() const noexcept -> bool {
     return m_impl->source.stop_requested();
 }
 
-void mts::runtime::Cancellation::cancel() {
+auto mts::runtime::Cancellation::cancel() -> void {
     m_impl->source.request_stop();
 }
 
-mts::agent::CancellationToken mts::runtime::Cancellation::agentToken() {
+auto mts::runtime::Cancellation::agentToken() -> mts::agent::CancellationToken {
     if (!m_impl->agentSource) {
         m_impl->agentSource = std::make_shared<mts::agent::CancellationSource>();
         m_impl->bridge = std::make_unique<std::stop_callback<AgentCancelBridge>>(

@@ -29,14 +29,14 @@ public:
 
     explicit SessionListModel(QObject* parent = nullptr);
 
-    int rowCount(QModelIndex const& parent = QModelIndex()) const override;
-    QVariant data(QModelIndex const& index, int role) const override;
-    QHash<int, QByteArray> roleNames() const override;
+    auto rowCount(QModelIndex const& parent = QModelIndex()) const -> int override;
+    auto data(QModelIndex const& index, int role) const -> QVariant override;
+    auto roleNames() const -> QHash<int, QByteArray> override;
 
-    void replace(QList<SessionEntry> const& entries);
-    void upsert(SessionEntry const& entry);
-    void setRunning(QString const& id, bool running);
-    int indexOf(QString const& id) const;
+    auto replace(QList<SessionEntry> const& entries) -> void;
+    auto upsert(SessionEntry const& entry) -> void;
+    auto setRunning(QString const& id, bool running) -> void;
+    auto indexOf(QString const& id) const -> int;
 
 private:
     QList<SessionEntry> m_entries;

@@ -24,38 +24,38 @@ public:
     explicit MapCanvas(QQuickItem* parent = nullptr);
 
     [[nodiscard]] auto controller() const -> MapController*;
-    void setController(MapController* controller);
+    auto setController(MapController* controller) -> void;
 
     [[nodiscard]] auto translationX() const -> float;
-    void setTranslationX(float translation);
+    auto setTranslationX(float translation) -> void;
 
     [[nodiscard]] auto translationY() const -> float;
-    void setTranslationY(float translation);
+    auto setTranslationY(float translation) -> void;
 
     [[nodiscard]] auto zDepth() const -> float;
-    void setZDepth(float depth);
+    auto setZDepth(float depth) -> void;
 
-    Q_INVOKABLE void fitToMap();
+    Q_INVOKABLE auto fitToMap() -> void;
 
 signals:
-    void controllerChanged();
-    void translationXChanged();
-    void translationYChanged();
-    void zDepthChanged();
+    auto controllerChanged() -> void;
+    auto translationXChanged() -> void;
+    auto translationYChanged() -> void;
+    auto zDepthChanged() -> void;
 
 public slots:
-    void handleTileUpdate();
+    auto handleTileUpdate() -> void;
 
 protected:
-    void componentComplete() override;
-    QCanvasPainterItemRenderer* createItemRenderer() const override;
-    void mousePressEvent(QMouseEvent* event) override;
-    void mouseMoveEvent(QMouseEvent* event) override;
-    void mouseReleaseEvent(QMouseEvent* event) override;
-    void wheelEvent(QWheelEvent* event) override;
+    auto componentComplete() -> void override;
+    auto createItemRenderer() const -> QCanvasPainterItemRenderer* override;
+    auto mousePressEvent(QMouseEvent* event) -> void override;
+    auto mouseMoveEvent(QMouseEvent* event) -> void override;
+    auto mouseReleaseEvent(QMouseEvent* event) -> void override;
+    auto wheelEvent(QWheelEvent* event) -> void override;
 
 private:
-    void maybeApplyInitialView();
+    auto maybeApplyInitialView() -> void;
 
     QPointer<MapController> m_controller;
     QTimer* m_idleTimer = nullptr;

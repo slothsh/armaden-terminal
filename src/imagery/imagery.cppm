@@ -43,6 +43,7 @@ struct TileIdHash {
         std::size_t seed = std::hash<int>{}(tile.level);
         seed ^= std::hash<int>{}(tile.x) + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2);
         seed ^= std::hash<int>{}(tile.y) + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2);
+
         return seed;
     }
 };
@@ -58,6 +59,7 @@ struct LevelInfo {
     [[nodiscard]] auto pixelSize() const -> QSize {
         int const width = pixelWidth > 0 ? pixelWidth : tilesAcross * tileSize;
         int const height = pixelHeight > 0 ? pixelHeight : tilesDown * tileSize;
+
         return QSize(width, height);
     }
 
@@ -78,6 +80,7 @@ struct LevelInfo {
     int const pixelHeight = int(std::ceil(double(basePixelSize.height()) / scale));
     int const tilesAcross = int(std::ceil(double(pixelWidth) / double(tileSize)));
     int const tilesDown = int(std::ceil(double(pixelHeight) / double(tileSize)));
+
     return LevelInfo{
         level,
         std::clamp(tilesAcross, 1, std::numeric_limits<int>::max()),
@@ -90,6 +93,7 @@ struct LevelInfo {
 
 [[nodiscard]] auto baseRectToLevelRect(QRectF const& baseRect, int level) -> QRectF {
     double const scale = levelPixelScale(level);
+
     return QRectF(
         QPointF(baseRect.left() / scale, baseRect.top() / scale),
         QSizeF(baseRect.width() / scale, baseRect.height() / scale)
@@ -98,6 +102,7 @@ struct LevelInfo {
 
 [[nodiscard]] auto levelRectToBaseRect(QRectF const& levelRect, int level) -> QRectF {
     double const scale = levelPixelScale(level);
+
     return QRectF(
         QPointF(levelRect.left() * scale, levelRect.top() * scale),
         QSizeF(levelRect.width() * scale, levelRect.height() * scale)
@@ -113,18 +118,21 @@ struct LevelInfo {
     QSize const extent = level.pixelSize();
     float const width = std::max(0, std::min(level.tileSize, extent.width() - tile.x * level.tileSize));
     float const height = std::max(0, std::min(level.tileSize, extent.height() - tile.y * level.tileSize));
+
     return QRectF(origin, QSizeF(width, height));
 }
 
 [[nodiscard]] auto tileAt(LevelInfo const& level, QPointF const& levelPixel) -> TileId {
     int const tileX = qBound(0, int(std::floor(levelPixel.x() / float(level.tileSize))), level.tilesAcross - 1);
     int const tileY = qBound(0, int(std::floor(levelPixel.y() / float(level.tileSize))), level.tilesDown - 1);
+
     return TileId{level.level, tileX, tileY};
 }
 
 [[nodiscard]] auto tilesForRect(LevelInfo const& level, QRectF const& levelPixelRect) -> std::vector<TileId> {
-    if (levelPixelRect.isEmpty())
+    if (levelPixelRect.isEmpty()) {
         return {};
+    }
 
     QRectF const rect = levelPixelRect.normalized();
     QSize const levelSize = level.pixelSize();
@@ -142,13 +150,19 @@ struct LevelInfo {
     std::vector<TileId> tiles;
     tiles.reserve(std::size_t((lastX - firstX + 1) * (lastY - firstY + 1)));
     for (int y = firstY; y <= lastY; ++y) {
-        for (int x = firstX; x <= lastX; ++x)
+        for (int x = firstX; x <= lastX; ++x) {
             tiles.push_back(TileId{level.level, x, y});
+        }
     }
+
     return tiles;
 }
 
-[[nodiscard]] auto orderCenterFirst(std::vector<TileId> tiles, LevelInfo const& level, QPointF const& center) -> std::vector<TileId> {
+[[nodiscard]] auto orderCenterFirst(
+    std::vector<TileId> tiles,
+    LevelInfo const& level,
+    QPointF const& center
+) -> std::vector<TileId> {
     float const tileSize = float(level.tileSize);
     auto const distanceToCenter = [tileSize, &center](TileId const& tile) -> double {
         QPointF const tileCenter(
@@ -156,11 +170,14 @@ struct LevelInfo {
             float(tile.y) * tileSize + tileSize * 0.5f
         );
         QPointF const delta = tileCenter - center;
+
         return double(delta.x() * delta.x() + delta.y() * delta.y());
     };
+
     std::stable_sort(tiles.begin(), tiles.end(), [&distanceToCenter](TileId const& a, TileId const& b) {
         return distanceToCenter(a) < distanceToCenter(b);
     });
+
     return tiles;
 }
 
@@ -169,14 +186,21 @@ struct LodPolicy {
     int minimumLevel = 0;
 };
 
-[[nodiscard]] auto selectLevel(double zoom, double devicePixelRatio, int maxLevel, LodPolicy const& policy) -> int {
+[[nodiscard]] auto selectLevel(
+    double zoom,
+    double devicePixelRatio,
+    int maxLevel,
+    LodPolicy const& policy
+) -> int {
     int const minimumLevel = std::min(policy.minimumLevel, maxLevel);
     int const maximumLevel = std::max(minimumLevel, maxLevel);
-    if (!(zoom > 0.0))
+    if (!(zoom > 0.0)) {
         return minimumLevel;
+    }
 
     double const ratio = std::max(devicePixelRatio, 1.0);
     double const raw = std::log2(zoom / ratio) + policy.bias;
+
     return qBound(minimumLevel, int(std::round(raw)), maximumLevel);
 }
 
@@ -200,8 +224,9 @@ struct ViewportTiles {
 
 [[nodiscard]] auto resolveViewport(ViewportRequest const& request) -> ViewportTiles {
     ViewportTiles result;
-    if (request.baseRect.isEmpty() || request.baseSize.isEmpty() || request.viewportSize.isEmpty())
+    if (request.baseRect.isEmpty() || request.baseSize.isEmpty() || request.viewportSize.isEmpty()) {
         return result;
+    }
 
     result.level = selectLevel(request.zoom, request.devicePixelRatio, request.maxLevel, request.lod);
     result.levelInfo = levelInfoForBase(request.baseSize, request.tileSize, result.level);
@@ -211,11 +236,16 @@ struct ViewportTiles {
         result.levelInfo,
         result.levelRect.center()
     );
+
     return result;
 }
 
 template <class Type>
-concept TileSource = requires(Type&& source, TileId const& tile, int level) {
+concept TileSource = requires(
+    Type&& source,
+    TileId const& tile,
+    int level
+) {
     { source.tileSize() } -> std::convertible_to<int>;
     { source.levelCount() } -> std::convertible_to<int>;
     { source.levelInfo(level) } -> std::same_as<LevelInfo>;
@@ -237,34 +267,39 @@ public:
         : m_byteBudget(std::max<qsizetype>(byteBudget, 0)) {}
 
     TileCache(TileCache const&) = delete;
-    TileCache& operator=(TileCache const&) = delete;
+    auto operator=(TileCache const&) -> TileCache& = delete;
 
     [[nodiscard]] auto find(TileId const& tile) const -> std::optional<Entry> {
         std::lock_guard const lock(m_mutex);
         auto const it = m_index.find(tile);
-        if (it == m_index.end())
+        if (it == m_index.end()) {
             return std::nullopt;
+        }
+
         m_records.splice(m_records.begin(), m_records, it->second);
+
         return it->second->second;
     }
 
     [[nodiscard]] auto state(TileId const& tile) const -> TileState {
         std::lock_guard const lock(m_mutex);
         auto const it = m_index.find(tile);
+
         return it == m_index.end() ? TileState::Missing : it->second->second.state;
     }
 
-    void markQueued(TileId const& tile) {
+    auto markQueued(TileId const& tile) -> void {
         std::vector<Notification> notifications;
         {
             std::lock_guard const lock(m_mutex);
             this->replaceRecord(tile, Entry{TileState::Queued, SharedImage{}, {}, 0});
             notifications.emplace_back(tile, TileState::Queued);
         }
+
         this->notify(notifications);
     }
 
-    void store(TileId const& tile, SharedImage image) {
+    auto store(TileId const& tile, SharedImage image) -> void {
         std::vector<Notification> notifications;
         {
             std::lock_guard const lock(m_mutex);
@@ -274,64 +309,73 @@ public:
             notifications.emplace_back(tile, TileState::Ready);
             this->evictOverBudget(notifications, tile);
         }
+
         this->notify(notifications);
     }
 
-    void markFailed(TileId const& tile, std::string error) {
+    auto markFailed(TileId const& tile, std::string error) -> void {
         std::vector<Notification> notifications;
         {
             std::lock_guard const lock(m_mutex);
             this->replaceRecord(tile, Entry{TileState::Failed, SharedImage{}, std::move(error), 0});
             notifications.emplace_back(tile, TileState::Failed);
         }
+
         this->notify(notifications);
     }
 
-    void evict(TileId const& tile) {
+    auto evict(TileId const& tile) -> void {
         std::vector<Notification> notifications;
         {
             std::lock_guard const lock(m_mutex);
             this->eraseRecord(tile, notifications);
         }
+
         this->notify(notifications);
     }
 
-    void clear() {
+    auto clear() -> void {
         std::vector<Notification> notifications;
         {
             std::lock_guard const lock(m_mutex);
             notifications.reserve(m_records.size());
-            for (auto const& record : m_records)
+            for (auto const& record : m_records) {
                 notifications.emplace_back(record.first, TileState::Missing);
+            }
             m_records.clear();
             m_index.clear();
             m_byteUsage = 0;
         }
+
         this->notify(notifications);
     }
 
-    void setByteBudget(qsizetype budget) {
+    auto setByteBudget(qsizetype budget) -> void {
         std::vector<Notification> notifications;
         {
             std::lock_guard const lock(m_mutex);
             m_byteBudget = std::max<qsizetype>(budget, 0);
             this->evictOverBudget(notifications, std::nullopt);
         }
+
         this->notify(notifications);
     }
 
     [[nodiscard]] auto byteBudget() const -> qsizetype {
         std::lock_guard const lock(m_mutex);
+
         return m_byteBudget;
     }
 
     [[nodiscard]] auto byteUsage() const -> qsizetype {
         std::lock_guard const lock(m_mutex);
+
         return m_byteUsage;
     }
 
     [[nodiscard]] auto size() const -> std::size_t {
         std::lock_guard const lock(m_mutex);
+
         return m_index.size();
     }
 
@@ -339,10 +383,11 @@ public:
         std::lock_guard const lock(m_mutex);
         std::size_t const id = m_nextListenerId++;
         m_listeners.emplace(id, std::move(listener));
+
         return id;
     }
 
-    void removeListener(std::size_t id) {
+    auto removeListener(std::size_t id) -> void {
         std::lock_guard const lock(m_mutex);
         m_listeners.erase(id);
     }
@@ -351,39 +396,46 @@ private:
     using Records = std::list<std::pair<TileId, Entry>>;
     using Notification = std::pair<TileId, TileState>;
 
-    void insertRecord(TileId const& tile, Entry&& entry) {
+    auto insertRecord(TileId const& tile, Entry&& entry) -> void {
         m_records.emplace_front(tile, std::move(entry));
         m_index.emplace(tile, m_records.begin());
     }
 
-    void replaceRecord(TileId const& tile, Entry&& entry) {
+    auto replaceRecord(TileId const& tile, Entry&& entry) -> void {
         auto const existing = m_index.find(tile);
         if (existing != m_index.end()) {
             m_byteUsage -= existing->second->second.bytes;
             m_records.erase(existing->second);
             m_index.erase(existing);
         }
+
         this->insertRecord(tile, std::move(entry));
     }
 
-    void eraseRecord(TileId const& tile, std::vector<Notification>& notifications) {
+    auto eraseRecord(TileId const& tile, std::vector<Notification>& notifications) -> void {
         auto const it = m_index.find(tile);
-        if (it == m_index.end())
+        if (it == m_index.end()) {
             return;
+        }
+
         m_byteUsage -= it->second->second.bytes;
         m_records.erase(it->second);
         m_index.erase(it);
         notifications.emplace_back(tile, TileState::Missing);
     }
 
-    void evictOverBudget(std::vector<Notification>& notifications, std::optional<TileId> const& pinned) {
+    auto evictOverBudget(std::vector<Notification>& notifications, std::optional<TileId> const& pinned) -> void {
         auto it = m_records.end();
         while (m_byteUsage > m_byteBudget && m_index.size() > 1) {
-            if (it == m_records.begin())
+            if (it == m_records.begin()) {
                 break;
+            }
+
             --it;
-            if ((pinned.has_value() && it->first == *pinned) || it->second.state == TileState::Queued)
+            if ((pinned.has_value() && it->first == *pinned) || it->second.state == TileState::Queued) {
                 continue;
+            }
+
             m_byteUsage -= it->second.bytes;
             m_index.erase(it->first);
             notifications.emplace_back(it->first, TileState::Missing);
@@ -391,19 +443,24 @@ private:
         }
     }
 
-    void notify(std::vector<Notification> const& notifications) const {
-        if (notifications.empty())
+    auto notify(std::vector<Notification> const& notifications) const -> void {
+        if (notifications.empty()) {
             return;
+        }
+
         std::vector<Listener> listeners;
         {
             std::lock_guard const lock(m_mutex);
             listeners.reserve(m_listeners.size());
-            for (auto const& [id, listener] : m_listeners)
+            for (auto const& [id, listener] : m_listeners) {
                 listeners.push_back(listener);
+            }
         }
+
         for (auto const& listener : listeners) {
-            for (auto const& [tile, state] : notifications)
+            for (auto const& [tile, state] : notifications) {
                 listener(tile, state);
+            }
         }
     }
 
@@ -432,19 +489,21 @@ public:
             std::lock_guard const lock(m_mutex);
             m_alive->store(false, std::memory_order_release);
         }
+
         std::unique_lock lock(m_mutex);
         m_drained.wait(lock, [this] { return m_inflight.empty(); });
     }
 
     TileScheduler(TileScheduler const&) = delete;
-    TileScheduler& operator=(TileScheduler const&) = delete;
+    auto operator=(TileScheduler const&) -> TileScheduler& = delete;
 
-    void request(TileId const& tile, Generation generation, Completion completion) {
+    auto request(TileId const& tile, Generation generation, Completion completion) -> void {
         std::shared_ptr<Inflight> dispatchEntry;
         {
             std::lock_guard const lock(m_mutex);
-            if (!m_alive->load(std::memory_order_acquire))
+            if (!m_alive->load(std::memory_order_acquire)) {
                 return;
+            }
 
             auto [it, inserted] = m_inflight.try_emplace(tile, std::make_shared<Inflight>());
             bool stale = false;
@@ -452,8 +511,10 @@ public:
                 std::lock_guard const entryLock(it->second->mutex);
                 stale = it->second->drained || it->second->cancelled;
             }
-            if (stale)
+
+            if (stale) {
                 it->second = std::make_shared<Inflight>();
+            }
 
             std::lock_guard const entryLock(it->second->mutex);
             it->second->requests.push_back(Request{generation, std::move(completion)});
@@ -461,11 +522,12 @@ public:
             it->second->decodeStarted = true;
         }
 
-        if (dispatchEntry)
+        if (dispatchEntry) {
             this->dispatch(tile, std::move(dispatchEntry));
+        }
     }
 
-    void setGeneration(Generation generation) {
+    auto setGeneration(Generation generation) -> void {
         std::lock_guard const lock(m_mutex);
         m_generation = std::max(m_generation, generation);
         for (auto const& [tile, entry] : m_inflight) {
@@ -478,10 +540,11 @@ public:
 
     [[nodiscard]] auto generation() const -> Generation {
         std::lock_guard const lock(m_mutex);
+
         return m_generation;
     }
 
-    void cancelPending() {
+    auto cancelPending() -> void {
         std::lock_guard const lock(m_mutex);
         for (auto const& [tile, entry] : m_inflight) {
             std::lock_guard const entryLock(entry->mutex);
@@ -492,11 +555,13 @@ public:
 
     [[nodiscard]] auto pending(TileId const& tile) const -> bool {
         std::lock_guard const lock(m_mutex);
+
         return m_inflight.contains(tile);
     }
 
     [[nodiscard]] auto pendingCount() const -> std::size_t {
         std::lock_guard const lock(m_mutex);
+
         return m_inflight.size();
     }
 
@@ -514,7 +579,7 @@ private:
         bool cancelled = false;
     };
 
-    void dispatch(TileId const& tile, std::shared_ptr<Inflight> entry) {
+    auto dispatch(TileId const& tile, std::shared_ptr<Inflight> entry) -> void {
         auto const alive = m_alive;
         auto const decoder = m_decoder;
         m_pool->schedule([this, alive = std::move(alive), entry = std::move(entry), tile, decoder] {
@@ -541,10 +606,12 @@ private:
         });
     }
 
-    void finish(TileId const& tile,
-                std::shared_ptr<Inflight> const& entry,
-                mts::agent::Result<SharedImage> result,
-                std::shared_ptr<std::atomic_bool> const& alive) {
+    auto finish(
+        TileId const& tile,
+        std::shared_ptr<Inflight> const& entry,
+        mts::agent::Result<SharedImage> result,
+        std::shared_ptr<std::atomic_bool> const& alive
+    ) -> void {
         std::vector<Request> drained;
         {
             std::lock_guard const entryLock(entry->mutex);
@@ -557,16 +624,20 @@ private:
         {
             std::lock_guard const lock(m_mutex);
             auto const it = m_inflight.find(tile);
-            if (it != m_inflight.end() && it->second == entry)
+            if (it != m_inflight.end() && it->second == entry) {
                 m_inflight.erase(it);
+            }
             m_drained.notify_all();
         }
 
-        if (!deliver)
+        if (!deliver) {
             return;
+        }
+
         for (auto const& request : drained) {
-            if (request.completion)
+            if (request.completion) {
                 request.completion(result);
+            }
         }
     }
 
@@ -580,20 +651,29 @@ private:
 };
 
 [[nodiscard]] auto expandHomePath(std::string const& path) -> std::filesystem::path {
-    if (path.empty() || path.front() != '~')
+    if (path.empty() || path.front() != '~') {
         return std::filesystem::path(path);
+    }
 
     std::string const home = []() -> std::string {
-        if (char const* env = std::getenv("HOME"); env != nullptr && *env != '\0')
+        if (char const* env = std::getenv("HOME"); env != nullptr && *env != '\0') {
             return std::string(env);
+        }
+
         return {};
     }();
-    if (home.empty())
+    if (home.empty()) {
         return std::filesystem::path(path);
-    if (path.size() == 1)
+    }
+
+    if (path.size() == 1) {
         return std::filesystem::path(home);
-    if (path.at(1) == '/' || path.at(1) == std::filesystem::path::preferred_separator)
+    }
+
+    if (path.at(1) == '/' || path.at(1) == std::filesystem::path::preferred_separator) {
         return std::filesystem::path(home) / std::filesystem::path(path.substr(2));
+    }
+
     return std::filesystem::path(path);
 }
 
@@ -620,6 +700,7 @@ struct PyramidBuildState {
 
     [[nodiscard]] auto progress(int levelCount) const -> TileBuildProgress {
         std::lock_guard const lock(mutex);
+
         TileBuildProgress progress;
         progress.building = state == State::Building;
         progress.ready = state == State::Ready;
@@ -627,19 +708,23 @@ struct PyramidBuildState {
         progress.error = error;
         progress.levelsReady = levelsReady.load(std::memory_order_acquire);
         progress.levelCount = levelCount;
+
         return progress;
     }
 
-    void notify(TileBuildProgress const& progress) const {
+    auto notify(TileBuildProgress const& progress) const -> void {
         std::vector<Listener> snapshot;
         {
             std::lock_guard const lock(mutex);
             snapshot.reserve(listeners.size());
-            for (auto const& [id, listener] : listeners)
+            for (auto const& [id, listener] : listeners) {
                 snapshot.push_back(listener);
+            }
         }
-        for (auto const& listener : snapshot)
+
+        for (auto const& listener : snapshot) {
             listener(progress);
+        }
     }
 
     mutable std::mutex mutex;
@@ -650,7 +735,7 @@ struct PyramidBuildState {
     std::size_t nextListenerId = 1;
 };
 
-}
+} // END OF NAMESPACE detail
 
 class SingleFileTileSource {
 public:
@@ -663,40 +748,47 @@ public:
     static constexpr int kMaximumImageAllocationMiB = 4096;
     static constexpr std::uint64_t kAllocationSafetyMarginBytes = 64ULL * 1024ULL * 1024ULL;
 
-    [[nodiscard]] static auto create(std::filesystem::path const& file, Options options)
-        -> mts::agent::Result<SingleFileTileSource> {
-        if (options.tileSize <= 0)
+    [[nodiscard]] static auto create(
+        std::filesystem::path const& file,
+        Options options
+    ) -> mts::agent::Result<SingleFileTileSource> {
+        if (options.tileSize <= 0) {
             return mts::agent::Result<SingleFileTileSource>::fromStatus(
                 mts::agent::Status::invalidArgument("tile size must be positive"));
+        }
 
         std::error_code pathError;
-        if (!std::filesystem::exists(file, pathError) || pathError)
+        if (!std::filesystem::exists(file, pathError) || pathError) {
             return mts::agent::Result<SingleFileTileSource>::fromStatus(
                 mts::agent::Status::invalidArgument("map source file does not exist: " + file.string()));
+        }
 
         QImageReader reader(QString::fromStdString(file.string()));
         QSize const baseSize = reader.size();
-        if (baseSize.isEmpty())
+        if (baseSize.isEmpty()) {
             return mts::agent::Result<SingleFileTileSource>::fromStatus(
                 mts::agent::Status::internal("could not read source image dimensions: " + file.string()));
+        }
 
         std::uint64_t const pixelBytes = std::uint64_t(baseSize.width())
             * std::uint64_t(baseSize.height()) * 4ULL;
         std::uint64_t const requiredBytes = pixelBytes + kAllocationSafetyMarginBytes;
         std::uint64_t const requiredMiB = (requiredBytes + (1024ULL * 1024ULL - 1ULL)) / (1024ULL * 1024ULL);
-        if (requiredMiB > std::uint64_t(kMaximumImageAllocationMiB))
+        if (requiredMiB > std::uint64_t(kMaximumImageAllocationMiB)) {
             return mts::agent::Result<SingleFileTileSource>::fromStatus(
                 mts::agent::Status::resourceExhausted(
                     "source image " + std::to_string(baseSize.width()) + "x" + std::to_string(baseSize.height())
                     + " requires about " + std::to_string(requiredMiB) + " MiB to decode; limit is "
                     + std::to_string(kMaximumImageAllocationMiB) + " MiB"));
+        }
 
         {
             static std::mutex allocationLimitMutex;
             std::lock_guard const lock(allocationLimitMutex);
             int const currentLimit = QImageReader::allocationLimit();
-            if (currentLimit > 0 && currentLimit < int(requiredMiB))
+            if (currentLimit > 0 && currentLimit < int(requiredMiB)) {
                 QImageReader::setAllocationLimit(int(requiredMiB));
+            }
         }
 
         return SingleFileTileSource(file, baseSize, std::move(options));
@@ -712,6 +804,7 @@ public:
 
     [[nodiscard]] auto levelInfo(int level) const -> LevelInfo {
         int const clamped = qBound(0, level, m_levelCount - 1);
+
         return levelInfoForBase(m_baseSize, m_tileSize, clamped);
     }
 
@@ -727,11 +820,12 @@ public:
         return m_pyramidDir;
     }
 
-    void startBuild(mts::runtime::ThreadPool& pool) {
+    auto startBuild(mts::runtime::ThreadPool& pool) -> void {
         {
             std::lock_guard const lock(m_core->mutex);
-            if (m_core->state != detail::PyramidBuildState::State::Idle)
+            if (m_core->state != detail::PyramidBuildState::State::Idle) {
                 return;
+            }
 
             int const ready = this->countReadyLevels();
             if (ready == m_levelCount) {
@@ -740,6 +834,7 @@ public:
             } else {
                 m_core->state = detail::PyramidBuildState::State::Building;
                 m_core->levelsReady.store(ready, std::memory_order_release);
+
                 auto const core = m_core;
                 auto const file = m_file;
                 auto const pyramidDir = m_pyramidDir;
@@ -751,6 +846,7 @@ public:
                 });
             }
         }
+
         m_core->notify(m_core->progress(m_levelCount));
     }
 
@@ -761,6 +857,7 @@ public:
     [[nodiscard]] auto levelReady(int level) const -> bool {
         int const clamped = qBound(0, level, m_levelCount - 1);
         std::error_code error;
+
         return std::filesystem::exists(this->levelMarkerPath(clamped), error) && !error;
     }
 
@@ -768,18 +865,20 @@ public:
         std::lock_guard const lock(m_core->mutex);
         std::size_t const id = m_core->nextListenerId++;
         m_core->listeners.emplace(id, std::move(listener));
+
         return id;
     }
 
-    void removeProgressListener(std::size_t id) {
+    auto removeProgressListener(std::size_t id) -> void {
         std::lock_guard const lock(m_core->mutex);
         m_core->listeners.erase(id);
     }
 
     [[nodiscard]] auto readTile(TileId const& tile) -> mts::agent::Result<SharedImage> {
-        if (tile.level < 0 || tile.level >= m_levelCount)
+        if (tile.level < 0 || tile.level >= m_levelCount) {
             return mts::agent::Result<SharedImage>::fromStatus(
                 mts::agent::Status::invalidArgument("tile level out of range"));
+        }
 
         double const scale = levelPixelScale(tile.level);
         int const levelWidth = int(std::ceil(double(m_baseSize.width()) / scale));
@@ -793,15 +892,20 @@ public:
         SharedImage image(QString::fromStdString(this->tilePath(tile).string()));
         if (image.isNull()) {
             TileBuildProgress const progress = m_core->progress(m_levelCount);
-            if (progress.failed)
+            if (progress.failed) {
                 return mts::agent::Result<SharedImage>::fromStatus(
                     mts::agent::Status::internal("map pyramid build failed: " + progress.error));
-            if (!progress.building && !progress.ready)
+            }
+
+            if (!progress.building && !progress.ready) {
                 return mts::agent::Result<SharedImage>::fromStatus(
                     mts::agent::Status::notFound("map pyramid has not been built"));
+            }
+
             return mts::agent::Result<SharedImage>::fromStatus(
                 mts::agent::Status::notFound("tile not yet available"));
         }
+
         return image;
     }
 
@@ -844,9 +948,11 @@ private:
         int ready = 0;
         for (int level = 0; level < m_levelCount; ++level) {
             std::error_code error;
-            if (std::filesystem::exists(this->levelMarkerPath(level), error) && !error)
+            if (std::filesystem::exists(this->levelMarkerPath(level), error) && !error) {
                 ++ready;
+            }
         }
+
         return ready;
     }
 
@@ -860,51 +966,71 @@ private:
     }
 
     [[nodiscard]] static auto levelImageFor(QImage const& base, QSize baseSize, int level) -> QImage {
-        if (level == 0)
+        if (level == 0) {
             return base;
+        }
+
         double const scale = levelPixelScale(level);
         QSize const target(
             int(std::ceil(double(baseSize.width()) / scale)),
             int(std::ceil(double(baseSize.height()) / scale))
         );
+
         return base.scaled(target, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
     }
 
-    [[nodiscard]] static auto writeTile(QImage const& levelImage, QSize levelSize,
-                                        std::filesystem::path const& pyramidDir,
-                                        int tileSize, int level, int x, int y) -> bool {
+    [[nodiscard]] static auto writeTile(
+        QImage const& levelImage,
+        QSize levelSize,
+        std::filesystem::path const& pyramidDir,
+        int tileSize,
+        int level,
+        int x,
+        int y
+    ) -> bool {
         int const left = x * tileSize;
         int const top = y * tileSize;
         int const width = std::min(tileSize, levelSize.width() - left);
         int const height = std::min(tileSize, levelSize.height() - top);
-        if (width <= 0 || height <= 0)
+        if (width <= 0 || height <= 0) {
             return true;
+        }
 
         QImage const tile = levelImage.copy(left, top, width, height);
         std::filesystem::path const directory = pyramidDir / std::to_string(level);
         std::error_code error;
         std::filesystem::create_directories(directory, error);
-        if (error)
+        if (error) {
             return false;
+        }
 
         auto const tilePath = directory / (std::to_string(x) + "_" + std::to_string(y) + ".png");
+
         return tile.save(QString::fromStdString(tilePath.string()), "png");
     }
 
-    static void failPyramidBuild(std::shared_ptr<detail::PyramidBuildState> const& core,
-                                 int levelCount, std::string message) {
+    static auto failPyramidBuild(
+        std::shared_ptr<detail::PyramidBuildState> const& core,
+        int levelCount,
+        std::string message
+    ) -> void {
         {
             std::lock_guard const lock(core->mutex);
             core->state = detail::PyramidBuildState::State::Failed;
             core->error = std::move(message);
         }
+
         core->notify(core->progress(levelCount));
     }
 
-    static void runPyramidBuild(std::shared_ptr<detail::PyramidBuildState> const& core,
-                                std::filesystem::path const& file,
-                                std::filesystem::path const& pyramidDir,
-                                QSize baseSize, int tileSize, int levelCount) {
+    static auto runPyramidBuild(
+        std::shared_ptr<detail::PyramidBuildState> const& core,
+        std::filesystem::path const& file,
+        std::filesystem::path const& pyramidDir,
+        QSize baseSize,
+        int tileSize,
+        int levelCount
+    ) -> void {
         QImageReader reader(QString::fromStdString(file.string()));
         QImage const base = reader.read();
         if (base.isNull()) {
@@ -915,16 +1041,18 @@ private:
         int ready = 0;
         for (int level = 0; level < levelCount; ++level) {
             std::error_code error;
-            if (std::filesystem::exists(pyramidDir / ("level_" + std::to_string(level) + ".done"), error) && !error)
+            if (std::filesystem::exists(pyramidDir / ("level_" + std::to_string(level) + ".done"), error) && !error) {
                 ++ready;
+            }
         }
         core->levelsReady.store(ready, std::memory_order_release);
 
         for (int level = levelCount - 1; level >= 0; --level) {
             std::error_code error;
             std::filesystem::path const marker = pyramidDir / ("level_" + std::to_string(level) + ".done");
-            if (std::filesystem::exists(marker, error) && !error)
+            if (std::filesystem::exists(marker, error) && !error) {
                 continue;
+            }
 
             double const scale = levelPixelScale(level);
             QSize const levelSize(
@@ -964,6 +1092,7 @@ private:
             std::lock_guard const lock(core->mutex);
             core->state = detail::PyramidBuildState::State::Ready;
         }
+
         core->notify(core->progress(levelCount));
     }
 
@@ -975,4 +1104,4 @@ private:
     std::shared_ptr<detail::PyramidBuildState> m_core;
 };
 
-}
+} // END OF NAMESPACE `mts::imagery`
