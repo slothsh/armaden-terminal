@@ -9,3 +9,18 @@ target_link_libraries(imagery_tile_source_test PRIVATE LibImagery)
 
 add_test_target(orchestration_conversation_service_test orchestration/conversation_service_test.cpp)
 target_link_libraries(orchestration_conversation_service_test PRIVATE LibOrchestration)
+
+add_test_target(core_events_test core/events_test.cpp)
+target_link_libraries(core_events_test PRIVATE LibCore)
+
+add_test_target(core_config_test core/config_test.cpp)
+target_link_libraries(core_config_test PRIVATE LibCore)
+
+add_test_target(core_persistence_test core/persistence_test.cpp)
+target_link_libraries(core_persistence_test PRIVATE LibCore)
+
+add_test_target(core_provider_test core/provider_test.cpp)
+target_link_libraries(core_provider_test PRIVATE LibCore)
+
+add_test_target(agent_facade_test agent/agent_facade_test.cpp)
+target_link_libraries(agent_facade_test PRIVATE LibCore)

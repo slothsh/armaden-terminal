@@ -17,7 +17,7 @@ function(add_test_target TARGET_NAME SOURCE_FILES)
     add_executable(${TARGET_NAME} ${SOURCE_FILES})
     add_dependencies(${TARGET_NAME} ${CXX_TARGET_PRECOMPILED_STD})
     target_compile_options(${TARGET_NAME} PRIVATE -fmodule-file=std=${CXX_STD_PCM})
-    target_link_libraries(${TARGET_NAME} PRIVATE Catch2::Catch2WithMain ${PROJECT_LIBRARY_TARGET})
+    target_link_libraries(${TARGET_NAME} PRIVATE Catch2::Catch2WithMain)
     catch_discover_tests(${TARGET_NAME} ADD_TAGS_AS_LABELS)
 endfunction()
 
