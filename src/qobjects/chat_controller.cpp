@@ -1,5 +1,7 @@
 #include "chat_controller.hpp"
 
+#include "app_context.hpp"
+
 #include "conversation_model.hpp"
 #include "map_controller.hpp"
 #include "session_list_model.hpp"
@@ -88,15 +90,14 @@ struct PendingRun {
 };
 
 struct ChatController::Impl {
-    mts::events::EventBus bus;
-    std::unique_ptr<mts::persistence::SessionStoreHandle> store;
-    std::unique_ptr<mts::model::ProviderHandle> provider;
-    std::unique_ptr<MapController> mapController;
-    std::unique_ptr<mts::model::ProviderHandle> namingProviderOwned;
+    mts::events::EventBus* bus = nullptr;
+    mts::persistence::SessionStoreHandle* store = nullptr;
+    mts::model::ProviderHandle* provider = nullptr;
     mts::model::ProviderHandle* namingProvider = nullptr;
-    std::unique_ptr<mts::model::ProviderHandle> visionProviderOwned;
     mts::model::ProviderHandle* visionProvider = nullptr;
-    std::unique_ptr<mts::harness::AgentHarness> harness;
+    mts::harness::AgentHarness* harness = nullptr;
+    mts::runtime::ThreadPool* pool = nullptr;
+    MapController* mapController = nullptr;
     QHash<QString, std::shared_ptr<mts::runtime::Cancellation>> cancellations;
     QHash<QString, std::shared_ptr<mts::runtime::Cancellation>> namingCancellations;
     QHash<QString, PendingRun> pending;
@@ -106,203 +107,53 @@ struct ChatController::Impl {
     QString status;
     int streamingRow = -1;
     bool running = false;
-
-    // Declared last so it is destroyed first: the pool's destructor joins its
-    // workers, which must happen before the harness/provider/store/bus above
-    // (which the workers reference) are freed.
-    std::unique_ptr<mts::runtime::ThreadPool> pool;
 };
 
-ChatController::ChatController(QObject* parent)
+ChatController::ChatController(mts::app::AppContext const& context, QObject* parent)
     : QObject(parent)
     , m_impl(std::make_unique<Impl>())
     , m_sessions(new SessionListModel(this))
     , m_conversation(new ConversationModel(this)) {
-    std::string configError;
-    auto const config = mts::config::loadConfigOrDefaults(mts::config::configPath(), configError);
-    if (!configError.empty()) {
-        setStatus(QString::fromStdString(configError));
-    } else if (config.provider.model.empty() || config.provider.apiKey.empty()) {
-        setStatus(QStringLiteral("No model configured; using the offline provider. Create config/mindtosis.json."));
+    m_impl->bus = &context.bus;
+    m_impl->store = context.store;
+    m_impl->provider = context.provider;
+    m_impl->namingProvider = context.namingProvider;
+    m_impl->visionProvider = context.visionProvider;
+    m_impl->harness = context.harness;
+    m_impl->pool = &context.pool;
+    m_impl->mapController = &context.mapController;
+
+    if (!context.initialStatus.empty()) {
+        setStatus(QString::fromStdString(context.initialStatus));
     }
 
-    auto const workers = config.runtime.workers == 0 ? 4u : config.runtime.workers;
-    m_impl->pool = std::make_unique<mts::runtime::ThreadPool>(workers);
+    static_cast<void>(m_impl->bus->subscribe<mts::events::RunStarted>([this](mts::events::RunStarted const& event) {
+        QString const id = QString::fromStdString(event.session);
+        QMetaObject::invokeMethod(this, [this, id] {
+            m_impl->inFlight.insert(id);
+            m_sessions->setRunning(id, true);
+            refreshRunning();
+        }, Qt::QueuedConnection);
+    }));
 
-    auto store = mts::persistence::makeSessionStore(mts::persistence::databasePath());
-    if (store) {
-        m_impl->store = std::make_unique<mts::persistence::SessionStoreHandle>(std::move(store.value()));
-    } else {
-        setStatus(QString::fromStdString(std::string(store.error().message())));
-    }
-
-    auto provider = mts::model::makeProvider(config);
-    if (provider) {
-        m_impl->provider = std::make_unique<mts::model::ProviderHandle>(std::move(provider.value()));
-    } else {
-        setStatus(QString::fromStdString(std::string(provider.error().message())));
-    }
-
-    if (!config.provider.apiKey.empty()) {
-        auto namingConfig = config;
-        if (!config.naming.model.empty()) {
-            namingConfig.provider.model = config.naming.model;
-        }
-
-        if (!namingConfig.provider.model.empty()) {
-            if (auto naming = mts::model::makeProvider(namingConfig); naming) {
-                m_impl->namingProviderOwned = std::make_unique<mts::model::ProviderHandle>(std::move(naming.value()));
-                m_impl->namingProvider = m_impl->namingProviderOwned.get();
-            }
-        }
-    }
-
-    if (!config.vision.model.empty()) {
-        auto vision = mts::model::makeVisionProvider(config);
-        if (vision) {
-            m_impl->visionProviderOwned = std::make_unique<mts::model::ProviderHandle>(std::move(vision.value()));
-            m_impl->visionProvider = m_impl->visionProviderOwned.get();
-        } else {
-            setStatus(QString::fromStdString(std::string(vision.error().message())));
-        }
-    }
-
-    m_impl->mapController = std::make_unique<MapController>(
-        *m_impl->pool,
-        mts::imagery::expandHomePath(config.map.configPath),
-        mts::imagery::expandHomePath(config.cache.tilesDir),
-        this
-    );
-    if (!m_impl->mapController->status().isEmpty()) {
-        setStatus(m_impl->mapController->status());
-    }
-
-    if (m_impl->store != nullptr && m_impl->provider != nullptr) {
-        mts::harness::MapTools mapTools;
-        mapTools.visionTimeoutMs = int(config.vision.timeoutMs);
-        mapTools.info = [this]() -> mts::agent::Result<mts::agent::json> {
-            auto const* controller = m_impl->mapController.get();
-            auto const* loader = controller != nullptr ? controller->loader() : nullptr;
-            if (loader == nullptr) {
-                return mts::agent::Result<mts::agent::json>::fromStatus(mts::agent::Status::unavailable(
-                    controller != nullptr && !controller->status().isEmpty()
-                        ? controller->status().toStdString()
-                        : "map is not loaded"));
+    static_cast<void>(m_impl->bus->subscribe<mts::events::RunFinished>([this](mts::events::RunFinished const& event) {
+        QString const id = QString::fromStdString(event.session);
+        QMetaObject::invokeMethod(this, [this, id] {
+            m_impl->inFlight.remove(id);
+            m_impl->cancellations.remove(id);
+            m_impl->pending.remove(id);
+            m_sessions->setRunning(id, false);
+            if (id == m_impl->activeSession) {
+                reloadConversation(id);
             }
 
-            mts::map::MapInfo const& info = loader->info();
-            mts::agent::json result = mts::agent::json::object();
-            result["id"] = info.id;
-            result["name"] = info.name;
-            result["unitLabel"] = info.transform.unitLabel;
-            result["metersPerPixel"] = info.transform.metersPerPixel;
-            result["minLevel"] = info.minLevel;
-            result["maxLevel"] = info.maxLevel;
-            result["tileSize"] = info.tileSize;
-            result["baseSize"] = mts::agent::json{{"width", info.baseSize.width()}, {"height", info.baseSize.height()}};
-            result["worldBounds"] = mts::agent::json{
-                {"x", info.worldBounds.left()},
-                {"y", info.worldBounds.top()},
-                {"width", info.worldBounds.width()},
-                {"height", info.worldBounds.height()},
-            };
-
-            mts::agent::json layers = mts::agent::json::array();
-            for (auto const* layer : loader->layers()) {
-                layers.push_back(mts::agent::json{
-                    {"id", layer->id()},
-                    {"name", layer->name()},
-                    {"visible", layer->visible()},
-                    {"opacity", layer->opacity()},
-                    {"blend", mts::map::blendModeToString(layer->blend())},
-                });
-            }
-            result["layers"] = std::move(layers);
-
-            return result;
-        };
-
-        mapTools.snapshot = [this, maxPixels = int(config.vision.maxPixels)](
-            std::optional<mts::harness::MapToolRegion> const& region,
-            std::optional<int> level,
-            std::vector<std::string> const& layers
-        ) -> mts::agent::Result<mts::harness::MapToolSnapshot> {
-            auto const* controller = m_impl->mapController.get();
-            if (controller == nullptr || controller->loader() == nullptr || controller->snapshotService() == nullptr) {
-                return mts::agent::Result<mts::harness::MapToolSnapshot>::fromStatus(
-                    mts::agent::Status::unavailable("map imagery is not available"));
-            }
-
-            mts::map::MapInfo const& info = controller->loader()->info();
-            QRectF worldRect = info.worldBounds;
-            if (region.has_value()) {
-                worldRect = QRectF(
-                    QPointF(region->x, region->y),
-                    QSizeF(region->width, region->height)
-                ).normalized();
-            }
-
-            mts::map::SnapshotOptions options;
-            options.level = level;
-            options.layers = layers;
-            options.maxPixels = maxPixels;
-            auto const snapshot = controller->snapshotService()->renderRegion(worldRect, options);
-            if (!snapshot) {
-                return mts::agent::fromFoundation(snapshot.error());
-            }
-
-            QByteArray png;
-            QBuffer buffer(&png);
-            buffer.open(QIODevice::WriteOnly);
-            snapshot.value().image.save(&buffer, "png");
-            buffer.close();
-
-            mts::harness::MapToolSnapshot out;
-            out.snapshotId = snapshot.value().id;
-            out.width = snapshot.value().pixelSize.width();
-            out.height = snapshot.value().pixelSize.height();
-            out.level = snapshot.value().level;
-            out.layers = snapshot.value().layers;
-            out.region = mts::harness::MapToolRegion{
-                worldRect.left(), worldRect.top(), worldRect.width(), worldRect.height()};
-            out.unitLabel = info.transform.unitLabel;
-            out.pngBase64 = png.toBase64().toStdString();
-
-            return out;
-        };
-
-        m_impl->harness = std::make_unique<mts::harness::AgentHarness>(
-            *m_impl->provider, m_impl->namingProvider, m_impl->visionProvider, *m_impl->store,
-            *m_impl->pool, m_impl->bus, config.server, std::move(mapTools)
-        );
-
-        static_cast<void>(m_impl->bus.subscribe<mts::events::RunStarted>([this](mts::events::RunStarted const& event) {
-            QString const id = QString::fromStdString(event.session);
-            QMetaObject::invokeMethod(this, [this, id] {
-                m_impl->inFlight.insert(id);
-                m_sessions->setRunning(id, true);
-                refreshRunning();
-            }, Qt::QueuedConnection);
-        }));
-
-        static_cast<void>(m_impl->bus.subscribe<mts::events::RunFinished>([this](mts::events::RunFinished const& event) {
-            QString const id = QString::fromStdString(event.session);
-            QMetaObject::invokeMethod(this, [this, id] {
-                m_impl->inFlight.remove(id);
-                m_impl->cancellations.remove(id);
-                m_impl->pending.remove(id);
-                m_sessions->setRunning(id, false);
-                if (id == m_impl->activeSession) {
-                    reloadConversation(id);
-                }
-
-                refreshRunning();
-                refreshSessions();
+            refreshRunning();
+            refreshSessions();
                 maybeNameSession(id);
             }, Qt::QueuedConnection);
         }));
 
-        static_cast<void>(m_impl->bus.subscribe<mts::events::RunFailed>([this](mts::events::RunFailed const& event) {
+        static_cast<void>(m_impl->bus->subscribe<mts::events::RunFailed>([this](mts::events::RunFailed const& event) {
             QString const id = QString::fromStdString(event.session);
             QString const message = QString::fromStdString(event.message);
             QMetaObject::invokeMethod(this, [this, id, message] {
@@ -320,7 +171,7 @@ ChatController::ChatController(QObject* parent)
             }, Qt::QueuedConnection);
         }));
 
-        static_cast<void>(m_impl->bus.subscribe<mts::events::TokenDelta>([this](mts::events::TokenDelta const& event) {
+        static_cast<void>(m_impl->bus->subscribe<mts::events::TokenDelta>([this](mts::events::TokenDelta const& event) {
             QString const id = QString::fromStdString(event.session);
             QString const delta = QString::fromStdString(event.delta);
             QMetaObject::invokeMethod(this, [this, id, delta] {
@@ -343,7 +194,7 @@ ChatController::ChatController(QObject* parent)
             }, Qt::QueuedConnection);
         }));
 
-        static_cast<void>(m_impl->bus.subscribe<mts::events::MessageAdded>([this](mts::events::MessageAdded const& event) {
+        static_cast<void>(m_impl->bus->subscribe<mts::events::MessageAdded>([this](mts::events::MessageAdded const& event) {
             QString const id = QString::fromStdString(event.session);
             int const kind = blockKindForEvent(event.kind);
             QString const text = QString::fromStdString(event.text);
@@ -361,7 +212,7 @@ ChatController::ChatController(QObject* parent)
             }, Qt::QueuedConnection);
         }));
 
-        static_cast<void>(m_impl->bus.subscribe<mts::events::ToolCallStarted>([this](mts::events::ToolCallStarted const& event) {
+        static_cast<void>(m_impl->bus->subscribe<mts::events::ToolCallStarted>([this](mts::events::ToolCallStarted const& event) {
             QString const id = QString::fromStdString(event.session);
             QString const name = QString::fromStdString(event.name);
             QString const args = QString::fromStdString(event.arguments);
@@ -375,7 +226,7 @@ ChatController::ChatController(QObject* parent)
             }, Qt::QueuedConnection);
         }));
 
-        static_cast<void>(m_impl->bus.subscribe<mts::events::ToolCallFinished>([this](mts::events::ToolCallFinished const& event) {
+        static_cast<void>(m_impl->bus->subscribe<mts::events::ToolCallFinished>([this](mts::events::ToolCallFinished const& event) {
             QString const id = QString::fromStdString(event.session);
             QString const name = QString::fromStdString(event.name);
             QString const result = QString::fromStdString(event.result);
@@ -387,7 +238,6 @@ ChatController::ChatController(QObject* parent)
                 m_conversation->append(ConversationBlock{ConversationModel::ToolResult, name, result});
             }, Qt::QueuedConnection);
         }));
-    }
 
     refreshSessions();
     if (m_sessions->rowCount() > 0) {
@@ -415,9 +265,6 @@ ChatController::~ChatController() {
         }
     }
 
-    // Join the pool here, while the harness/provider/store/bus it references are
-    // still alive. The pool is declared last in Impl for the same reason.
-    m_impl->pool.reset();
 }
 
 auto ChatController::sessions() const -> SessionListModel* {
@@ -425,7 +272,7 @@ auto ChatController::sessions() const -> SessionListModel* {
 }
 
 auto ChatController::mapController() const -> MapController* {
-    return m_impl->mapController.get();
+    return m_impl->mapController;
 }
 
 auto ChatController::conversation() const -> ConversationModel* {
@@ -601,7 +448,7 @@ auto ChatController::maybeNameSession(QString const& id) -> void {
     auto cancellation = std::make_shared<mts::runtime::Cancellation>();
     m_impl->namingCancellations.insert(id, cancellation);
 
-    auto* harness = m_impl->harness.get();
+    auto* harness = m_impl->harness;
     m_impl->pool->schedule([this, id, cancellation, harness] {
         auto const title = harness->suggestSessionTitle(id.toStdString(), *cancellation);
         QMetaObject::invokeMethod(this, [this, id, title] {

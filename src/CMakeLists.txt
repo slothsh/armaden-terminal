@@ -28,6 +28,7 @@ add_executable_target(
         "${CMAKE_CURRENT_SOURCE_DIR}"
     SOURCE_FILES
         main.cpp
+        app/application.cpp
     MODULE_FILES
         ${LOGGING_MODULE_SRC_FILES}
 )
@@ -50,6 +51,7 @@ target_include_directories(
     PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/include/"
         "${CMAKE_CURRENT_SOURCE_DIR}/qobjects/"
+        "${CMAKE_CURRENT_SOURCE_DIR}/app/"
 )
 
 target_link_libraries(

@@ -1,35 +1,11 @@
-#include <QGuiApplication>
-#include <QQuickWindow>
-#include <QQmlApplicationEngine>
-#include <QUrl>
-
-import std;
-import logging;
+#include "application.hpp"
 
 auto main(int argc, char** argv) -> int {
-    initialize_logging();
-    mts::log::info("Initializing application...");
+    try {
+        mts::app::Application application(argc, argv);
 
-    QGuiApplication app(argc, argv);
-    QQuickWindow::setGraphicsApi(QSGRendererInterface::Vulkan);
-    QQuickWindow::setTextRenderType(QQuickWindow::NativeTextRendering);
-    QQmlApplicationEngine engine;
-
-    mts::log::info("Done! Connecting application to GUI engine...");
-
-    QUrl const url("qrc:/qt/qml/Application/qml/Main.qml");
-
-    QObject::connect(
-        &engine,
-        &QQmlApplicationEngine::objectCreationFailed,
-        &app,
-        [] { QCoreApplication::exit(EXIT_FAILURE); },
-        Qt::QueuedConnection
-    );
-
-    engine.load(url);
-
-    mts::log::info("Done! Running application...");
-
-    return app.exec();
+        return application.run();
+    } catch (...) {
+        return 1;
+    }
 }

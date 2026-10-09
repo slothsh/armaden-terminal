@@ -15,6 +15,7 @@ Window {
     height: 640
     title: qsTr("mindtosis")
 
+    property var chat: null
     property string pendingDelete: ""
     property string renamingSession: ""
 
@@ -28,10 +29,6 @@ Window {
     readonly property bool chatFullWidth: chatExpanded || chatNarrow
     readonly property real chatColumnInset: chatFullWidth ? 0 : Math.round((content.width - chatPageWidth) / 2)
     readonly property real chatColumnWidth: chatFullWidth ? content.width : chatPageWidth
-
-    ChatController {
-        id: chat
-    }
 
     property bool quitConfirmed: false
 

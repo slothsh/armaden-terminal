@@ -10,6 +10,10 @@
 #include "map_controller.hpp"
 #include "session_list_model.hpp"
 
+namespace mts::app {
+struct AppContext;
+}
+
 class ChatController : public QObject {
     Q_OBJECT
     QML_NAMED_ELEMENT(ChatController)
@@ -22,7 +26,7 @@ class ChatController : public QObject {
     Q_PROPERTY(MapController* mapController READ mapController CONSTANT)
 
 public:
-    explicit ChatController(QObject* parent = nullptr);
+    explicit ChatController(mts::app::AppContext const& context, QObject* parent = nullptr);
     ~ChatController() override;
 
     auto sessions() const -> SessionListModel*;
