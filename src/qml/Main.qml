@@ -87,8 +87,8 @@ Window {
 
         IconButton {
             id: historyButton
-            glyph: "\uD83D\uDDE8\uFE0E"
-            glyphColor: leftDrawer.width > 0 ? Theme.color.accent : Theme.color.textMuted
+            iconName: "history"
+            iconColor: leftDrawer.width > 0 ? Theme.color.accent : Theme.color.textMuted
             x: Theme.metric.spacing
             anchors.verticalCenter: parent.verticalCenter
             onClicked: leftDrawer.toggle()
@@ -96,8 +96,8 @@ Window {
 
         IconButton {
             id: inputDrawerButton
-            glyph: "\u2328"
-            glyphColor: inputDrawer.size > 0 ? Theme.color.accent : Theme.color.textMuted
+            iconName: "keyboard"
+            iconColor: inputDrawer.size > 0 ? Theme.color.accent : Theme.color.textMuted
             x: Math.max(content.x + Theme.metric.spacing, historyButton.x + historyButton.width + Theme.metric.spacing)
             anchors.verticalCenter: parent.verticalCenter
             onClicked: inputDrawer.toggle()
@@ -105,8 +105,8 @@ Window {
 
         IconButton {
             id: mapPaneButton
-            glyph: "\u25A3"
-            glyphColor: root.mapPaneVisible ? Theme.color.accent : Theme.color.textMuted
+            iconName: "map"
+            iconColor: root.mapPaneVisible ? Theme.color.accent : Theme.color.textMuted
             x: Math.max(content.x + Theme.metric.spacing, inputDrawerButton.x + inputDrawerButton.width + Theme.metric.spacing)
             anchors.verticalCenter: parent.verticalCenter
             onClicked: root.mapPaneVisible = !root.mapPaneVisible
@@ -256,7 +256,7 @@ Window {
 
                 IconButton {
                     id: sendButton
-                    glyph: "\u27A4"
+                    iconName: "send"
                     anchors.left: parent.left
                     anchors.leftMargin: Theme.metric.spacing
                     anchors.verticalCenter: parent.verticalCenter
@@ -270,7 +270,7 @@ Window {
 
                 IconButton {
                     id: stopButton
-                    glyph: "\u25A0"
+                    iconName: "square"
                     anchors.left: sendButton.right
                     anchors.leftMargin: Theme.metric.spacing
                     anchors.verticalCenter: parent.verticalCenter
@@ -369,7 +369,7 @@ Window {
 
                 IconButton {
                     id: clearHistoryButton
-                    glyph: "\u22EF"
+                    iconName: "ellipsis"
                     active: historyMenu.opened
                     anchors.right: parent.right
                     anchors.rightMargin: 6
@@ -379,7 +379,7 @@ Window {
 
                 IconButton {
                     id: addSessionButton
-                    glyph: "+"
+                    iconName: "plus"
                     anchors.right: clearHistoryButton.left
                     anchors.verticalCenter: parent.verticalCenter
                     onClicked: {
@@ -521,7 +521,7 @@ Window {
 
                     IconButton {
                         id: sessionMenuButton
-                        glyph: "\u22EF"
+                        iconName: "ellipsis"
                         property bool openedByButton: false
                         active: sessionMenu.opened && sessionMenuButton.openedByButton
                         anchors.right: parent.right

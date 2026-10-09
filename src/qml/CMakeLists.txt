@@ -6,7 +6,9 @@ target_link_libraries(
         Qt::Quick
         controls
         theme
+        LucideQml
 )
 
 add_subdirectory(controls/)
+add_subdirectory(lucide/)
 add_subdirectory(theme/)

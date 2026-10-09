@@ -9,7 +9,7 @@ file(GLOB_RECURSE LOGGING_MODULE_SRC_FILES logging/*.cppm)
 file(GLOB_RECURSE MAGIC_ENUM_MODULE_SRC_FILES "${magic_enum_SOURCE_DIR}/module/*.cppm")
 
 find_package(EnTT REQUIRED)
-find_package(Qt6 6.11 REQUIRED COMPONENTS Quick CanvasPainter)
+find_package(Qt6 6.11 REQUIRED COMPONENTS Quick QuickShapes CanvasPainter)
 qt_standard_project_setup(REQUIRES 6.11)
 
 add_subdirectory(qml/)

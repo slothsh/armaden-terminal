@@ -24,6 +24,13 @@ CPMAddPackage(
 )
 
 CPMAddPackage(
+    NAME lucide-qml
+    GITHUB_REPOSITORY slothsh/lucide-qml
+    GIT_TAG 7b0ad9fb797ff858557ab875d63e4cf03380530e
+    DOWNLOAD_ONLY YES
+)
+
+CPMAddPackage(
     NAME stdexec
     GITHUB_REPOSITORY NVIDIA/stdexec
     GIT_TAG 80722de262458bf0bc986a32a9e04bfbc77ef7a9

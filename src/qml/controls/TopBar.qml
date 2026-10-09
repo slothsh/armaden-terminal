@@ -33,7 +33,7 @@ Rectangle {
 
     IconButton {
         id: menuButton
-        glyph: "\u2630"
+        iconName: "menu"
         active: control.menuActive
         anchors.left: parent.left
         anchors.leftMargin: Theme.metric.spacing
@@ -53,18 +53,19 @@ Rectangle {
 
     IconButton {
         id: expandButton
-        glyph: "\u2922"
+        iconName: "expand"
         x: Math.max(control.contentX + Math.max(control.contentInset, Theme.metric.spacing), menuButton.x + menuButton.width + Theme.metric.spacing)
         anchors.verticalCenter: parent.verticalCenter
         visible: control.expandVisible
         interactive: control.expandEnabled
-        glyphColor: control.expandActive ? Theme.color.accent : Theme.color.textMuted
+        iconColor: control.expandActive ? Theme.color.accent : Theme.color.textMuted
         onClicked: control.expandRequested()
     }
 
     IconButton {
         id: closeButton
-        glyph: "\u2715"
+        iconName: "x"
+        iconSize: 20
         anchors.right: parent.right
         anchors.rightMargin: Theme.metric.spacing
         anchors.verticalCenter: parent.verticalCenter

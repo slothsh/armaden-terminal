@@ -1,32 +1,33 @@
 import QtQuick
 import Lib.Theme
+import Lucide
 
 Rectangle {
     id: control
 
-    required property string glyph
-    property color glyphColor: Theme.color.text
+    required property string iconName
+    property real iconSize: 16
+    property color iconColor: Theme.color.text
     property bool active: false
     property bool interactive: true
     property alias hovered: mouseArea.containsMouse
 
     signal clicked()
 
-    implicitWidth: 18
-    implicitHeight: 18
+    implicitWidth: 24
+    implicitHeight: 24
     radius: Theme.metric.radius
     opacity: control.interactive ? 1.0 : 0.4
     color: control.interactive && control.hovered
         ? Theme.color.hover
         : (control.interactive && control.active ? Theme.color.active : "transparent")
 
-    Text {
+    LucideIcon {
         anchors.centerIn: parent
-        text: control.glyph
-        color: control.glyphColor
-        font.pixelSize: 12
-        horizontalAlignment: Text.AlignHCenter
-        verticalAlignment: Text.AlignVCenter
+        name: control.iconName
+        size: control.iconSize
+        color: control.iconColor
+        strokeWidth: 2
     }
 
     MouseArea {
