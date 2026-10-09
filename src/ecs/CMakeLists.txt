@@ -1,12 +1,14 @@
 find_package(Qt6 6.11 REQUIRED COMPONENTS Gui CanvasPainter)
 
+file(GLOB_RECURSE ECS_MODULE_SRC_FILES CONFIGURE_DEPENDS *.cppm)
+
 add_library_target(
     LibEcs
     STATIC
     BASE_DIRS
         "${CMAKE_CURRENT_SOURCE_DIR}"
     MODULE_FILES
-        ecs.cppm
+        ${ECS_MODULE_SRC_FILES}
 )
 
 set_target_properties(

@@ -1,10 +1,12 @@
+file(GLOB_RECURSE JSON_MODULE_SRC_FILES CONFIGURE_DEPENDS *.cppm)
+
 add_library_target(
     LibJson
     STATIC
     BASE_DIRS
         "${CMAKE_CURRENT_SOURCE_DIR}"
     MODULE_FILES
-        json.cppm
+        ${JSON_MODULE_SRC_FILES}
 )
 
 set_target_properties(

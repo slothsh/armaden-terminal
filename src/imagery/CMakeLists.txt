@@ -1,12 +1,14 @@
 find_package(Qt6 6.11 REQUIRED COMPONENTS Gui)
 
+file(GLOB_RECURSE IMAGERY_MODULE_SRC_FILES CONFIGURE_DEPENDS *.cppm)
+
 add_library_target(
     LibImagery
     STATIC
     BASE_DIRS
         "${CMAKE_CURRENT_SOURCE_DIR}"
     MODULE_FILES
-        imagery.cppm
+        ${IMAGERY_MODULE_SRC_FILES}
 )
 
 set_target_properties(

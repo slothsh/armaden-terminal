@@ -1,10 +1,12 @@
+file(GLOB_RECURSE FOUNDATION_MODULE_SRC_FILES CONFIGURE_DEPENDS *.cppm)
+
 add_library_target(
     LibFoundation
     STATIC
     BASE_DIRS
         "${CMAKE_CURRENT_SOURCE_DIR}"
     MODULE_FILES
-        foundation.cppm
+        ${FOUNDATION_MODULE_SRC_FILES}
 )
 
 set_target_properties(

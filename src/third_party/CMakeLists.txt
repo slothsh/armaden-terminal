@@ -1,3 +1,6 @@
+# Third-party module source files
+file(GLOB_RECURSE MAGIC_ENUM_MODULE_SRC_FILES CONFIGURE_DEPENDS "${magic_enum_SOURCE_DIR}/module/*.cppm")
+
 add_library_target(
     LibMagicEnum
     STATIC

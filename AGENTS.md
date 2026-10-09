@@ -76,6 +76,11 @@ Do NOT add documentation comments to ANY code. This will only be required on req
     } // END OF NAMESPACE `mts::map`
     ```
 
+- Module partitions: split an oversized module by concern. The primary module interface unit stays thin and re-exports the public partitions; internal partitions are imported but never re-exported.
+  - File naming: `<module>_<partition>.cppm`, declaring `export module <module>:<partition>;` (e.g. `map_loader.cppm` → `export module map:loader;`).
+  - Public surface: declare the partition as `export module M:P;` and re-export it from the primary with `export import :P;`.
+  - Internal helpers: declare the partition as `export module M:P;` but import it in the primary with a plain `import :P;` (never `export`). Partitions are only importable inside their own module, so the primary's failure to re-export keeps the helpers out of the public surface.
+
 - When using a new library and a module facade has not been exported for it yet, query the user for instructions on how to treat it.
 
 ## MANDATORY: Design Conventions

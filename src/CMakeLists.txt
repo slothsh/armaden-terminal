@@ -3,10 +3,7 @@ file(GLOB_RECURSE QOBJECTS_MODULE_SRC_FILES qobjects/*.cpp)
 file(GLOB_RECURSE QOBJECTS_MODULE_HEADER_FILES qobjects/*.hpp)
 
 # Project module source files
-file(GLOB_RECURSE LOGGING_MODULE_SRC_FILES logging/*.cppm)
-
-# Third-party module source files
-file(GLOB_RECURSE MAGIC_ENUM_MODULE_SRC_FILES "${magic_enum_SOURCE_DIR}/module/*.cppm")
+file(GLOB_RECURSE LOGGING_MODULE_SRC_FILES CONFIGURE_DEPENDS logging/*.cppm)
 
 find_package(EnTT REQUIRED)
 find_package(Qt6 6.11 REQUIRED COMPONENTS Quick QuickShapes CanvasPainter)
