@@ -7,3 +7,5 @@ build/
 ._*
 .env
 *.env
+assets/
+config/
