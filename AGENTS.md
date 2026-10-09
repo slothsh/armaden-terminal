@@ -38,6 +38,44 @@ Do NOT add documentation comments to ANY code. This will only be required on req
 - Prefer import modules where possible. Only include headers for unsupported libraries.
 - Always prefix member function calls with `this->` and static member function calls with the class's name (`Foo::static_member()`).
 - Attach the pointer or reference symbol to the `const` qualifier when one is available, otherwise to the type. For a const pointer to a const type, attach the second `const` qualifier to the pointer. Examples: `Foo const* foo`, `Foo const& foo`, `Foo const *const foo`, `Foo* foo`, `Foo& foo`.
+- Always use braces on `if` / `else if` / `while` / `for` / `do` bodies. Never write single-line or brace-less control statements.
+- Always favour trailing return types and use them on everything, including free functions, member functions, Qt signals, slots, `Q_INVOKABLE` methods, and overrides. Constructors, destructors, conversion operators and lambdas are exempt (constructors/destructors/conversion operators cannot have one; lambdas may keep their implicit return type).
+- Use `static_cast` / `reinterpret_cast` (or `const_cast` / `dynamic_cast` where genuinely appropriate) instead of raw C-style casts such as `(Type)value` or `(void)value`. Function-style casts like `Type(value)` are fine.
+- Group chunks of code by concern and separate the chunks with a blank line.
+- For function declarations and function calls with long or large parameter/argument lists, put each expression on its own line and align the closing parenthesis with the indentation level of the statement/declaration that opened it:
+
+    ```
+    void foo(
+        int,
+        float,
+        string
+    ) {
+        // ...
+    }
+
+    foo(
+        foo + bar + baz,
+        foo + bar + baz,
+        bar(
+            foo + bar + baz,
+            123
+        )
+    );
+    ```
+
+- When a namespace access exceeds two qualifiers, consider introducing a namespace alias for it, and keep the alias name consistent across files.
+- Namespace formatting: put a single blank line after the opening brace, keep the contents at the same indentation as the `namespace` declaration, put a blank line before the closing brace, and annotate the closing brace with an `END OF NAMESPACE` marker followed by the namespace's qualified name in backticks (use `anonymous` for an anonymous namespace):
+
+    ```
+    namespace mts::map {
+
+    void foo() {
+        // ...
+    }
+
+    } // END OF NAMESPACE `mts::map`
+    ```
+
 - When using a new library and a module facade has not been exported for it yet, query the user for instructions on how to treat it.
 
 ## MANDATORY: Design Conventions
