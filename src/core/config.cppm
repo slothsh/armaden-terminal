@@ -2,8 +2,24 @@ export module config;
 
 import std;
 import agent;
+import foundation;
 
 export namespace mts::config {
+
+enum class ConfigErrorKind : foundation::u8 {
+    Unknown,
+    InvalidArgument,
+    NotFound,
+    Unavailable,
+    Internal,
+    Cancelled,
+    ResourceExhausted,
+    OutOfRange,
+    DataLoss,
+    PermissionDenied,
+};
+
+static_assert(foundation::ErrorKind<ConfigErrorKind>);
 
 struct ProviderConfig {
     std::string origin = "https://openrouter.ai";
@@ -68,8 +84,8 @@ struct AppConfig {
 };
 
 [[nodiscard]] auto defaultConfig() -> AppConfig;
-[[nodiscard]] auto parseConfig(std::string_view jsonText) -> mts::agent::Result<AppConfig>;
-[[nodiscard]] auto loadConfig(std::filesystem::path const& path) -> mts::agent::Result<AppConfig>;
+[[nodiscard]] auto parseConfig(std::string_view jsonText) -> mts::foundation::Result<AppConfig>;
+[[nodiscard]] auto loadConfig(std::filesystem::path const& path) -> mts::foundation::Result<AppConfig>;
 [[nodiscard]] auto loadConfigOrDefaults(std::filesystem::path const& path, std::string& error) -> AppConfig;
 [[nodiscard]] auto configPath() -> std::filesystem::path;
 
@@ -78,7 +94,7 @@ struct AppConfig {
 namespace mts::config::detail {
 
 using mts::agent::Config;
-using mts::agent::Status;
+using mts::foundation::Status;
 
 auto readString(Config const& config, std::string_view key, std::string& target) -> Status {
     auto const value = config.get(key);
@@ -88,7 +104,7 @@ auto readString(Config const& config, std::string_view key, std::string& target)
 
     auto const text = value->asString();
     if (!text) {
-        return text.status();
+        return mts::agent::toFoundation(text.status());
     }
 
     target = text.value();
@@ -104,7 +120,7 @@ auto readBool(Config const& config, std::string_view key, bool& target) -> Statu
 
     auto const flag = value->asBool();
     if (!flag) {
-        return flag.status();
+        return mts::agent::toFoundation(flag.status());
     }
 
     target = flag.value();
@@ -120,7 +136,7 @@ auto readDouble(Config const& config, std::string_view key, double& target) -> S
 
     auto const number = value->asDouble();
     if (!number) {
-        return number.status();
+        return mts::agent::toFoundation(number.status());
     }
 
     target = number.value();
@@ -136,12 +152,12 @@ auto readUInt32(Config const& config, std::string_view key, std::uint32_t& targe
 
     auto const number = value->asInt64();
     if (!number) {
-        return number.status();
+        return mts::agent::toFoundation(number.status());
     }
 
     std::int64_t const raw = number.value();
     if (raw < 0 || static_cast<std::uint64_t>(raw) > std::numeric_limits<std::uint32_t>::max()) {
-        return Status::outOfRange(std::string(key) + " is out of range");
+        return Status::err(ConfigErrorKind::OutOfRange, std::string(key) + " is out of range");
     }
 
     target = static_cast<std::uint32_t>(raw);
@@ -157,12 +173,12 @@ auto readUInt64(Config const& config, std::string_view key, std::uint64_t& targe
 
     auto const number = value->asInt64();
     if (!number) {
-        return number.status();
+        return mts::agent::toFoundation(number.status());
     }
 
     std::int64_t const raw = number.value();
     if (raw < 0) {
-        return Status::outOfRange(std::string(key) + " is out of range");
+        return Status::err(ConfigErrorKind::OutOfRange, std::string(key) + " is out of range");
     }
 
     target = static_cast<std::uint64_t>(raw);
@@ -274,29 +290,29 @@ auto defaultConfig() -> AppConfig {
     return AppConfig{};
 }
 
-auto parseConfig(std::string_view jsonText) -> mts::agent::Result<AppConfig> {
+auto parseConfig(std::string_view jsonText) -> mts::foundation::Result<AppConfig> {
     auto const parsed = mts::agent::ConfigLoader::fromJsonString(jsonText);
     if (!parsed) {
-        return parsed.status();
+        return mts::foundation::Result<AppConfig>::err(mts::agent::toFoundation(parsed.status()).error());
     }
 
     AppConfig app;
     if (auto const status = detail::applyConfig(parsed.value(), app); !status) {
-        return status;
+        return mts::foundation::Result<AppConfig>::err(status.error());
     }
 
     return app;
 }
 
-auto loadConfig(std::filesystem::path const& path) -> mts::agent::Result<AppConfig> {
+auto loadConfig(std::filesystem::path const& path) -> mts::foundation::Result<AppConfig> {
     auto const parsed = mts::agent::ConfigLoader::fromJsonFile(path);
     if (!parsed) {
-        return parsed.status();
+        return mts::foundation::Result<AppConfig>::err(mts::agent::toFoundation(parsed.status()).error());
     }
 
     AppConfig app;
     if (auto const status = detail::applyConfig(parsed.value(), app); !status) {
-        return status;
+        return mts::foundation::Result<AppConfig>::err(status.error());
     }
 
     return app;
@@ -312,7 +328,7 @@ auto loadConfigOrDefaults(std::filesystem::path const& path, std::string& error)
 
     auto const loaded = loadConfig(path);
     if (!loaded) {
-        error = loaded.status().message();
+        error = std::string(loaded.error().message());
 
         return defaultConfig();
     }

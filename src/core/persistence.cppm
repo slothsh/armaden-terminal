@@ -2,6 +2,7 @@ export module persistence;
 
 import std;
 import agent;
+import foundation;
 
 export namespace mts::persistence {
 
@@ -34,10 +35,25 @@ struct Message {
     std::int64_t timestamp = 0;
 };
 
-using Status = mts::agent::Status;
+using Status = mts::foundation::Status;
 
 template <class Type>
-using Result = mts::agent::Result<Type>;
+using Result = mts::foundation::Result<Type>;
+
+enum class PersistenceErrorKind : mts::foundation::u8 {
+    Unknown,
+    InvalidArgument,
+    NotFound,
+    Unavailable,
+    Internal,
+    Cancelled,
+    ResourceExhausted,
+    OutOfRange,
+    DataLoss,
+    PermissionDenied,
+};
+
+static_assert(mts::foundation::ErrorKind<PersistenceErrorKind>);
 
 template <class Repository>
 concept SessionRepository = requires(
@@ -224,7 +240,7 @@ inline auto toJson(SessionInfo const& session) -> mts::agent::json {
 
 inline auto sessionFromJson(mts::agent::json const& value) -> Result<SessionInfo> {
     if (!value.is_object()) {
-        return Status::dataLoss("session record is not an object");
+        return Result<SessionInfo>::err(PersistenceErrorKind::DataLoss, "session record is not an object");
     }
 
     SessionInfo session;
@@ -234,7 +250,7 @@ inline auto sessionFromJson(mts::agent::json const& value) -> Result<SessionInfo
     session.createdAt = value.value("createdAt", std::int64_t{0});
     session.updatedAt = value.value("updatedAt", std::int64_t{0});
     if (session.id.empty()) {
-        return Status::dataLoss("session record has no id");
+        return Result<SessionInfo>::err(PersistenceErrorKind::DataLoss, "session record has no id");
     }
 
     return session;
@@ -254,7 +270,7 @@ inline auto toJson(Message const& message) -> mts::agent::json {
 
 inline auto messageFromJson(mts::agent::json const& value) -> Result<Message> {
     if (!value.is_object()) {
-        return Status::dataLoss("message record is not an object");
+        return Result<Message>::err(PersistenceErrorKind::DataLoss, "message record is not an object");
     }
 
     Message message;
@@ -333,7 +349,7 @@ auto InMemorySessionStore::getSession(SessionId const& id) -> Result<SessionInfo
 
     auto const it = m_impl->sessions.find(id);
     if (it == m_impl->sessions.end()) {
-        return Status::notFound("session not found");
+        return Result<SessionInfo>::err(PersistenceErrorKind::NotFound, "session not found");
     }
 
     return it->second;
@@ -344,7 +360,7 @@ auto InMemorySessionStore::renameSession(SessionId const& id, std::string title)
 
     auto const it = m_impl->sessions.find(id);
     if (it == m_impl->sessions.end()) {
-        return Status::notFound("session not found");
+        return Status::err(PersistenceErrorKind::NotFound, "session not found");
     }
 
     it->second.title = std::move(title);
@@ -358,7 +374,7 @@ auto InMemorySessionStore::saveDraft(SessionId const& id, std::string draft) -> 
 
     auto const it = m_impl->sessions.find(id);
     if (it == m_impl->sessions.end()) {
-        return Status::notFound("session not found");
+        return Status::err(PersistenceErrorKind::NotFound, "session not found");
     }
 
     it->second.draft = std::move(draft);
@@ -379,7 +395,7 @@ auto InMemorySessionStore::appendMessage(Message message) -> Status {
     std::lock_guard const lock(m_impl->mutex);
 
     if (!m_impl->sessions.contains(message.session)) {
-        return Status::notFound("session not found");
+        return Status::err(PersistenceErrorKind::NotFound, "session not found");
     }
 
     if (message.id.empty()) {
@@ -445,7 +461,7 @@ auto LanggraphSessionStore::open(std::filesystem::path const& path) -> Result<La
 
     auto storage = std::make_shared<mts::agent::SQLiteStorage>(path.string());
     if (auto const status = storage->open(); !status) {
-        return status.status();
+        return Result<LanggraphSessionStore>::err(mts::agent::toFoundation(status.status()).error());
     }
 
     auto impl = std::make_unique<Impl>();
@@ -465,7 +481,7 @@ auto LanggraphSessionStore::createSession(std::string title) -> Result<SessionIn
     auto const stored = m_impl->storage->put(
         mts::agent::StorageKey{std::string(detail::sessionScope), session.id}, value);
     if (!stored) {
-        return stored.status();
+        return Result<SessionInfo>::err(mts::agent::toFoundation(stored.status()).error());
     }
 
     return session;
@@ -478,7 +494,7 @@ auto LanggraphSessionStore::listSessions() -> Result<std::vector<SessionInfo>> {
 
     auto const listed = m_impl->storage->list(options);
     if (!listed) {
-        return listed.status();
+        return Result<std::vector<SessionInfo>>::err(mts::agent::toFoundation(listed.status()).error());
     }
 
     std::vector<SessionInfo> sessions;
@@ -486,7 +502,7 @@ auto LanggraphSessionStore::listSessions() -> Result<std::vector<SessionInfo>> {
     for (auto const& item : listed.value().items_) {
         auto const parsed = detail::sessionFromJson(mts::agent::json::parse(item.value_, nullptr, false));
         if (!parsed) {
-            return parsed.status();
+            return parsed.error();
         }
 
         sessions.push_back(parsed.value());
@@ -502,16 +518,16 @@ auto LanggraphSessionStore::listSessions() -> Result<std::vector<SessionInfo>> {
 auto LanggraphSessionStore::getSession(SessionId const& id) -> Result<SessionInfo> {
     auto const item = m_impl->storage->get(mts::agent::StorageKey{std::string(detail::sessionScope), id});
     if (!item) {
-        return item.status();
+        return Result<SessionInfo>::err(mts::agent::toFoundation(item.status()).error());
     }
 
     if (!item.value().has_value()) {
-        return Status::notFound("session not found");
+        return Result<SessionInfo>::err(PersistenceErrorKind::NotFound, "session not found");
     }
 
     auto const parsed = detail::sessionFromJson(mts::agent::json::parse(item.value()->value_, nullptr, false));
     if (!parsed) {
-        return parsed.status();
+        return parsed.error();
     }
 
     return parsed.value();
@@ -520,7 +536,7 @@ auto LanggraphSessionStore::getSession(SessionId const& id) -> Result<SessionInf
 auto LanggraphSessionStore::renameSession(SessionId const& id, std::string title) -> Status {
     auto const session = getSession(id);
     if (!session) {
-        return session.status();
+        return session.error();
     }
 
     SessionInfo updated = session.value();
@@ -530,13 +546,13 @@ auto LanggraphSessionStore::renameSession(SessionId const& id, std::string title
     auto const value = detail::toJson(updated).dump();
     auto const stored = m_impl->storage->put(mts::agent::StorageKey{std::string(detail::sessionScope), id}, value);
 
-    return stored.isOk() ? Status::ok() : stored.status();
+    return stored.isOk() ? Status::ok() : mts::agent::toFoundation(stored.status());
 }
 
 auto LanggraphSessionStore::saveDraft(SessionId const& id, std::string draft) -> Status {
     auto const session = getSession(id);
     if (!session) {
-        return session.status();
+        return session.error();
     }
 
     SessionInfo updated = session.value();
@@ -545,7 +561,7 @@ auto LanggraphSessionStore::saveDraft(SessionId const& id, std::string draft) ->
     auto const value = detail::toJson(updated).dump();
     auto const stored = m_impl->storage->put(mts::agent::StorageKey{std::string(detail::sessionScope), id}, value);
 
-    return stored.isOk() ? Status::ok() : stored.status();
+    return stored.isOk() ? Status::ok() : mts::agent::toFoundation(stored.status());
 }
 
 auto LanggraphSessionStore::deleteSession(SessionId const& id) -> Status {
@@ -555,13 +571,13 @@ auto LanggraphSessionStore::deleteSession(SessionId const& id) -> Status {
 
     auto const removed = m_impl->storage->remove(mts::agent::StorageKey{std::string(detail::sessionScope), id});
 
-    return removed.isOk() ? Status::ok() : removed.status();
+    return removed.isOk() ? Status::ok() : mts::agent::toFoundation(removed.status());
 }
 
 auto LanggraphSessionStore::appendMessage(Message message) -> Status {
     auto const session = getSession(message.session);
     if (!session) {
-        return session.status();
+        return session.error();
     }
 
     if (message.id.empty()) {
@@ -575,7 +591,7 @@ auto LanggraphSessionStore::appendMessage(Message message) -> Status {
     if (message.sequence == 0) {
         auto const existing = loadMessages(message.session);
         if (!existing) {
-            return existing.status();
+            return existing.error();
         }
 
         std::uint64_t next = 1;
@@ -590,7 +606,7 @@ auto LanggraphSessionStore::appendMessage(Message message) -> Status {
         mts::agent::StorageKey{std::string(detail::messageScope), detail::messageKey(message.session, message.sequence)},
         value);
     if (!stored) {
-        return stored.status();
+        return mts::agent::toFoundation(stored.status());
     }
 
     SessionInfo updated = session.value();
@@ -600,7 +616,7 @@ auto LanggraphSessionStore::appendMessage(Message message) -> Status {
         detail::toJson(updated).dump()
     );
 
-    return touched.isOk() ? Status::ok() : touched.status();
+    return touched.isOk() ? Status::ok() : mts::agent::toFoundation(touched.status());
 }
 
 auto LanggraphSessionStore::loadMessages(SessionId const& id) -> Result<std::vector<Message>> {
@@ -611,7 +627,7 @@ auto LanggraphSessionStore::loadMessages(SessionId const& id) -> Result<std::vec
 
     auto const listed = m_impl->storage->list(options);
     if (!listed) {
-        return listed.status();
+        return Result<std::vector<Message>>::err(mts::agent::toFoundation(listed.status()).error());
     }
 
     std::vector<Message> messages;
@@ -619,7 +635,7 @@ auto LanggraphSessionStore::loadMessages(SessionId const& id) -> Result<std::vec
     for (auto const& item : listed.value().items_) {
         auto const parsed = detail::messageFromJson(mts::agent::json::parse(item.value_, nullptr, false));
         if (!parsed) {
-            return parsed.status();
+            return parsed.error();
         }
 
         messages.push_back(parsed.value());
@@ -640,13 +656,13 @@ auto LanggraphSessionStore::clearMessages(SessionId const& id) -> Status {
 
     auto const listed = m_impl->storage->list(options);
     if (!listed) {
-        return listed.status();
+        return mts::agent::toFoundation(listed.status());
     }
 
     for (auto const& item : listed.value().items_) {
         auto const removed = m_impl->storage->remove(item.key_);
         if (!removed) {
-            return removed.status();
+            return mts::agent::toFoundation(removed.status());
         }
     }
 
@@ -732,7 +748,7 @@ auto databasePath() -> std::filesystem::path {
 auto makeSessionStore(std::filesystem::path const& path) -> Result<SessionStoreHandle> {
     auto store = LanggraphSessionStore::open(path);
     if (!store) {
-        return store.status();
+        return store.error();
     }
 
     return SessionStoreHandle(std::move(store.value()));

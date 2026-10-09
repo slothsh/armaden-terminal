@@ -15,7 +15,7 @@ MapController::MapController(
     , m_pool(pool) {
     auto loader = mts::map::MapLoader::create(mapConfigPath, {cacheDir}, m_pool);
     if (!loader) {
-        m_status = QString::fromStdString(loader.status().message());
+        m_status = QString::fromStdString(std::string(loader.error().message()));
 
         emit this->statusChanged();
         return;

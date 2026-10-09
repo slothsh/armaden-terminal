@@ -14,6 +14,7 @@ qt_standard_project_setup(REQUIRES 6.11)
 
 add_subdirectory(qml/)
 add_subdirectory(third_party/)
+add_subdirectory(json/)
 add_subdirectory(foundation/)
 add_subdirectory(core/)
 add_subdirectory(ecs/)

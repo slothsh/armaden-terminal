@@ -15,7 +15,7 @@
 #include <QWheelEvent>
 
 import std;
-import agent;
+import foundation;
 import ecs;
 import imagery;
 import map;
@@ -353,7 +353,7 @@ private:
         loader->requestTile(
             layerId.toStdString(),
             tile,
-            [canvas](mts::agent::Result<mts::imagery::SharedImage> const&) {
+            [canvas](mts::foundation::Result<mts::imagery::SharedImage> const&) {
                 if (canvas != nullptr) {
                     QMetaObject::invokeMethod(canvas, &MapCanvas::handleTileUpdate, Qt::QueuedConnection);
                 }

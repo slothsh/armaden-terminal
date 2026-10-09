@@ -10,7 +10,7 @@
 export module imagery;
 
 import std;
-import agent;
+import foundation;
 import runtime;
 
 export namespace mts::imagery {
@@ -22,6 +22,21 @@ using ::QSize;
 using ::QSizeF;
 
 using SharedImage = QImage;
+
+enum class ImageryErrorKind : foundation::u8 {
+    Unknown,
+    InvalidArgument,
+    NotFound,
+    Unavailable,
+    Internal,
+    Cancelled,
+    ResourceExhausted,
+    OutOfRange,
+    DataLoss,
+    PermissionDenied,
+};
+
+static_assert(foundation::ErrorKind<ImageryErrorKind>);
 
 enum class TileState : std::uint8_t {
     Missing,
@@ -342,8 +357,8 @@ private:
 
 class TileScheduler {
 public:
-    using Decoder = std::function<mts::agent::Result<SharedImage>(TileId const&)>;
-    using Completion = std::function<void(mts::agent::Result<SharedImage> const&)>;
+    using Decoder = std::function<mts::foundation::Result<SharedImage>(TileId const&)>;
+    using Completion = std::function<void(mts::foundation::Result<SharedImage> const&)>;
 
     TileScheduler(mts::runtime::ThreadPool& pool, Decoder decoder)
         : m_pool(&pool)
@@ -416,16 +431,12 @@ private:
                 cancelled = entry->cancelled;
             }
 
-            mts::agent::Result<SharedImage> result = mts::agent::Result<SharedImage>::fromStatus(
-                mts::agent::Status::internal("tile decode did not run")
-            );
+            mts::foundation::Result<SharedImage> result = mts::foundation::Result<SharedImage>::err(mts::foundation::Error(ImageryErrorKind::Internal, "tile decode did not run"));
             if (!cancelled && alive->load(std::memory_order_acquire)) {
                 try {
                     result = decoder(tile);
                 } catch (...) {
-                    result = mts::agent::Result<SharedImage>::fromStatus(
-                        mts::agent::Status::internal("tile decoder threw an exception")
-                    );
+                    result = mts::foundation::Result<SharedImage>::err(mts::foundation::Error(ImageryErrorKind::Internal, "tile decoder threw an exception"));
                 }
             }
 
@@ -436,7 +447,7 @@ private:
     auto finish(
         TileId const& tile,
         std::shared_ptr<Inflight> const& entry,
-        mts::agent::Result<SharedImage> result,
+        mts::foundation::Result<SharedImage> result,
         std::shared_ptr<std::atomic_bool> const& alive
     ) -> void {
         std::vector<Request> drained;
@@ -558,23 +569,20 @@ public:
     [[nodiscard]] static auto create(
         std::filesystem::path const& file,
         Options options
-    ) -> mts::agent::Result<SingleFileTileSource> {
+    ) -> mts::foundation::Result<SingleFileTileSource> {
         if (options.tileSize <= 0) {
-            return mts::agent::Result<SingleFileTileSource>::fromStatus(
-                mts::agent::Status::invalidArgument("tile size must be positive"));
+            return mts::foundation::Result<SingleFileTileSource>::err(mts::foundation::Error(ImageryErrorKind::InvalidArgument, "tile size must be positive"));
         }
 
         std::error_code pathError;
         if (!std::filesystem::exists(file, pathError) || pathError) {
-            return mts::agent::Result<SingleFileTileSource>::fromStatus(
-                mts::agent::Status::invalidArgument("map source file does not exist: " + file.string()));
+            return mts::foundation::Result<SingleFileTileSource>::err(mts::foundation::Error(ImageryErrorKind::InvalidArgument, "map source file does not exist: " + file.string()));
         }
 
         QImageReader reader(QString::fromStdString(file.string()));
         QSize const baseSize = reader.size();
         if (baseSize.isEmpty()) {
-            return mts::agent::Result<SingleFileTileSource>::fromStatus(
-                mts::agent::Status::internal("could not read source image dimensions: " + file.string()));
+            return mts::foundation::Result<SingleFileTileSource>::err(mts::foundation::Error(ImageryErrorKind::Internal, "could not read source image dimensions: " + file.string()));
         }
 
         std::uint64_t const pixelBytes = std::uint64_t(baseSize.width())
@@ -582,8 +590,7 @@ public:
         std::uint64_t const requiredBytes = pixelBytes + kAllocationSafetyMarginBytes;
         std::uint64_t const requiredMiB = (requiredBytes + (1024ULL * 1024ULL - 1ULL)) / (1024ULL * 1024ULL);
         if (requiredMiB > std::uint64_t(kMaximumImageAllocationMiB)) {
-            return mts::agent::Result<SingleFileTileSource>::fromStatus(
-                mts::agent::Status::resourceExhausted(
+            return mts::foundation::Result<SingleFileTileSource>::err(mts::foundation::Error(ImageryErrorKind::ResourceExhausted, 
                     "source image " + std::to_string(baseSize.width()) + "x" + std::to_string(baseSize.height())
                     + " requires about " + std::to_string(requiredMiB) + " MiB to decode; limit is "
                     + std::to_string(kMaximumImageAllocationMiB) + " MiB"));
@@ -654,10 +661,9 @@ public:
         return std::filesystem::exists(this->levelMarkerPath(clamped), error) && !error;
     }
 
-    [[nodiscard]] auto readTile(TileId const& tile) -> mts::agent::Result<SharedImage> {
+    [[nodiscard]] auto readTile(TileId const& tile) -> mts::foundation::Result<SharedImage> {
         if (tile.level < 0 || tile.level >= m_levelCount) {
-            return mts::agent::Result<SharedImage>::fromStatus(
-                mts::agent::Status::invalidArgument("tile level out of range"));
+            return mts::foundation::Result<SharedImage>::err(mts::foundation::Error(ImageryErrorKind::InvalidArgument, "tile level out of range"));
         }
 
         double const scale = levelPixelScale(tile.level);
@@ -665,25 +671,21 @@ public:
         int const levelHeight = int(std::ceil(double(m_baseSize.height()) / scale));
         if (tile.x < 0 || std::int64_t(tile.x) * m_tileSize >= levelWidth
             || tile.y < 0 || std::int64_t(tile.y) * m_tileSize >= levelHeight) {
-            return mts::agent::Result<SharedImage>::fromStatus(
-                mts::agent::Status::invalidArgument("tile coordinates out of range"));
+            return mts::foundation::Result<SharedImage>::err(mts::foundation::Error(ImageryErrorKind::InvalidArgument, "tile coordinates out of range"));
         }
 
         SharedImage image(QString::fromStdString(this->tilePath(tile).string()));
         if (image.isNull()) {
             TileBuildProgress const progress = m_core->progress(m_levelCount);
             if (progress.failed) {
-                return mts::agent::Result<SharedImage>::fromStatus(
-                    mts::agent::Status::internal("map pyramid build failed: " + progress.error));
+                return mts::foundation::Result<SharedImage>::err(mts::foundation::Error(ImageryErrorKind::Internal, "map pyramid build failed: " + progress.error));
             }
 
             if (!progress.building && !progress.ready) {
-                return mts::agent::Result<SharedImage>::fromStatus(
-                    mts::agent::Status::notFound("map pyramid has not been built"));
+                return mts::foundation::Result<SharedImage>::err(mts::foundation::Error(ImageryErrorKind::NotFound, "map pyramid has not been built"));
             }
 
-            return mts::agent::Result<SharedImage>::fromStatus(
-                mts::agent::Status::notFound("tile not yet available"));
+            return mts::foundation::Result<SharedImage>::err(mts::foundation::Error(ImageryErrorKind::NotFound, "tile not yet available"));
         }
 
         return image;

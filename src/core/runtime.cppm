@@ -5,7 +5,6 @@
 export module runtime;
 
 import std;
-import agent;
 
 export namespace mts::runtime {
 
@@ -40,8 +39,6 @@ public:
     [[nodiscard]] auto cancelled() const noexcept -> bool;
     auto cancel() -> void;
 
-    [[nodiscard]] auto agentToken() -> mts::agent::CancellationToken;
-
 private:
     struct Impl;
     std::unique_ptr<Impl> m_impl;
@@ -72,24 +69,8 @@ auto mts::runtime::ThreadPool::schedule(std::function<void()> function) -> void 
     );
 }
 
-namespace {
-
-struct AgentCancelBridge {
-    std::shared_ptr<mts::agent::CancellationSource> source;
-
-    auto operator()() const -> void {
-        if (source) {
-            source->cancel();
-        }
-    }
-};
-
-} // END OF NAMESPACE anonymous
-
 struct mts::runtime::Cancellation::Impl {
     std::stop_source source;
-    std::shared_ptr<mts::agent::CancellationSource> agentSource;
-    std::unique_ptr<std::stop_callback<AgentCancelBridge>> bridge;
 };
 
 mts::runtime::Cancellation::Cancellation()
@@ -111,16 +92,4 @@ auto mts::runtime::Cancellation::cancelled() const noexcept -> bool {
 
 auto mts::runtime::Cancellation::cancel() -> void {
     m_impl->source.request_stop();
-}
-
-auto mts::runtime::Cancellation::agentToken() -> mts::agent::CancellationToken {
-    if (!m_impl->agentSource) {
-        m_impl->agentSource = std::make_shared<mts::agent::CancellationSource>();
-        m_impl->bridge = std::make_unique<std::stop_callback<AgentCancelBridge>>(
-            m_impl->source.get_token(),
-            AgentCancelBridge{m_impl->agentSource}
-        );
-    }
-
-    return m_impl->agentSource->token();
 }

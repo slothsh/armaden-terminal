@@ -33,7 +33,6 @@ target_link_libraries(
     PUBLIC
         spdlog::spdlog
         STDEXEC::stdexec
-        EnTT::EnTT
         LibFoundation
         lgc::langgraph
 )

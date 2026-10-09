@@ -2,6 +2,7 @@ export module harness;
 
 import std;
 import agent;
+import foundation;
 import config;
 import events;
 import persistence;
@@ -631,7 +632,7 @@ export namespace mts::harness {
             stopSource.get_token());
         timer.request_stop();
         if (!response) {
-            return response.status();
+            return mts::agent::fromFoundation(response.error());
         }
 
         mts::agent::json result = mts::agent::json::object();
@@ -719,7 +720,7 @@ auto AgentHarness::submitUserMessage(SessionId const& session, std::string text)
     message.text = text;
 
     if (auto const status = m_impl->store->appendMessage(message); !status) {
-        return status;
+        return mts::agent::fromFoundation(status);
     }
 
     m_impl->bus->publish(mts::events::MessageAdded{session, mts::events::MessageKind::UserText, text});
@@ -752,7 +753,7 @@ auto AgentHarness::runBlocking(SessionId const& session, mts::runtime::Cancellat
                 cancellation.token()
             );
             if (!streamed) {
-                return streamed.status();
+                return mts::agent::fromFoundation(streamed.error());
             }
 
             return mts::agent::StateUpdate::fromJsonValue({
@@ -799,8 +800,8 @@ auto AgentHarness::runBlocking(SessionId const& session, mts::runtime::Cancellat
 
     auto const stored = m_impl->store->loadMessages(session);
     if (!stored) {
-        bus.publish(mts::events::RunFailed{session, stored.status().message()});
-        return stored.status();
+        bus.publish(mts::events::RunFailed{session, std::string(stored.error().message())});
+        return mts::agent::fromFoundation(stored.error());
     }
 
     std::vector<mts::agent::BaseMessage> history;
@@ -817,12 +818,17 @@ auto AgentHarness::runBlocking(SessionId const& session, mts::runtime::Cancellat
         return input.status();
     }
 
+    mts::agent::CancellationSource agentCancellation;
+    std::stop_callback cancellationBridge(cancellation.token(), [&agentCancellation] {
+        agentCancellation.cancel();
+    });
+
     mts::agent::RunOptions options;
     options.threadId_ = session;
     options.metadata_ = mts::agent::json::object();
     options.configurable_ = mts::agent::json::object();
     options.reducers_.set("messages", mts::agent::ReducerKind::AddMessages);
-    options.cancellationToken_ = cancellation.agentToken();
+    options.cancellationToken_ = agentCancellation.token();
     options.checkpointer_ = m_impl->checkpointer;
     options.collectEvents_ = true;
     options.eventTypes_ = {
@@ -859,8 +865,8 @@ auto AgentHarness::runBlocking(SessionId const& session, mts::runtime::Cancellat
     for (std::size_t index = history.size(); index < produced.size(); ++index) {
         auto const& message = produced[index];
         if (auto const status = m_impl->store->appendMessage(detail::storedFromBaseMessage(session, message)); !status) {
-            bus.publish(mts::events::RunFailed{session, status.message()});
-            return status;
+            bus.publish(mts::events::RunFailed{session, std::string(status.error().message())});
+            return mts::agent::fromFoundation(status);
         }
 
         detail::emitMessage(bus, session, message);
@@ -881,7 +887,7 @@ auto AgentHarness::suggestSessionTitle(
 
     auto const stored = m_impl->store->loadMessages(session);
     if (!stored) {
-        return stored.status();
+        return mts::agent::fromFoundation(stored.error());
     }
 
     std::string firstPrompt;
@@ -912,7 +918,7 @@ auto AgentHarness::suggestSessionTitle(
             cancellation.token()
         );
         if (!response) {
-            return response.status();
+            return mts::agent::fromFoundation(response.error());
         }
 
         auto title = detail::sanitizeSessionTitle(response.value().content_);

@@ -207,7 +207,16 @@ public:
         return Result(std::move(error));
     }
 
+    template <ErrorKind Kind>
+    [[nodiscard]] static auto err(Kind kind, std::string message) -> Result {
+        return Result(Error(kind, std::move(message)));
+    }
+
     [[nodiscard]] auto hasValue() const noexcept -> bool {
+        return this->m_value.has_value();
+    }
+
+    [[nodiscard]] explicit operator bool() const noexcept {
         return this->m_value.has_value();
     }
 
@@ -290,7 +299,16 @@ public:
         return Result(std::move(error));
     }
 
+    template <ErrorKind Kind>
+    [[nodiscard]] static auto err(Kind kind, std::string message) -> Result {
+        return Result(Error(kind, std::move(message)));
+    }
+
     [[nodiscard]] auto hasValue() const noexcept -> bool {
+        return this->m_value.has_value();
+    }
+
+    [[nodiscard]] explicit operator bool() const noexcept {
         return this->m_value.has_value();
     }
 

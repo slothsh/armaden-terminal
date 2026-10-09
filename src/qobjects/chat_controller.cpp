@@ -133,14 +133,14 @@ ChatController::ChatController(QObject* parent)
     if (store) {
         m_impl->store = std::make_unique<mts::persistence::SessionStoreHandle>(std::move(store.value()));
     } else {
-        setStatus(QString::fromStdString(store.status().message()));
+        setStatus(QString::fromStdString(std::string(store.error().message())));
     }
 
     auto provider = mts::model::makeProvider(config);
     if (provider) {
         m_impl->provider = std::make_unique<mts::model::ProviderHandle>(std::move(provider.value()));
     } else {
-        setStatus(QString::fromStdString(provider.status().message()));
+        setStatus(QString::fromStdString(std::string(provider.error().message())));
     }
 
     if (!config.provider.apiKey.empty()) {
@@ -163,7 +163,7 @@ ChatController::ChatController(QObject* parent)
             m_impl->visionProviderOwned = std::make_unique<mts::model::ProviderHandle>(std::move(vision.value()));
             m_impl->visionProvider = m_impl->visionProviderOwned.get();
         } else {
-            setStatus(QString::fromStdString(vision.status().message()));
+            setStatus(QString::fromStdString(std::string(vision.error().message())));
         }
     }
 
@@ -248,7 +248,7 @@ ChatController::ChatController(QObject* parent)
             options.maxPixels = maxPixels;
             auto const snapshot = controller->snapshotService()->renderRegion(worldRect, options);
             if (!snapshot) {
-                return snapshot.status();
+                return mts::agent::fromFoundation(snapshot.error());
             }
 
             QByteArray png;
@@ -526,7 +526,7 @@ auto ChatController::createSession() -> void {
 
     auto const session = m_impl->store->createSession(kDefaultSessionTitle);
     if (!session) {
-        setStatus(QString::fromStdString(session.status().message()));
+        setStatus(QString::fromStdString(std::string(session.error().message())));
         return;
     }
 
@@ -540,7 +540,7 @@ auto ChatController::deleteSession(QString const& id) -> void {
     }
 
     if (auto const status = m_impl->store->deleteSession(id.toStdString()); !status) {
-        setStatus(QString::fromStdString(status.message()));
+        setStatus(QString::fromStdString(std::string(status.error().message())));
         return;
     }
 
@@ -577,7 +577,7 @@ auto ChatController::renameSession(QString const& id, QString const& title) -> v
     }
 
     if (auto const status = m_impl->store->renameSession(id.toStdString(), title.toStdString()); !status) {
-        setStatus(QString::fromStdString(status.message()));
+        setStatus(QString::fromStdString(std::string(status.error().message())));
         return;
     }
 

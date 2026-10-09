@@ -27,6 +27,8 @@ target_link_libraries(
     LibMap
     PUBLIC
         LibCore
+        LibFoundation
+        LibJson
         LibEcs
         LibImagery
         Qt6::Gui

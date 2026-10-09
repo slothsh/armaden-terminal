@@ -2,6 +2,7 @@ export module provider;
 
 import std;
 import agent;
+import foundation;
 import config;
 
 export namespace mts::model {
@@ -10,10 +11,25 @@ using Message = mts::agent::BaseMessage;
 using Chunk = mts::agent::AIMessageChunk;
 using ToolBinding = mts::agent::ChatModelToolBinding;
 using ChunkHandler = std::function<void(Chunk const&)>;
-using Status = mts::agent::Status;
+using Status = mts::foundation::Status;
 
 template <class Type>
-using Result = mts::agent::Result<Type>;
+using Result = mts::foundation::Result<Type>;
+
+enum class ProviderErrorKind : foundation::u8 {
+    Unknown,
+    InvalidArgument,
+    NotFound,
+    Unavailable,
+    Internal,
+    Cancelled,
+    ResourceExhausted,
+    OutOfRange,
+    DataLoss,
+    PermissionDenied,
+};
+
+static_assert(foundation::ErrorKind<ProviderErrorKind>);
 
 template <class Provider>
 concept ModelProvider = requires(
@@ -96,17 +112,17 @@ auto streamWithCancellation(
     ChunkHandler handler,
     std::stop_token token
 ) -> Result<Message> {
-    auto const wrapped = [&handler, token](Chunk const& chunk) -> Status {
+    auto const wrapped = [&handler, token](Chunk const& chunk) -> mts::agent::Status {
         if (token.stop_requested()) {
-            return Status::cancelled();
+            return mts::agent::Status::cancelled();
         }
 
         handler(chunk);
 
-        return Status::ok();
+        return mts::agent::Status::ok();
     };
 
-    return provider.stream(messages, wrapped);
+    return mts::agent::toFoundation(provider.stream(messages, wrapped));
 }
 
 } // END OF NAMESPACE `mts::model::detail`
@@ -118,7 +134,7 @@ OpenRouterProvider::OpenRouterProvider(std::shared_ptr<mts::agent::BaseChatModel
     , m_modelName(std::move(modelName)) {}
 
 auto OpenRouterProvider::invoke(std::vector<Message> const& messages) -> Result<Message> {
-    return m_model->invoke(messages);
+    return mts::agent::toFoundation(m_model->invoke(messages));
 }
 
 auto OpenRouterProvider::stream(
@@ -132,7 +148,7 @@ auto OpenRouterProvider::stream(
 auto OpenRouterProvider::bindTools(ToolBinding const& binding) -> Status {
     auto const bound = m_model->bindTools(binding);
     if (!bound) {
-        return bound.status();
+        return mts::agent::toFoundation(bound.status());
     }
 
     m_model = bound.value();
@@ -143,17 +159,17 @@ auto OpenRouterProvider::bindTools(ToolBinding const& binding) -> Status {
 auto OpenRouterProvider::create(mts::config::ProviderConfig const& config) -> Result<OpenRouterProvider> {
     auto const clientConfig = mts::agent::HttpClientConfig::fromOrigin(config.origin);
     if (!clientConfig) {
-        return clientConfig.status();
+        return Result<OpenRouterProvider>::err(mts::agent::toFoundation(clientConfig.status()).error());
     }
 
     auto const factory = mts::agent::defaultHttpClientFactory();
     if (!factory) {
-        return Status::internal("http client factory unavailable");
+        return Result<OpenRouterProvider>::err(ProviderErrorKind::Internal, "http client factory unavailable");
     }
 
     auto const client = factory->create(clientConfig.value(), nullptr);
     if (!client) {
-        return client.status();
+        return Result<OpenRouterProvider>::err(mts::agent::toFoundation(client.status()).error());
     }
 
     auto options = mts::agent::ProviderChatModelOptions::openAICompatible(client.value(), config.model, config.apiKey);
@@ -179,7 +195,7 @@ FakeModelProvider::FakeModelProvider(std::vector<Message> responses)
     : m_model(std::make_shared<mts::agent::FakeChatModel>(std::move(responses))) {}
 
 auto FakeModelProvider::invoke(std::vector<Message> const& messages) -> Result<Message> {
-    return m_model->invoke(messages);
+    return mts::agent::toFoundation(m_model->invoke(messages));
 }
 
 auto FakeModelProvider::stream(
@@ -230,7 +246,7 @@ auto makeProvider(mts::config::AppConfig const& config) -> Result<ProviderHandle
     if (!config.provider.model.empty() && !config.provider.apiKey.empty()) {
         auto provider = makeOpenRouterProvider(config.provider);
         if (!provider) {
-            return provider.status();
+            return Result<ProviderHandle>::err(provider.error());
         }
 
         return ProviderHandle(std::move(provider.value()));
@@ -241,22 +257,22 @@ auto makeProvider(mts::config::AppConfig const& config) -> Result<ProviderHandle
 
 auto makeVisionProvider(mts::config::AppConfig const& config) -> Result<ProviderHandle> {
     if (config.vision.model.empty()) {
-        return mts::agent::Result<ProviderHandle>::fromStatus(
-            mts::agent::Status::invalidArgument(
-                "vision model is not configured; set vision.model in the config to enable map image description"));
+        return Result<ProviderHandle>::err(
+            ProviderErrorKind::InvalidArgument,
+            "vision model is not configured; set vision.model in the config to enable map image description");
     }
 
     if (config.provider.apiKey.empty()) {
-        return mts::agent::Result<ProviderHandle>::fromStatus(
-            mts::agent::Status::invalidArgument(
-                "provider.apiKey is not configured; the vision model cannot be used without credentials"));
+        return Result<ProviderHandle>::err(
+            ProviderErrorKind::InvalidArgument,
+            "provider.apiKey is not configured; the vision model cannot be used without credentials");
     }
 
     auto providerConfig = config.provider;
     providerConfig.model = config.vision.model;
     auto provider = makeOpenRouterProvider(providerConfig);
     if (!provider) {
-        return provider.status();
+        return Result<ProviderHandle>::err(provider.error());
     }
 
     return ProviderHandle(std::move(provider.value()));

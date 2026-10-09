@@ -11,14 +11,30 @@
 export module map;
 
 import std;
-import agent;
+import foundation;
+import json;
 import runtime;
 import imagery;
 import ecs;
 
 export namespace mts::map {
 
-using mts::agent::json;
+using mts::json;
+
+enum class MapErrorKind : foundation::u8 {
+    Unknown,
+    InvalidArgument,
+    NotFound,
+    Unavailable,
+    Internal,
+    Cancelled,
+    ResourceExhausted,
+    OutOfRange,
+    DataLoss,
+    PermissionDenied,
+};
+
+static_assert(foundation::ErrorKind<MapErrorKind>);
 
 enum class MapBlend : std::uint8_t {
     Normal,
@@ -27,7 +43,7 @@ enum class MapBlend : std::uint8_t {
     Overlay,
 };
 
-[[nodiscard]] auto blendModeFromString(std::string const& text) -> mts::agent::Result<MapBlend> {
+[[nodiscard]] auto blendModeFromString(std::string const& text) -> mts::foundation::Result<MapBlend> {
     if (text == "normal") {
         return MapBlend::Normal;
     }
@@ -44,8 +60,7 @@ enum class MapBlend : std::uint8_t {
         return MapBlend::Overlay;
     }
 
-    return mts::agent::Result<MapBlend>::fromStatus(
-        mts::agent::Status::invalidArgument("unknown blend mode: " + text));
+    return mts::foundation::Result<MapBlend>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, "unknown blend mode: " + text));
 }
 
 [[nodiscard]] auto blendModeToString(MapBlend blend) -> std::string {
@@ -197,7 +212,7 @@ public:
         imagery::TileScheduler::Completion completion
     ) -> void {
         if (auto const entry = m_cache.find(tile); entry && entry->state == imagery::TileState::Ready) {
-            mts::agent::Result<imagery::SharedImage> const result = entry->image;
+            mts::foundation::Result<imagery::SharedImage> const result = entry->image;
             if (completion) {
                 completion(result);
             }
@@ -210,13 +225,13 @@ public:
         }
 
         m_scheduler.request(tile,
-            [this, tile, completion = std::move(completion)](mts::agent::Result<imagery::SharedImage> const& result) {
+            [this, tile, completion = std::move(completion)](mts::foundation::Result<imagery::SharedImage> const& result) {
                 if (result) {
                     m_cache.store(tile, result.value());
-                } else if (result.status().code() == mts::agent::StatusCode::NotFound) {
+                } else if (result.error().kind<MapErrorKind>() == MapErrorKind::NotFound) {
                     m_cache.evict(tile);
                 } else {
-                    m_cache.markFailed(tile, result.status().message());
+                    m_cache.markFailed(tile, std::string(result.error().message()));
                 }
 
                 if (completion) {
@@ -225,7 +240,7 @@ public:
             });
     }
 
-    [[nodiscard]] auto fetchTile(imagery::TileId const& tile) -> mts::agent::Result<imagery::SharedImage> {
+    [[nodiscard]] auto fetchTile(imagery::TileId const& tile) -> mts::foundation::Result<imagery::SharedImage> {
         if (auto const entry = m_cache.find(tile); entry && entry->state == imagery::TileState::Ready) {
             return entry->image;
         }
@@ -269,7 +284,7 @@ public:
         std::filesystem::path const& configPath,
         Options options,
         mts::runtime::ThreadPool& pool
-    ) -> mts::agent::Result<std::unique_ptr<MapLoader>>;
+    ) -> mts::foundation::Result<std::unique_ptr<MapLoader>>;
 
     [[nodiscard]] auto info() const -> MapInfo const& {
         return m_info;
@@ -349,15 +364,15 @@ public:
         std::string const& layerId,
         imagery::TileId const& tile,
         imagery::TileScheduler::Completion completion
-    ) const -> mts::agent::Status {
+    ) const -> mts::foundation::Status {
         MapLayer* const target = this->findLayer(layerId);
         if (target == nullptr) {
-            return mts::agent::Status::notFound("unknown map layer: " + layerId);
+            return mts::foundation::Status::err(MapErrorKind::NotFound, "unknown map layer: " + layerId);
         }
 
         target->requestTile(tile, std::move(completion));
 
-        return mts::agent::Status::ok();
+        return mts::foundation::Status::ok();
     }
 
 private:
@@ -417,30 +432,26 @@ public:
     [[nodiscard]] auto renderRegion(
         QRectF const& worldRect,
         SnapshotOptions const& options
-    ) const -> mts::agent::Result<MapSnapshot> {
+    ) const -> mts::foundation::Result<MapSnapshot> {
         if (worldRect.isEmpty() || !(worldRect.width() > 0.0) || !(worldRect.height() > 0.0)) {
-            return mts::agent::Result<MapSnapshot>::fromStatus(
-                mts::agent::Status::invalidArgument("snapshot region must have positive extent"));
+            return mts::foundation::Result<MapSnapshot>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, "snapshot region must have positive extent"));
         }
 
         if (options.maxPixels <= 0) {
-            return mts::agent::Result<MapSnapshot>::fromStatus(
-                mts::agent::Status::invalidArgument("snapshot maxPixels must be positive"));
+            return mts::foundation::Result<MapSnapshot>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, "snapshot maxPixels must be positive"));
         }
 
         MapInfo const& info = m_loader->info();
         std::vector<MapLayer*> const layers = this->resolveLayers(options);
         if (layers.empty()) {
-            return mts::agent::Result<MapSnapshot>::fromStatus(
-                mts::agent::Status::invalidArgument("snapshot layer selection is empty"));
+            return mts::foundation::Result<MapSnapshot>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, "snapshot layer selection is empty"));
         }
 
         QRectF const baseRect = info.transform.metricRectToPixelRect(worldRect);
         int const maxLevel = std::max(0, m_loaderMaxLevel(layers));
         int const level = options.level.value_or(autoLevel(baseRect, options.maxPixels, maxLevel));
         if (level < 0 || level > maxLevel) {
-            return mts::agent::Result<MapSnapshot>::fromStatus(
-                mts::agent::Status::invalidArgument(
+            return mts::foundation::Result<MapSnapshot>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, 
                     "snapshot level out of range: " + std::to_string(level)));
         }
 
@@ -450,8 +461,7 @@ public:
             int(std::ceil(levelRect.height()))
         );
         if (std::max(levelSize.width(), levelSize.height()) > kMaximumIntermediateEdge) {
-            return mts::agent::Result<MapSnapshot>::fromStatus(
-                mts::agent::Status::invalidArgument(
+            return mts::foundation::Result<MapSnapshot>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, 
                     "snapshot region too large at level " + std::to_string(level)
                     + "; request a coarser level or a smaller region"));
         }
@@ -476,7 +486,7 @@ public:
                 for (auto const& tile : tileIds) {
                     auto const decoded = layer->fetchTile(tile);
                     if (!decoded) {
-                        return mts::agent::Result<MapSnapshot>::fromStatus(decoded.status());
+                        return mts::foundation::Result<MapSnapshot>::err(decoded.error());
                     }
 
                     QPointF const origin = imagery::tileOrigin(grid, tile) - levelRect.topLeft();
@@ -708,8 +718,8 @@ private:
 
 namespace mts::map::detail {
 
-using mts::agent::json;
-using mts::agent::Status;
+using mts::json;
+using mts::foundation::Status;
 
 [[nodiscard]] auto jsonDouble(json const& object, std::string_view key, double fallback, double& target) -> Status {
     if (!object.contains(key)) {
@@ -719,7 +729,7 @@ using mts::agent::Status;
 
     auto const& value = object.at(key);
     if (!value.is_number()) {
-        return Status::invalidArgument(std::string(key) + " must be a number");
+        return Status::err(MapErrorKind::InvalidArgument, std::string(key) + " must be a number");
     }
 
     target = value.get<double>();
@@ -735,7 +745,7 @@ using mts::agent::Status;
 
     auto const& value = object.at(key);
     if (!value.is_string()) {
-        return Status::invalidArgument(std::string(key) + " must be a string");
+        return Status::err(MapErrorKind::InvalidArgument, std::string(key) + " must be a string");
     }
 
     target = value.get<std::string>();
@@ -751,7 +761,7 @@ using mts::agent::Status;
 
     auto const& value = object.at(key);
     if (!value.is_boolean()) {
-        return Status::invalidArgument(std::string(key) + " must be a boolean");
+        return Status::err(MapErrorKind::InvalidArgument, std::string(key) + " must be a boolean");
     }
 
     target = value.get<bool>();
@@ -767,7 +777,7 @@ using mts::agent::Status;
 
     auto const& value = object.at(key);
     if (!value.is_number_integer()) {
-        return Status::invalidArgument(std::string(key) + " must be an integer");
+        return Status::err(MapErrorKind::InvalidArgument, std::string(key) + " must be an integer");
     }
 
     target = value.get<int>();
@@ -795,18 +805,16 @@ auto MapLoader::create(
     std::filesystem::path const& configPath,
     Options options,
     mts::runtime::ThreadPool& pool
-) -> mts::agent::Result<std::unique_ptr<MapLoader>> {
+) -> mts::foundation::Result<std::unique_ptr<MapLoader>> {
     std::ifstream stream(configPath);
     if (!stream.is_open()) {
-        return mts::agent::Result<std::unique_ptr<MapLoader>>::fromStatus(
-            mts::agent::Status::invalidArgument("could not read map config: " + configPath.string()));
+        return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, "could not read map config: " + configPath.string()));
     }
 
     std::string const text((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
     json const config = json::parse(text, nullptr, false);
     if (config.is_discarded() || !config.is_object()) {
-        return mts::agent::Result<std::unique_ptr<MapLoader>>::fromStatus(
-            mts::agent::Status::invalidArgument("map config is not valid JSON: " + configPath.string()));
+        return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, "map config is not valid JSON: " + configPath.string()));
     }
 
     std::filesystem::path const configDir = configPath.parent_path();
@@ -814,46 +822,44 @@ auto MapLoader::create(
 
     MapInfo info;
     if (auto const status = detail::jsonString(config, "id", stem, info.id); !status) {
-        return mts::agent::Result<std::unique_ptr<MapLoader>>::fromStatus(status);
+        return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
     }
 
     if (auto const status = detail::jsonString(config, "name", info.id, info.name); !status) {
-        return mts::agent::Result<std::unique_ptr<MapLoader>>::fromStatus(status);
+        return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
     }
 
     if (auto const status = detail::jsonInt(config, "tileSize", 256, info.tileSize); !status) {
-        return mts::agent::Result<std::unique_ptr<MapLoader>>::fromStatus(status);
+        return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
     }
 
     if (info.tileSize <= 0) {
-        return mts::agent::Result<std::unique_ptr<MapLoader>>::fromStatus(
-            mts::agent::Status::invalidArgument("map config tileSize must be positive"));
+        return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, "map config tileSize must be positive"));
     }
 
     MapTransform transform;
     if (auto const status = detail::jsonDouble(config, "metersPerPixel", 1.0, transform.metersPerPixel); !status) {
-        return mts::agent::Result<std::unique_ptr<MapLoader>>::fromStatus(status);
+        return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
     }
 
     if (transform.metersPerPixel <= 0.0) {
-        return mts::agent::Result<std::unique_ptr<MapLoader>>::fromStatus(
-            mts::agent::Status::invalidArgument("map config metersPerPixel must be positive"));
+        return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, "map config metersPerPixel must be positive"));
     }
 
     if (auto const status = detail::jsonDouble(config, "originX", 0.0, transform.originX); !status) {
-        return mts::agent::Result<std::unique_ptr<MapLoader>>::fromStatus(status);
+        return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
     }
 
     if (auto const status = detail::jsonDouble(config, "originY", 0.0, transform.originY); !status) {
-        return mts::agent::Result<std::unique_ptr<MapLoader>>::fromStatus(status);
+        return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
     }
 
     if (auto const status = detail::jsonBool(config, "flipY", true, transform.flipY); !status) {
-        return mts::agent::Result<std::unique_ptr<MapLoader>>::fromStatus(status);
+        return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
     }
 
     if (auto const status = detail::jsonString(config, "unitLabel", "m", transform.unitLabel); !status) {
-        return mts::agent::Result<std::unique_ptr<MapLoader>>::fromStatus(status);
+        return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
     }
 
     info.transform = transform;
@@ -872,61 +878,57 @@ auto MapLoader::create(
     if (config.contains("layers")) {
         auto const& layers = config.at("layers");
         if (!layers.is_array()) {
-            return mts::agent::Result<std::unique_ptr<MapLoader>>::fromStatus(
-                mts::agent::Status::invalidArgument("map config layers must be an array"));
+            return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, "map config layers must be an array"));
         }
 
         for (auto const& entry : layers) {
             if (!entry.is_object()) {
-                return mts::agent::Result<std::unique_ptr<MapLoader>>::fromStatus(
-                    mts::agent::Status::invalidArgument("map config layer entries must be objects"));
+                return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, "map config layer entries must be objects"));
             }
 
             LayerSpec spec;
             if (auto const status = detail::jsonString(entry, "id", {}, spec.id); !status) {
-                return mts::agent::Result<std::unique_ptr<MapLoader>>::fromStatus(status);
+                return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
             }
 
             if (spec.id.empty()) {
-                return mts::agent::Result<std::unique_ptr<MapLoader>>::fromStatus(
-                    mts::agent::Status::invalidArgument("map config layer id is required"));
+                return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, "map config layer id is required"));
             }
 
             if (auto const status = detail::jsonString(entry, "name", spec.id, spec.name); !status) {
-                return mts::agent::Result<std::unique_ptr<MapLoader>>::fromStatus(status);
+                return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
             }
 
             if (auto const status = detail::jsonString(entry, "path", {}, spec.path); !status) {
-                return mts::agent::Result<std::unique_ptr<MapLoader>>::fromStatus(status);
+                return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
             }
 
             if (spec.path.empty()) {
-                return mts::agent::Result<std::unique_ptr<MapLoader>>::fromStatus(
-                    mts::agent::Status::invalidArgument("map config layer path is required: " + spec.id));
+                return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, "map config layer path is required: " + spec.id));
             }
 
             std::string blendText;
             if (auto const status = detail::jsonString(entry, "blendMode", "normal", blendText); !status) {
-                return mts::agent::Result<std::unique_ptr<MapLoader>>::fromStatus(status);
+                return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
             }
 
             auto const blend = blendModeFromString(blendText);
             if (!blend) {
-                return mts::agent::Result<std::unique_ptr<MapLoader>>::fromStatus(blend.status());
+                return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(blend.error());
             }
 
             spec.blend = blend.value();
 
             if (auto const status = detail::jsonDouble(entry, "opacity", 1.0, spec.opacity); !status) {
-                return mts::agent::Result<std::unique_ptr<MapLoader>>::fromStatus(status);
+                return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
             }
 
             if (auto const status = detail::jsonBool(entry, "defaultVisible", true, spec.visible); !status) {
-                return mts::agent::Result<std::unique_ptr<MapLoader>>::fromStatus(status);
+                return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
             }
 
             if (auto const status = detail::jsonInt(entry, "levelBias", 0, spec.levelBias); !status) {
-                return mts::agent::Result<std::unique_ptr<MapLoader>>::fromStatus(status);
+                return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
             }
 
             specs.push_back(std::move(spec));
@@ -936,12 +938,11 @@ auto MapLoader::create(
         spec.id = "base";
         spec.name = info.name;
         if (auto const status = detail::jsonString(config, "path", {}, spec.path); !status) {
-            return mts::agent::Result<std::unique_ptr<MapLoader>>::fromStatus(status);
+            return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(status.error());
         }
 
         if (spec.path.empty()) {
-            return mts::agent::Result<std::unique_ptr<MapLoader>>::fromStatus(
-                mts::agent::Status::invalidArgument("map config requires a path or a layers array"));
+            return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, "map config requires a path or a layers array"));
         }
 
         specs.push_back(std::move(spec));
@@ -954,9 +955,8 @@ auto MapLoader::create(
         auto const source = imagery::SingleFileTileSource::create(
             resolved, imagery::SingleFileTileSource::Options{info.tileSize, options.cacheDir});
         if (!source) {
-            return mts::agent::Result<std::unique_ptr<MapLoader>>::fromStatus(
-                mts::agent::Status::invalidArgument(
-                    "layer '" + spec.id + "': " + source.status().message()));
+            return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, 
+                    "layer '" + spec.id + "': " + source.error().message()));
         }
 
         layers.push_back(std::make_unique<MapLayer>(
@@ -965,8 +965,7 @@ auto MapLoader::create(
     }
 
     if (layers.empty()) {
-        return mts::agent::Result<std::unique_ptr<MapLoader>>::fromStatus(
-            mts::agent::Status::invalidArgument("map config defines no layers"));
+        return mts::foundation::Result<std::unique_ptr<MapLoader>>::err(mts::foundation::Error(MapErrorKind::InvalidArgument, "map config defines no layers"));
     }
 
     info.baseSize = layers.front()->source().baseSize();
