@@ -24,3 +24,6 @@ target_link_libraries(provider_test PRIVATE LibProvider)
 
 add_test_target(agent_facade_test agent/agent_facade_test.cpp)
 target_link_libraries(agent_facade_test PRIVATE LibAgent)
+
+add_test_target(interaction_test interaction/interaction_test.cpp)
+target_link_libraries(interaction_test PRIVATE LibInteraction)

@@ -2,6 +2,7 @@
 
 #include "app_context.hpp"
 #include "chat_controller.hpp"
+#include "interaction_controller.hpp"
 #include "map_controller.hpp"
 
 #include <QBuffer>
@@ -303,6 +304,8 @@ mts::app::Application::Application(int argc, char** argv)
         m_initialStatus
     );
 
+    m_interaction = new InteractionController(m_application.get());
+
     mts::app::AppContext const context{
         *m_pool,
         *m_bus,
@@ -313,6 +316,7 @@ mts::app::Application::Application(int argc, char** argv)
         m_harness.get(),
         *m_mapController,
         *m_conversationService,
+        m_interaction,
         m_initialStatus,
     };
 
@@ -322,6 +326,7 @@ mts::app::Application::Application(int argc, char** argv)
 
     m_engine->setInitialProperties({
         {"chat", QVariant::fromValue(static_cast<QObject*>(m_chat))},
+        {"interaction", QVariant::fromValue(static_cast<QObject*>(m_interaction))},
     });
 
     QObject::connect(
@@ -340,6 +345,9 @@ mts::app::Application::Application(int argc, char** argv)
 mts::app::Application::~Application() {
     delete m_chat;
     m_chat = nullptr;
+
+    delete m_interaction;
+    m_interaction = nullptr;
 
     m_conversationService.reset();
     m_pool.reset();

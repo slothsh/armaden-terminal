@@ -31,6 +31,7 @@ class ThreadPool;
 }
 
 class MapController;
+class InteractionController;
 
 namespace mts::app {
 
@@ -44,6 +45,7 @@ struct AppContext {
     mts::harness::AgentHarness* harness = nullptr;
     MapController& mapController;
     mts::orchestration::ConversationService& conversation;
+    InteractionController* interaction = nullptr;
     std::string initialStatus;
 };
 

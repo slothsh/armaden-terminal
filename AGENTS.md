@@ -36,6 +36,7 @@ Do NOT add documentation comments to ANY code. This will only be required on req
 
 - Always use east-const convention for everything.
 - Prefer import modules where possible. Only include headers for unsupported libraries.
+- When working inside of C++20 module, ALWAYS use `import std;` over header includes.
 - Always prefix member function calls with `this->` and static member function calls with the class's name (`Foo::static_member()`).
 - Attach the pointer or reference symbol to the `const` qualifier when one is available, otherwise to the type. For a const pointer to a const type, attach the second `const` qualifier to the pointer. Examples: `Foo const* foo`, `Foo const& foo`, `Foo const *const foo`, `Foo* foo`, `Foo& foo`.
 - Always use braces on `if` / `else if` / `while` / `for` / `do` bodies. Never write single-line or brace-less control statements.

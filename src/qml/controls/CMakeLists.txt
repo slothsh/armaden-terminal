@@ -26,3 +26,9 @@ qt_add_qml_module(
         VerticalDrawer.qml
     NO_LINT
 )
+
+target_link_libraries(
+    controls
+    PUBLIC
+        interactionui
+)

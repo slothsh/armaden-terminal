@@ -5,6 +5,7 @@
 
 class ChatController;
 class MapController;
+class InteractionController;
 class QGuiApplication;
 class QQmlApplicationEngine;
 
@@ -59,6 +60,7 @@ private:
     std::unique_ptr<mts::harness::AgentHarness> m_harness;
     std::unique_ptr<mts::orchestration::ConversationService> m_conversationService;
     ChatController* m_chat = nullptr;
+    InteractionController* m_interaction = nullptr;
     std::string m_initialStatus;
 };
 

@@ -5,10 +5,13 @@ import QtQuick.Controls
 import QtQuick.Templates as T
 import QtQuick.Effects
 import Lib.Controls
+import Lib.Interaction
 import Lib.Theme
 
 Window {
     id: root
+    InteractionScope.domain: "app"
+    InteractionScope.role: "window"
     visible: true
     color: Theme.color.dark
     width: 960
@@ -124,6 +127,8 @@ Window {
 
     Rectangle {
         id: content
+        InteractionScope.domain: "app.main"
+        InteractionScope.role: "pane"
         x: leftDrawer.width
         y: topBar.height
         width: parent.width - leftDrawer.width
@@ -136,6 +141,12 @@ Window {
 
         MapCanvas {
             id: mapCanvas
+            InteractionScope.domain: "app.map"
+            InteractionScope.role: "surface"
+            InteractionScope.hitTestable: true
+            InteractionScope.navigable: true
+            InteractionScope.draggable: true
+            InteractionScope.scrollable: true
             anchors.fill: parent
             visible: root.mapPaneVisible
             controller: chat.mapController

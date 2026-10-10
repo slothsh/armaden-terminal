@@ -2,6 +2,9 @@
 file(GLOB_RECURSE QOBJECTS_MODULE_SRC_FILES CONFIGURE_DEPENDS qobjects/*.cpp)
 file(GLOB_RECURSE QOBJECTS_MODULE_HEADER_FILES CONFIGURE_DEPENDS qobjects/*.hpp)
 
+list(FILTER QOBJECTS_MODULE_SRC_FILES EXCLUDE REGEX "interaction_(scope|hub)\\.cpp$")
+list(FILTER QOBJECTS_MODULE_HEADER_FILES EXCLUDE REGEX "interaction_(scope|hub)\\.hpp$")
+
 # Project module source files
 file(GLOB_RECURSE LOGGING_MODULE_SRC_FILES CONFIGURE_DEPENDS logging/*.cppm)
 
@@ -9,10 +12,38 @@ find_package(EnTT REQUIRED)
 find_package(Qt6 6.11 REQUIRED COMPONENTS Quick QuickShapes CanvasPainter)
 qt_standard_project_setup(REQUIRES 6.11)
 
-add_subdirectory(qml/)
 add_subdirectory(third_party/)
 add_subdirectory(json/)
 add_subdirectory(core/)
+add_subdirectory(interaction/)
+
+qt_add_qml_module(
+    interactionui
+    URI Lib.Interaction
+    VERSION 1.0
+    SOURCES
+        qobjects/interaction_hub.hpp
+        qobjects/interaction_hub.cpp
+        qobjects/interaction_scope.hpp
+        qobjects/interaction_scope.cpp
+    NO_LINT
+)
+
+target_include_directories(
+    interactionui
+    PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/"
+        "${CMAKE_CURRENT_SOURCE_DIR}/qobjects/"
+)
+
+target_link_libraries(
+    interactionui
+    PUBLIC
+        Qt6::Qml
+        Qt6::Quick
+)
+
+add_subdirectory(qml/)
 add_subdirectory(platform/)
 add_subdirectory(agent/)
 add_subdirectory(config/)
@@ -75,10 +106,12 @@ target_link_libraries(
         LibProvider
         LibEvents
         LibEcs
+        LibInteraction
         LibRender2d
         LibImagery
         LibMap
         LibOrchestration
     PRIVATE
         LibQml
+        interactionui
 )
