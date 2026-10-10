@@ -154,6 +154,96 @@ auto actionSurfaceFrom(QString const& value) -> mts::interaction::ActionSurface 
     return mts::interaction::ActionSurface::Menu;
 }
 
+auto layerKindName(mts::interaction::LayerKind kind) -> QString {
+    switch (kind) {
+        case mts::interaction::LayerKind::Dialog: {
+            return QStringLiteral("dialog");
+        }
+
+        case mts::interaction::LayerKind::Pane: {
+            return QStringLiteral("pane");
+        }
+
+        case mts::interaction::LayerKind::ContextMenu: {
+            return QStringLiteral("contextMenu");
+        }
+
+        case mts::interaction::LayerKind::Popup: {
+            return QStringLiteral("popup");
+        }
+    }
+
+    return QStringLiteral("popup");
+}
+
+auto commandKindFrom(QString const& value) -> std::optional<mts::interaction::CommandKind> {
+    using Kind = mts::interaction::CommandKind;
+    if (value == QStringLiteral("focus")) { return Kind::Focus; }
+    if (value == QStringLiteral("focusNext")) { return Kind::FocusNext; }
+    if (value == QStringLiteral("focusPrevious") || value == QStringLiteral("focusPrev")) { return Kind::FocusPrevious; }
+    if (value == QStringLiteral("focusFirst")) { return Kind::FocusFirst; }
+    if (value == QStringLiteral("focusLast")) { return Kind::FocusLast; }
+    if (value == QStringLiteral("focusDirection")) { return Kind::FocusDirection; }
+    if (value == QStringLiteral("select")) { return Kind::Select; }
+    if (value == QStringLiteral("clearSelection")) { return Kind::ClearSelection; }
+    if (value == QStringLiteral("selectAll")) { return Kind::SelectAll; }
+    if (value == QStringLiteral("extendSelection")) { return Kind::ExtendSelection; }
+    if (value == QStringLiteral("activate")) { return Kind::Activate; }
+    if (value == QStringLiteral("invoke") || value == QStringLiteral("invokeAction")) { return Kind::InvokeAction; }
+    if (value == QStringLiteral("openContextMenu")) { return Kind::OpenContextMenu; }
+    if (value == QStringLiteral("closeContextMenu")) { return Kind::CloseContextMenu; }
+    if (value == QStringLiteral("pushLayer")) { return Kind::PushLayer; }
+    if (value == QStringLiteral("popLayer")) { return Kind::PopLayer; }
+
+    return std::nullopt;
+}
+
+auto selectionIntentFrom(QString const& value) -> std::optional<mts::interaction::SelectionIntent> {
+    if (value.isEmpty() || value == QStringLiteral("replace")) {
+        return mts::interaction::SelectionIntent::Replace;
+    }
+    if (value == QStringLiteral("toggle")) {
+        return mts::interaction::SelectionIntent::Toggle;
+    }
+    if (value == QStringLiteral("range")) {
+        return mts::interaction::SelectionIntent::Range;
+    }
+    if (value == QStringLiteral("addRange")) {
+        return mts::interaction::SelectionIntent::AddRange;
+    }
+    if (value == QStringLiteral("add")) {
+        return mts::interaction::SelectionIntent::Add;
+    }
+
+    return std::nullopt;
+}
+
+auto commandStatusName(mts::interaction::CommandStatus status) -> QString {
+    switch (status) {
+        case mts::interaction::CommandStatus::Succeeded: { return QStringLiteral("succeeded"); }
+        case mts::interaction::CommandStatus::InvalidRequest: { return QStringLiteral("invalidRequest"); }
+        case mts::interaction::CommandStatus::InvalidTarget: { return QStringLiteral("invalidTarget"); }
+        case mts::interaction::CommandStatus::StaleTarget: { return QStringLiteral("staleTarget"); }
+        case mts::interaction::CommandStatus::CapabilityDenied: { return QStringLiteral("capabilityDenied"); }
+        case mts::interaction::CommandStatus::LayerBlocked: { return QStringLiteral("layerBlocked"); }
+        case mts::interaction::CommandStatus::NoFocusableTarget: { return QStringLiteral("noFocusableTarget"); }
+        case mts::interaction::CommandStatus::InvalidDirection: { return QStringLiteral("invalidDirection"); }
+        case mts::interaction::CommandStatus::ActionNotFound: { return QStringLiteral("actionNotFound"); }
+        case mts::interaction::CommandStatus::ActionOutOfScope: { return QStringLiteral("actionOutOfScope"); }
+        case mts::interaction::CommandStatus::ActionHidden: { return QStringLiteral("actionHidden"); }
+        case mts::interaction::CommandStatus::ActionDisabled: { return QStringLiteral("actionDisabled"); }
+        case mts::interaction::CommandStatus::ActionMissingCapability: { return QStringLiteral("actionMissingCapability"); }
+        case mts::interaction::CommandStatus::ActionMissingHandler: { return QStringLiteral("actionMissingHandler"); }
+        case mts::interaction::CommandStatus::LayerNotFound: { return QStringLiteral("layerNotFound"); }
+        case mts::interaction::CommandStatus::Unsupported: { return QStringLiteral("unsupported"); }
+        case mts::interaction::CommandStatus::WrongThread: { return QStringLiteral("wrongThread"); }
+        case mts::interaction::CommandStatus::DispatchUnavailable: { return QStringLiteral("dispatchUnavailable"); }
+        case mts::interaction::CommandStatus::FacadeClosed: { return QStringLiteral("facadeClosed"); }
+    }
+
+    return QStringLiteral("unsupported");
+}
+
 auto layerKindFrom(QString const& value) -> mts::interaction::LayerKind {
     if (value == QStringLiteral("dialog")) {
         return mts::interaction::LayerKind::Dialog;
@@ -225,6 +315,10 @@ InteractionController::InteractionController(QObject* parent)
 
     m_selectionSubscription = m_selection->subscribe([this](mts::interaction::SelectionChange const& change) {
         this->recordSelectionChange(change);
+        emit this->selectionChanged(QString::fromUtf8(
+            change.domain.path().data(),
+            static_cast<qsizetype>(change.domain.path().size())
+        ));
         m_actionRevision += 1;
         emit this->actionsChanged();
     });
@@ -239,6 +333,55 @@ InteractionController::InteractionController(QObject* parent)
     this->connect(hub, &InteractionHub::scopeChanged, this, &InteractionController::onScopeChanged);
     this->connect(hub, &InteractionHub::scopeDestroyed, this, &InteractionController::onScopeDestroyed);
     this->installDefaultActions();
+
+    mts::interaction::UiCommandHandlers handlers;
+    handlers.focus = [this](mts::interaction::TargetId target) {
+        return this->focusTargetOnGui(target);
+    };
+    handlers.activate = [this](mts::interaction::TargetId target) {
+        return this->activateTargetOnGui(target);
+    };
+    handlers.openContextMenu = [this](mts::interaction::TargetId target, mts::interaction::Point const& position) {
+        emit this->contextMenuForTarget(target.packed(), position.x, position.y);
+
+        return true;
+    };
+    handlers.closeContextMenu = [this] {
+        return this->closeContextMenuOnGui();
+    };
+    handlers.selectionChanged = [this](mts::interaction::Domain const& domain, mts::interaction::TargetId cursor) {
+        emit this->selectionCommandRequested(
+            QString::fromUtf8(domain.path().data(), static_cast<qsizetype>(domain.path().size())),
+            cursor.packed()
+        );
+    };
+    handlers.commandCompleted = [this](mts::interaction::CommandResult const& result) {
+        m_lastCommandResult = this->commandResultMap(result);
+        emit this->commandResultChanged();
+    };
+    handlers.pushLayer = [this](mts::interaction::LayerDescriptor const& descriptor) -> std::optional<mts::interaction::u64> {
+        return m_layers->push(descriptor);
+    };
+    handlers.popLayer = [this](mts::interaction::u64 id) {
+        return this->popLayerOnGui(id);
+    };
+
+    m_commands = std::make_unique<mts::interaction::CommandFacade>(
+        *m_registry,
+        *m_context,
+        *m_selection,
+        *m_layers,
+        *m_actions,
+        *m_navigation,
+        std::move(handlers),
+        [this](std::function<void()> command) {
+            return QMetaObject::invokeMethod(
+                this,
+                [command = std::move(command)]() mutable { command(); },
+                Qt::QueuedConnection
+            );
+        }
+    );
 
     if (QGuiApplication::instance() != nullptr) {
         QGuiApplication::instance()->installEventFilter(this);
@@ -337,8 +480,172 @@ auto InteractionController::keyRouter() -> mts::interaction::KeyRouter& {
     return *m_keyRouter;
 }
 
+auto InteractionController::commands() -> mts::interaction::CommandFacade& {
+    return *m_commands;
+}
+
+auto InteractionController::lastCommandResult() const -> QVariantMap {
+    return m_lastCommandResult;
+}
+
+auto InteractionController::commandResultMap(mts::interaction::CommandResult const& result) const -> QVariantMap {
+    QVariantMap map;
+    map.insert(QStringLiteral("ok"), result.succeeded());
+    map.insert(QStringLiteral("status"), commandStatusName(result.status));
+    map.insert(QStringLiteral("target"), QVariant::fromValue<qulonglong>(result.target.packed()));
+    map.insert(QStringLiteral("layerId"), QVariant::fromValue<qulonglong>(result.layerId));
+    map.insert(QStringLiteral("actionId"), QString::fromStdString(result.actionId));
+    map.insert(QStringLiteral("message"), QString::fromStdString(result.message));
+
+    return map;
+}
+
+auto InteractionController::executeAndReport(mts::interaction::CommandRequest const& request) -> mts::interaction::CommandResult {
+    return m_commands->execute(request);
+}
+
+auto InteractionController::selectionCount(QString const& domain) const -> int {
+    return static_cast<int>(m_selection->count(mts::interaction::Domain(domain.toStdString())));
+}
+
+auto InteractionController::selectedTargets(QString const& domain) const -> QVariantList {
+    QVariantList result;
+    for (mts::interaction::TargetId const target : m_selection->ordered(mts::interaction::Domain(domain.toStdString()))) {
+        result.push_back(QVariant::fromValue<qulonglong>(target.packed()));
+    }
+
+    return result;
+}
+
+auto InteractionController::selectionSummary(QString const& domain) const -> QVariantMap {
+    mts::interaction::Domain const scope(domain.toStdString());
+    QVariantMap result;
+    result.insert(QStringLiteral("domain"), domain);
+    result.insert(QStringLiteral("count"), this->selectionCount(domain));
+    result.insert(QStringLiteral("targets"), this->selectedTargets(domain));
+    result.insert(QStringLiteral("anchor"), QVariant::fromValue<qulonglong>(m_selection->anchor(scope).packed()));
+    result.insert(QStringLiteral("cursor"), QVariant::fromValue<qulonglong>(m_selection->cursor(scope).packed()));
+
+    return result;
+}
+
+auto InteractionController::layersSnapshot() const -> QVariantList {
+    QVariantList result;
+    for (mts::interaction::LayerEntry const& layer : m_layers->layers()) {
+        QVariantMap item;
+        item.insert(QStringLiteral("id"), QVariant::fromValue<qulonglong>(layer.id));
+        item.insert(QStringLiteral("name"), QString::fromStdString(layer.descriptor.name));
+        item.insert(QStringLiteral("kind"), layerKindName(layer.descriptor.kind));
+        item.insert(QStringLiteral("domain"), QString::fromUtf8(
+            layer.descriptor.domain.path().data(),
+            static_cast<qsizetype>(layer.descriptor.domain.path().size())
+        ));
+        item.insert(QStringLiteral("dismissOnEscape"), layer.descriptor.dismissOnEscape);
+        item.insert(QStringLiteral("dismissOnOutsideClick"), layer.descriptor.dismissOnOutsideClick);
+        item.insert(QStringLiteral("focusTrap"), layer.descriptor.focusTrap);
+        result.push_back(item);
+    }
+
+    return result;
+}
+
+auto InteractionController::executeCommand(QVariantMap const& input) -> QVariantMap {
+    auto const kind = commandKindFrom(input.value(QStringLiteral("kind")).toString());
+    if (!kind.has_value()) {
+        mts::interaction::CommandResult const result{
+            mts::interaction::CommandStatus::Unsupported,
+            mts::interaction::TargetId::invalid(),
+            0,
+            {},
+            "unknown interaction command",
+        };
+        m_lastCommandResult = this->commandResultMap(result);
+        emit this->commandResultChanged();
+
+        return m_lastCommandResult;
+    }
+
+    mts::interaction::CommandRequest request;
+    request.kind = *kind;
+    request.target = mts::interaction::TargetId::fromPacked(input.value(QStringLiteral("target")).toULongLong());
+    request.domain = mts::interaction::Domain(input.value(QStringLiteral("domain")).toString().toStdString());
+    request.group = input.value(QStringLiteral("group")).toString().toStdString();
+    request.wrap = input.value(QStringLiteral("wrap"), true).toBool();
+    request.updateSelection = input.value(QStringLiteral("updateSelection"), true).toBool();
+    auto const intent = selectionIntentFrom(input.value(QStringLiteral("intent")).toString());
+    if (!intent.has_value()) {
+        mts::interaction::CommandResult const result{
+            mts::interaction::CommandStatus::InvalidRequest,
+            request.target,
+            0,
+            {},
+            "selection intent is invalid",
+        };
+        m_lastCommandResult = this->commandResultMap(result);
+        emit this->commandResultChanged();
+
+        return m_lastCommandResult;
+    }
+    request.selectionIntent = *intent;
+    request.actionId = input.value(QStringLiteral("actionId")).toString().toStdString();
+    request.layerId = input.value(QStringLiteral("layerId")).toULongLong();
+    request.position = mts::interaction::Point{
+        input.value(QStringLiteral("x")).toDouble(),
+        input.value(QStringLiteral("y")).toDouble(),
+    };
+
+    if (auto const direction = directionFrom(input.value(QStringLiteral("direction")).toString()); direction.has_value()) {
+        request.direction = *direction;
+    } else if (*kind == mts::interaction::CommandKind::FocusDirection
+        || *kind == mts::interaction::CommandKind::ExtendSelection) {
+        mts::interaction::CommandResult const result{
+            mts::interaction::CommandStatus::InvalidDirection,
+            request.target,
+            0,
+            request.actionId,
+            "direction must be up, down, left or right",
+        };
+        m_lastCommandResult = this->commandResultMap(result);
+        emit this->commandResultChanged();
+
+        return m_lastCommandResult;
+    }
+
+    for (QVariant const& value : input.value(QStringLiteral("targets")).toList()) {
+        request.targets.push_back(mts::interaction::TargetId::fromPacked(value.toULongLong()));
+    }
+
+    QVariantMap const arguments = input.value(QStringLiteral("arguments")).toMap();
+    request.arguments.reserve(static_cast<std::size_t>(arguments.size()));
+    for (auto iterator = arguments.cbegin(); iterator != arguments.cend(); ++iterator) {
+        request.arguments.push_back(mts::interaction::ActionArgument{
+            iterator.key().toStdString(),
+            iterator.value().toString().toStdString(),
+        });
+    }
+
+    if (*kind == mts::interaction::CommandKind::PushLayer) {
+        request.layer.name = input.value(QStringLiteral("name")).toString().toStdString();
+        request.layer.kind = layerKindFrom(input.value(QStringLiteral("layerKind")).toString());
+        request.layer.domain = request.domain;
+        request.layer.owner = mts::interaction::TargetId::fromPacked(input.value(QStringLiteral("ownerTarget")).toULongLong());
+        request.layer.previousFocus = m_context->focusedId();
+        request.layer.dismissOnEscape = input.value(QStringLiteral("dismissOnEscape"), true).toBool();
+        request.layer.dismissOnOutsideClick = input.value(QStringLiteral("dismissOnOutsideClick"), true).toBool();
+        request.layer.focusTrap = input.value(QStringLiteral("focusTrap"), false).toBool();
+    }
+
+    return this->commandResultMap(this->executeAndReport(request));
+}
+
 auto InteractionController::context() -> mts::interaction::ContextStore& {
     return *m_context;
+}
+
+auto InteractionController::targetSemanticKey(quint64 target) const -> QString {
+    auto const resolved = m_registry->find(mts::interaction::TargetId::fromPacked(target));
+
+    return resolved.has_value() ? QString::fromStdString(resolved->semanticKey) : QString{};
 }
 
 auto InteractionController::targetForDomain(QString const& domain, QString const& role) const -> quint64 {
@@ -400,42 +707,43 @@ auto InteractionController::invokeAction(
     quint64 target,
     QVariantMap const& arguments
 ) -> bool {
-    mts::interaction::TargetId targetId = mts::interaction::TargetId::fromPacked(target);
-    if (!targetId.valid()) {
-        targetId = m_context->currentId();
-    }
-    if (!targetId.valid()) {
-        targetId = m_context->focusedId();
-    }
-
-    auto const resolved = m_registry->find(targetId);
-    if (!resolved.has_value()) {
-        return false;
-    }
-
-    std::vector<mts::interaction::ActionArgument> actionArguments;
-    actionArguments.reserve(static_cast<std::size_t>(arguments.size()));
+    mts::interaction::CommandRequest request;
+    request.kind = mts::interaction::CommandKind::InvokeAction;
+    request.target = mts::interaction::TargetId::fromPacked(target);
+    request.actionId = actionId.toStdString();
+    request.arguments.reserve(static_cast<std::size_t>(arguments.size()));
     for (auto iterator = arguments.cbegin(); iterator != arguments.cend(); ++iterator) {
-        actionArguments.push_back(mts::interaction::ActionArgument{
+        request.arguments.push_back(mts::interaction::ActionArgument{
             iterator.key().toStdString(),
             iterator.value().toString().toStdString(),
         });
     }
 
-    mts::interaction::ActionContext const context = m_actions->makeContext(
-        *resolved,
-        *m_context,
-        *m_selection,
-        std::move(actionArguments)
-    );
-    auto const result = m_actions->invoke(actionId.toStdString(), context);
-    if (!result.invoked()) {
-        return false;
-    }
+    return this->executeAndReport(request).succeeded();
+}
 
-    this->recordActionInvocation(actionId, targetId);
+auto InteractionController::invoke(
+    QString const& actionId,
+    quint64 target,
+    QVariantMap const& arguments
+) -> bool {
+    return this->invokeAction(actionId, target, arguments);
+}
 
-    return true;
+auto InteractionController::openContextMenu(quint64 target, qreal x, qreal y) -> QVariantMap {
+    mts::interaction::CommandRequest request;
+    request.kind = mts::interaction::CommandKind::OpenContextMenu;
+    request.target = mts::interaction::TargetId::fromPacked(target);
+    request.position = mts::interaction::Point{x, y};
+
+    return this->commandResultMap(this->executeAndReport(request));
+}
+
+auto InteractionController::closeContextMenu() -> QVariantMap {
+    mts::interaction::CommandRequest request;
+    request.kind = mts::interaction::CommandKind::CloseContextMenu;
+
+    return this->commandResultMap(this->executeAndReport(request));
 }
 
 auto InteractionController::setBusinessValue(QString const& key, QString const& value) -> void {
@@ -444,26 +752,37 @@ auto InteractionController::setBusinessValue(QString const& key, QString const& 
     emit this->actionsChanged();
 }
 
+auto InteractionController::focus(quint64 target) -> bool {
+    return this->focusTarget(target);
+}
+
 auto InteractionController::focusTarget(quint64 target) -> bool {
-    mts::interaction::TargetId const id = mts::interaction::TargetId::fromPacked(target);
-    auto const resolved = m_registry->find(id);
+    mts::interaction::CommandRequest request;
+    request.kind = mts::interaction::CommandKind::Focus;
+    request.target = mts::interaction::TargetId::fromPacked(target);
+
+    return this->executeAndReport(request).succeeded();
+}
+
+auto InteractionController::focusTargetOnGui(mts::interaction::TargetId target) -> bool {
+    auto const resolved = m_registry->find(target);
     if (!resolved.has_value()
         || !resolved->capabilities.focusable
         || !resolved->visible
         || !resolved->enabled
-        || !m_layers->ownsInput(id, *m_registry)) {
+        || !m_layers->ownsInput(target, *m_registry)) {
         return false;
     }
 
     for (auto iterator = m_bindings.cbegin(); iterator != m_bindings.cend(); ++iterator) {
-        if (iterator.value() != target) {
+        if (iterator.value() != target.packed()) {
             continue;
         }
 
         if (auto* item = qobject_cast<QQuickItem*>(iterator.key()->owner()); item != nullptr) {
             item->forceActiveFocus(Qt::TabFocusReason);
-            m_context->setFocused(id);
-            m_navigation->remember(resolved->domain, id);
+            m_context->setFocused(target);
+            m_navigation->remember(resolved->domain, target);
 
             return true;
         }
@@ -473,55 +792,45 @@ auto InteractionController::focusTarget(quint64 target) -> bool {
 }
 
 auto InteractionController::focusNext(QString const& domain, QString const& group, bool wrap) -> bool {
-    mts::interaction::TargetId current = m_context->focusedId();
-    if (!current.valid()) {
-        auto const remembered = m_navigation->remembered(mts::interaction::Domain(domain.toStdString()));
-        current = remembered.value_or(m_context->currentId());
-    }
+    mts::interaction::CommandRequest request;
+    request.kind = mts::interaction::CommandKind::FocusNext;
+    request.domain = mts::interaction::Domain(domain.toStdString());
+    request.group = group.toStdString();
+    request.wrap = wrap;
 
-    auto const target = m_navigation->focusNext(
-        mts::interaction::Domain(domain.toStdString()),
-        current,
-        wrap,
-        group.toStdString()
-    );
-
-    return target.has_value() && this->focusTarget(target->packed());
+    return this->executeAndReport(request).succeeded();
 }
 
 auto InteractionController::focusPrevious(QString const& domain, QString const& group, bool wrap) -> bool {
-    mts::interaction::TargetId current = m_context->focusedId();
-    if (!current.valid()) {
-        auto const remembered = m_navigation->remembered(mts::interaction::Domain(domain.toStdString()));
-        current = remembered.value_or(m_context->currentId());
-    }
+    mts::interaction::CommandRequest request;
+    request.kind = mts::interaction::CommandKind::FocusPrevious;
+    request.domain = mts::interaction::Domain(domain.toStdString());
+    request.group = group.toStdString();
+    request.wrap = wrap;
 
-    auto const target = m_navigation->focusPrevious(
-        mts::interaction::Domain(domain.toStdString()),
-        current,
-        wrap,
-        group.toStdString()
-    );
+    return this->executeAndReport(request).succeeded();
+}
 
-    return target.has_value() && this->focusTarget(target->packed());
+auto InteractionController::focusPrev(QString const& domain, QString const& group, bool wrap) -> bool {
+    return this->focusPrevious(domain, group, wrap);
 }
 
 auto InteractionController::focusFirst(QString const& domain, QString const& group) -> bool {
-    auto const target = m_navigation->focusFirst(
-        mts::interaction::Domain(domain.toStdString()),
-        group.toStdString()
-    );
+    mts::interaction::CommandRequest request;
+    request.kind = mts::interaction::CommandKind::FocusFirst;
+    request.domain = mts::interaction::Domain(domain.toStdString());
+    request.group = group.toStdString();
 
-    return target.has_value() && this->focusTarget(target->packed());
+    return this->executeAndReport(request).succeeded();
 }
 
 auto InteractionController::focusLast(QString const& domain, QString const& group) -> bool {
-    auto const target = m_navigation->focusLast(
-        mts::interaction::Domain(domain.toStdString()),
-        group.toStdString()
-    );
+    mts::interaction::CommandRequest request;
+    request.kind = mts::interaction::CommandKind::FocusLast;
+    request.domain = mts::interaction::Domain(domain.toStdString());
+    request.group = group.toStdString();
 
-    return target.has_value() && this->focusTarget(target->packed());
+    return this->executeAndReport(request).succeeded();
 }
 
 auto InteractionController::focusDirection(
@@ -531,53 +840,65 @@ auto InteractionController::focusDirection(
 ) -> bool {
     auto const navigationDirection = directionFrom(direction);
     if (!navigationDirection.has_value()) {
+        mts::interaction::CommandResult const result{
+            mts::interaction::CommandStatus::InvalidDirection,
+            mts::interaction::TargetId::invalid(),
+            0,
+            {},
+            "direction must be up, down, left or right",
+        };
+        m_lastCommandResult = this->commandResultMap(result);
+        emit this->commandResultChanged();
+
         return false;
     }
 
-    mts::interaction::TargetId current = m_context->focusedId();
-    if (!current.valid()) {
-        current = m_context->currentId();
-    }
+    mts::interaction::CommandRequest request;
+    request.kind = mts::interaction::CommandKind::FocusDirection;
+    request.domain = mts::interaction::Domain(domain.toStdString());
+    request.direction = *navigationDirection;
+    request.group = group.toStdString();
 
-    auto const target = m_navigation->focusDirection(
-        mts::interaction::Domain(domain.toStdString()),
-        current,
-        *navigationDirection,
-        group.toStdString()
-    );
-    if (!target.has_value()) {
-        return false;
-    }
-
-    auto const resolved = m_registry->find(*target);
-    if (!resolved.has_value()) {
-        return false;
-    }
-
-    bool const focused = this->focusTarget(target->packed());
-    if (focused && resolved->capabilities.selectable) {
-        m_selection->select(resolved->domain, *target, mts::interaction::SelectionIntent::Replace);
-    }
-
-    return focused;
+    return this->executeAndReport(request).succeeded();
 }
 
 auto InteractionController::focusWithin(QString const& domain, QString const& group) -> bool {
     return this->focusFirst(domain, group);
 }
 
+auto InteractionController::activate(quint64 target) -> bool {
+    return this->activateTarget(target);
+}
+
 auto InteractionController::activateTarget(quint64 target) -> bool {
-    auto const resolved = m_registry->find(mts::interaction::TargetId::fromPacked(target));
+    mts::interaction::CommandRequest request;
+    request.kind = mts::interaction::CommandKind::Activate;
+    request.target = mts::interaction::TargetId::fromPacked(target);
+
+    return this->executeAndReport(request).succeeded();
+}
+
+auto InteractionController::closeContextMenuOnGui() -> bool {
+    auto const top = m_layers->top();
+    if (!top.has_value() || top->descriptor.kind != mts::interaction::LayerKind::ContextMenu) {
+        return false;
+    }
+
+    return this->closeLayer(top->id);
+}
+
+auto InteractionController::activateTargetOnGui(mts::interaction::TargetId target) -> bool {
+    auto const resolved = m_registry->find(target);
     if (!resolved.has_value()
         || !resolved->capabilities.activatable
         || !resolved->visible
         || !resolved->enabled
-        || !m_layers->ownsInput(resolved->id, *m_registry)) {
+        || !m_layers->ownsInput(target, *m_registry)) {
         return false;
     }
 
     for (auto iterator = m_bindings.cbegin(); iterator != m_bindings.cend(); ++iterator) {
-        if (iterator.value() != target) {
+        if (iterator.value() != target.packed()) {
             continue;
         }
 
@@ -588,57 +909,74 @@ auto InteractionController::activateTarget(quint64 target) -> bool {
     return false;
 }
 
-auto InteractionController::selectAll(QString const& domain) -> void {
-    mts::interaction::Domain const scope(domain.toStdString());
-    std::vector<mts::interaction::TargetId> candidates;
-    for (mts::interaction::TargetId const id : m_navigation->focusRing(scope)) {
-        auto const target = m_registry->find(id);
-        if (target.has_value() && target->capabilities.selectable) {
-            candidates.push_back(id);
-        }
+auto InteractionController::select(
+    QVariantList const& targets,
+    QString const& domain,
+    QString const& intent
+) -> QVariantMap {
+    mts::interaction::CommandRequest request;
+    request.kind = mts::interaction::CommandKind::Select;
+    request.domain = mts::interaction::Domain(domain.toStdString());
+    auto const selectionIntent = selectionIntentFrom(intent);
+    if (!selectionIntent.has_value()) {
+        mts::interaction::CommandResult const result{
+            mts::interaction::CommandStatus::InvalidRequest,
+            mts::interaction::TargetId::invalid(),
+            0,
+            {},
+            "selection intent is invalid",
+        };
+        m_lastCommandResult = this->commandResultMap(result);
+        emit this->commandResultChanged();
+
+        return m_lastCommandResult;
+    }
+    request.selectionIntent = *selectionIntent;
+    request.targets.reserve(static_cast<std::size_t>(targets.size()));
+    for (QVariant const& target : targets) {
+        request.targets.push_back(mts::interaction::TargetId::fromPacked(target.toULongLong()));
     }
 
-    m_selection->selectAll(scope, candidates);
+    return this->commandResultMap(this->executeAndReport(request));
+}
+
+auto InteractionController::clearSelection(QString const& domain) -> QVariantMap {
+    mts::interaction::CommandRequest request;
+    request.kind = mts::interaction::CommandKind::ClearSelection;
+    request.domain = mts::interaction::Domain(domain.toStdString());
+
+    return this->commandResultMap(this->executeAndReport(request));
+}
+
+auto InteractionController::selectAll(QString const& domain) -> void {
+    mts::interaction::CommandRequest request;
+    request.kind = mts::interaction::CommandKind::SelectAll;
+    request.domain = mts::interaction::Domain(domain.toStdString());
+    this->executeAndReport(request);
 }
 
 auto InteractionController::extendSelection(QString const& domain, QString const& direction) -> bool {
     auto const navigationDirection = directionFrom(direction);
     if (!navigationDirection.has_value()) {
+        mts::interaction::CommandResult const result{
+            mts::interaction::CommandStatus::InvalidDirection,
+            mts::interaction::TargetId::invalid(),
+            0,
+            {},
+            "direction must be up, down, left or right",
+        };
+        m_lastCommandResult = this->commandResultMap(result);
+        emit this->commandResultChanged();
+
         return false;
     }
 
-    mts::interaction::TargetId current = m_context->focusedId();
-    if (!current.valid()) {
-        current = m_context->currentId();
-    }
+    mts::interaction::CommandRequest request;
+    request.kind = mts::interaction::CommandKind::ExtendSelection;
+    request.domain = mts::interaction::Domain(domain.toStdString());
+    request.direction = *navigationDirection;
 
-    mts::interaction::Domain const scope(domain.toStdString());
-    auto const currentTarget = m_registry->find(current);
-    auto const target = m_navigation->focusDirection(
-        scope,
-        current,
-        *navigationDirection,
-        currentTarget.has_value() ? std::string_view(currentTarget->group) : std::string_view{}
-    );
-    if (!target.has_value()) {
-        return false;
-    }
-
-    auto const nextTarget = m_registry->find(*target);
-    if (!currentTarget.has_value()
-        || !nextTarget.has_value()
-        || !currentTarget->capabilities.selectable
-        || !nextTarget->capabilities.selectable) {
-        return false;
-    }
-
-    if (!m_selection->anchor(scope).valid()) {
-        m_selection->setAnchor(scope, current);
-    }
-
-    m_selection->select(scope, *target, mts::interaction::SelectionIntent::Range);
-
-    return this->focusTarget(target->packed());
+    return this->executeAndReport(request).succeeded();
 }
 
 auto InteractionController::pushLayer(
@@ -673,10 +1011,17 @@ auto InteractionController::pushLayer(
     descriptor.dismissOnOutsideClick = dismissOnOutsideClick;
     descriptor.focusTrap = focusTrap;
 
-    quint64 const id = m_layers->push(std::move(descriptor));
-    m_layerObjects.insert(id, object);
+    mts::interaction::CommandRequest request;
+    request.kind = mts::interaction::CommandKind::PushLayer;
+    request.layer = std::move(descriptor);
+    auto const result = this->executeAndReport(request);
+    if (!result.succeeded()) {
+        return 0;
+    }
 
-    return id;
+    m_layerObjects.insert(result.layerId, object);
+
+    return result.layerId;
 }
 
 auto InteractionController::positionLayer(QObject* object, qreal x, qreal y) -> void {
@@ -704,9 +1049,16 @@ auto InteractionController::positionLayer(QObject* object, qreal x, qreal y) -> 
 }
 
 auto InteractionController::popLayer(quint64 id) -> void {
+    mts::interaction::CommandRequest request;
+    request.kind = mts::interaction::CommandKind::PopLayer;
+    request.layerId = id;
+    this->executeAndReport(request);
+}
+
+auto InteractionController::popLayerOnGui(quint64 id) -> bool {
     auto const layer = m_layers->find(id);
     if (!layer.has_value()) {
-        return;
+        return false;
     }
 
     mts::interaction::TargetId const previousFocus = layer->descriptor.previousFocus;
@@ -725,6 +1077,8 @@ auto InteractionController::popLayer(quint64 id) -> void {
     if (wasTop) {
         this->restoreFocus(previousFocus);
     }
+
+    return true;
 }
 
 auto InteractionController::dismissTopLayer() -> bool {
@@ -758,14 +1112,12 @@ auto InteractionController::dismissTopLayerOutside() -> bool {
 auto InteractionController::closeLayer(quint64 id) -> bool {
     QPointer<QObject> const object = m_layerObjects.value(id);
     if (object == nullptr) {
-        this->popLayer(id);
-
-        return true;
+        return this->popLayerOnGui(id);
     }
 
     if (!QMetaObject::invokeMethod(object, "dismissLayer", Qt::DirectConnection)) {
         if (!QMetaObject::invokeMethod(object, "close", Qt::DirectConnection)) {
-            this->popLayer(id);
+            this->popLayerOnGui(id);
         }
     }
 
@@ -775,16 +1127,14 @@ auto InteractionController::closeLayer(quint64 id) -> bool {
 auto InteractionController::closeLayerOutside(quint64 id) -> bool {
     QPointer<QObject> const object = m_layerObjects.value(id);
     if (object == nullptr) {
-        this->popLayer(id);
-
-        return true;
+        return this->popLayerOnGui(id);
     }
 
     m_outsideDismissedObject = object;
     if (!QMetaObject::invokeMethod(object, "dismissLayerOutside", Qt::DirectConnection)) {
         if (!QMetaObject::invokeMethod(object, "dismissLayer", Qt::DirectConnection)) {
             if (!QMetaObject::invokeMethod(object, "close", Qt::DirectConnection)) {
-                this->popLayer(id);
+                this->popLayerOnGui(id);
             }
         }
     }
@@ -948,13 +1298,15 @@ auto InteractionController::routeKeyEvent(QQuickWindow* window, QEvent* event) -
                 return false;
             }
 
-            emit this->contextMenuForTarget(
-                target->id.packed(),
+            mts::interaction::CommandRequest request;
+            request.kind = mts::interaction::CommandKind::OpenContextMenu;
+            request.target = target->id;
+            request.position = mts::interaction::Point{
                 target->geometry.x + target->geometry.width * 0.5,
-                target->geometry.y + target->geometry.height * 0.5
-            );
+                target->geometry.y + target->geometry.height * 0.5,
+            };
 
-            return true;
+            return this->executeAndReport(request).succeeded();
         }
 
         case mts::interaction::NavigationCommand::DismissLayer: {
@@ -1349,8 +1701,10 @@ auto InteractionController::installDefaultActions() -> void {
             alwaysVisible,
             std::move(enabled),
             [this, actionId](mts::interaction::ActionContext const& context) {
+                QString const actionName = QString::fromStdString(actionId);
+                this->recordActionInvocation(actionName, context.target.id);
                 emit this->actionRequested(
-                    QString::fromStdString(actionId),
+                    actionName,
                     context.target.id.packed(),
                     QString::fromStdString(context.target.semanticKey)
                 );

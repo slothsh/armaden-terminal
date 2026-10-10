@@ -319,6 +319,7 @@ mts::app::Application::Application(int argc, char** argv)
         *m_mapController,
         *m_conversationService,
         m_interaction,
+        &m_interaction->commands(),
         m_initialStatus,
     };
 

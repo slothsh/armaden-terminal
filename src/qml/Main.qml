@@ -27,13 +27,12 @@ Window {
     signal contextMenuRequested(real x, real y)
 
     onContextMenuRequested: (x, y) => {
-        const available = root.interaction.actionsFor(root.interaction.hoveredTarget, "contextMenu")
-        if (available.length === 0) {
-            return
-        }
-
-        interactionContextMenu.actionTarget = root.interaction.hoveredTarget
-        interactionContextMenu.openAt(x, y)
+        root.interaction.executeCommand({
+            kind: "openContextMenu",
+            target: root.interaction.hoveredTarget,
+            x: x,
+            y: y,
+        })
     }
 
     property bool mapPaneVisible: false
@@ -557,14 +556,17 @@ Window {
                     readonly property bool renaming: root.renamingSession === model.sessionId
 
                     function activate() {
-                        conversationView.stickToBottom = true
-                        chat.saveDraft(promptInput.text)
-                        chat.selectSession(model.sessionId)
+                        root.interaction.executeCommand({
+                            kind: "select",
+                            domain: "app.sessionList",
+                            targets: [sessionRow.InteractionScope.targetId],
+                            intent: "replace",
+                        })
                     }
 
                     color: model.sessionId === chat.activeSession
                         ? Theme.color.active
-                        : ((rowHover.hovered || sessionMenu.opened || sessionRow.activeFocus) ? Theme.color.hover : "transparent")
+                        : ((rowHover.hovered || (interactionContextMenu.opened && interactionContextMenu.actionTarget === sessionRow.InteractionScope.targetId) || sessionRow.activeFocus) ? Theme.color.hover : "transparent")
                     border.color: sessionRow.activeFocus ? Theme.color.accent : "transparent"
                     border.width: sessionRow.activeFocus ? 1 : 0
 
@@ -579,8 +581,13 @@ Window {
                         acceptedButtons: Qt.LeftButton | Qt.RightButton
                         onClicked: mouse => {
                             if (mouse.button === Qt.RightButton) {
-                                sessionMenu.actionTarget = sessionRow.InteractionScope.targetId
-                                sessionMenu.openAt(mouse.x, mouse.y)
+                                const point = sessionRow.mapToItem(root.contentItem, mouse.x, mouse.y)
+                                root.interaction.executeCommand({
+                                    kind: "openContextMenu",
+                                    target: sessionRow.InteractionScope.targetId,
+                                    x: point.x,
+                                    y: point.y,
+                                })
                                 return
                             }
                             sessionRow.activate()
@@ -666,24 +673,26 @@ Window {
                         interactionDomain: "app.sessionList"
                         interactionGroup: "session-list"
                         interactionOrder: index * 2 + 1
-                        active: sessionMenu.opened
+                        active: interactionContextMenu.opened && interactionContextMenu.actionTarget === sessionRow.InteractionScope.targetId
                         anchors.right: parent.right
                         anchors.rightMargin: 6
                         anchors.verticalCenter: parent.verticalCenter
                         onClicked: {
-                            sessionMenu.actionTarget = sessionRow.InteractionScope.targetId
-                            sessionMenu.x = sessionRow.width - sessionMenu.width
-                            sessionMenu.y = sessionRow.height + 2
-                            sessionMenu.toggle()
+                            const target = sessionRow.InteractionScope.targetId
+                            if (interactionContextMenu.opened && interactionContextMenu.actionTarget === target) {
+                                root.interaction.executeCommand({kind: "closeContextMenu"})
+                            } else {
+                                const point = sessionMenuButton.mapToItem(root.contentItem, 0, sessionMenuButton.height)
+                                root.interaction.executeCommand({
+                                    kind: "openContextMenu",
+                                    target: target,
+                                    x: point.x,
+                                    y: point.y,
+                                })
+                            }
                         }
                     }
 
-                    ContextMenu {
-                        id: sessionMenu
-                        interactionController: root.interaction
-                        interactionDomain: "app.sessionMenu"
-                        layerKind: "contextMenu"
-                    }
                 }
             }
         }
@@ -713,6 +722,21 @@ Window {
         function onContextMenuForTarget(target, x, y) {
             interactionContextMenu.actionTarget = target
             interactionContextMenu.openAt(x, y)
+        }
+
+        function onSelectionCommandRequested(domain, cursor) {
+            if (domain !== "app.sessionList" || cursor === 0) {
+                return
+            }
+
+            const sessionId = root.interaction.targetSemanticKey(cursor)
+            if (sessionId.length === 0) {
+                return
+            }
+
+            conversationView.stickToBottom = true
+            chat.saveDraft(promptInput.text)
+            chat.selectSession(sessionId)
         }
     }
 

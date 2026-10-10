@@ -30,6 +30,10 @@ namespace mts::runtime {
 class ThreadPool;
 }
 
+namespace mts::interaction {
+class CommandFacade;
+}
+
 class MapController;
 class InteractionController;
 
@@ -46,6 +50,7 @@ struct AppContext {
     MapController& mapController;
     mts::orchestration::ConversationService& conversation;
     InteractionController* interaction = nullptr;
+    mts::interaction::CommandFacade* interactionCommands = nullptr;
     std::string initialStatus;
 };
 

@@ -109,7 +109,7 @@ Popup {
         InteractionScope.domain: control.interactionDomain
         InteractionScope.role: "layer-content"
         InteractionScope.focusable: false
-        InteractionScope.activatable: false
+        InteractionScope.activatable: true
         spacing: 0
 
         Repeater {

@@ -13,7 +13,8 @@ ChatController::ChatController(mts::app::AppContext const& context, QObject* par
     , m_service(&context.conversation)
     , m_sessions(new SessionListModel(this))
     , m_conversation(new ConversationModel(this))
-    , m_mapController(&context.mapController) {
+    , m_mapController(&context.mapController)
+    , m_interactionCommands(context.interactionCommands) {
     m_projector = std::make_unique<ConversationProjector>(
         context.bus,
         *m_service,
@@ -53,6 +54,10 @@ auto ChatController::conversation() const -> ConversationModel* {
 
 auto ChatController::mapController() const -> MapController* {
     return this->m_mapController;
+}
+
+auto ChatController::interactionCommands() const -> mts::interaction::CommandFacade* {
+    return this->m_interactionCommands;
 }
 
 auto ChatController::running() const -> bool {

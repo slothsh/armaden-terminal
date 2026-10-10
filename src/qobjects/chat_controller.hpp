@@ -18,6 +18,10 @@ namespace mts::orchestration {
 class ConversationService;
 }
 
+namespace mts::interaction {
+class CommandFacade;
+}
+
 class ConversationProjector;
 
 class ChatController : public QObject {
@@ -38,6 +42,7 @@ public:
     auto sessions() const -> SessionListModel*;
     auto conversation() const -> ConversationModel*;
     auto mapController() const -> MapController*;
+    auto interactionCommands() const -> mts::interaction::CommandFacade*;
     auto running() const -> bool;
     auto status() const -> QString;
     auto activeSession() const -> QString;
@@ -66,4 +71,5 @@ private:
     SessionListModel* m_sessions;
     ConversationModel* m_conversation;
     MapController* m_mapController = nullptr;
+    mts::interaction::CommandFacade* m_interactionCommands = nullptr;
 };
