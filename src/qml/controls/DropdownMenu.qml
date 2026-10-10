@@ -1,39 +1,65 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Effects
+import Lib.Interaction
 import Lib.Theme
 
 Popup {
     id: control
 
-    property bool justClosed: false
+    property var interactionController: null
+    property string interactionDomain: "app.popup"
+    property string layerKind: "popup"
+    property bool dismissOnEscape: true
+    property bool dismissOnOutsideClick: true
+    property bool focusTrap: true
+    property var layerToken: 0
 
     width: 160
     padding: 4
     focus: true
     implicitHeight: contentColumn.implicitHeight + padding * 2
+    closePolicy: Popup.CloseOnPressOutside
 
     function toggle() {
+        if (control.interactionController
+                && control.interactionController.consumeOutsideDismissal(control)) {
+            return
+        }
         if (control.opened) {
             control.close()
-            return
+        } else {
+            control.open()
         }
-        if (control.justClosed) {
-            control.justClosed = false
-            return
+    }
+
+    function dismissLayer() {
+        control.close()
+    }
+
+    function dismissLayerOutside() {
+        control.close()
+    }
+
+    onAboutToShow: {
+        if (control.interactionController && control.layerToken === 0) {
+            control.layerToken = control.interactionController.pushLayer(
+                control,
+                control.layerKind,
+                control.interactionDomain,
+                0,
+                control.dismissOnEscape,
+                control.dismissOnOutsideClick,
+                control.focusTrap
+            )
         }
-        control.open()
     }
 
     onClosed: {
-        control.justClosed = true
-        guard.restart()
-    }
-
-    Timer {
-        id: guard
-        interval: 150
-        onTriggered: control.justClosed = false
+        if (control.interactionController && control.layerToken !== 0) {
+            control.interactionController.popLayer(control.layerToken)
+            control.layerToken = 0
+        }
     }
 
     background: Item {
@@ -57,18 +83,9 @@ Popup {
 
     contentItem: Column {
         id: contentColumn
+        InteractionScope.domain: control.interactionDomain
+        InteractionScope.role: "layer-content"
+        InteractionScope.focusable: true
         spacing: 0
-
-        Keys.onEscapePressed: {
-            control.close()
-            event.accepted = true
-        }
-
-        Shortcut {
-            sequence: "Escape"
-            context: Qt.WindowShortcut
-            enabled: control.opened
-            onActivated: control.close()
-        }
     }
 }

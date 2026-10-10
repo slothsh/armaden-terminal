@@ -102,6 +102,13 @@ struct SelectionChanged {
     std::vector<InteractionTarget> removed;
 };
 
+struct LayerChanged {
+    InteractionTarget id;
+    std::size_t depth;
+    std::string domain;
+    std::string action;
+};
+
 using EventTypes = std::tuple<
     SessionCreated,
     SessionUpdated,
@@ -117,7 +124,8 @@ using EventTypes = std::tuple<
     FocusChanged,
     CurrentTargetChanged,
     HoverChanged,
-    SelectionChanged
+    SelectionChanged,
+    LayerChanged
 >;
 
 template <class Event>
@@ -226,7 +234,8 @@ private:
         Signal<FocusChanged>,
         Signal<CurrentTargetChanged>,
         Signal<HoverChanged>,
-        Signal<SelectionChanged>
+        Signal<SelectionChanged>,
+        Signal<LayerChanged>
     > m_signals;
 };
 

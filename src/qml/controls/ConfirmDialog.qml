@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Effects
+import Lib.Interaction
 import Lib.Controls
 import Lib.Theme
 
@@ -10,6 +11,10 @@ Popup {
     required property string message
     property string confirmText: qsTr("Delete")
     property string cancelText: qsTr("Cancel")
+    property var interactionController: null
+    property string interactionDomain: "app.dialog"
+    property string layerKind: "dialog"
+    property var layerToken: 0
 
     signal accepted()
     signal rejected()
@@ -22,6 +27,32 @@ Popup {
     x: (parent.width - width) / 2
     y: (parent.height - height) / 2
     closePolicy: Popup.NoAutoClose
+
+    function dismissLayer() {
+        control.rejected()
+        control.close()
+    }
+
+    onAboutToShow: {
+        if (control.interactionController && control.layerToken === 0) {
+            control.layerToken = control.interactionController.pushLayer(
+                control,
+                control.layerKind,
+                control.interactionDomain,
+                0,
+                true,
+                false,
+                true
+            )
+        }
+    }
+
+    onClosed: {
+        if (control.interactionController && control.layerToken !== 0) {
+            control.interactionController.popLayer(control.layerToken)
+            control.layerToken = 0
+        }
+    }
 
     background: Item {
         RectangularShadow {
@@ -44,24 +75,11 @@ Popup {
 
     contentItem: Column {
         id: contentColumn
+        InteractionScope.domain: control.interactionDomain
+        InteractionScope.role: "layer-content"
+        InteractionScope.focusable: true
         width: control.width - control.padding * 2
         spacing: 16
-
-        Keys.onEscapePressed: {
-            control.rejected()
-            control.close()
-            event.accepted = true
-        }
-
-        Shortcut {
-            sequence: "Escape"
-            context: Qt.WindowShortcut
-            enabled: control.opened
-            onActivated: {
-                control.rejected()
-                control.close()
-            }
-        }
 
         Text {
             width: parent.width

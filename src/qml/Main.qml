@@ -19,6 +19,7 @@ Window {
     title: qsTr("mindtosis")
 
     property var chat: null
+    property var interaction: null
     property string pendingDelete: ""
     property string renamingSession: ""
 
@@ -249,6 +250,8 @@ Window {
 
         VerticalDrawer {
             id: inputDrawer
+            InteractionScope.domain: "app.promptPane"
+            InteractionScope.role: "pane"
             visible: !root.mapPaneVisible
             side: DrawerSide.Bottom
             size: 120
@@ -351,6 +354,8 @@ Window {
 
         HorizontalDrawer {
             id: leftDrawer
+            InteractionScope.domain: "app.sessionPane"
+            InteractionScope.role: "pane"
             size: 220
             sizeMin: 140
             sizeMax: root.width > 500 ? root.width / 2 : 250
@@ -411,6 +416,8 @@ Window {
 
             DropdownMenu {
                 id: historyMenu
+                interactionController: root.interaction
+                interactionDomain: "app.historyMenu"
                 x: leftDrawer.width - width
                 y: historyGutter.y + clearHistoryButton.y + clearHistoryButton.height + 2
 
@@ -439,10 +446,9 @@ Window {
                     height: 28
 
                     readonly property bool renaming: root.renamingSession === model.sessionId
-                    readonly property bool menuEngaged: sessionMenu.opened && !sessionMenuButton.openedByButton
                     color: model.sessionId === chat.activeSession
                         ? Theme.color.active
-                        : ((rowHover.hovered || menuEngaged) ? Theme.color.hover : "transparent")
+                        : ((rowHover.hovered || sessionMenu.opened) ? Theme.color.hover : "transparent")
 
                     HoverHandler {
                         id: rowHover
@@ -455,7 +461,6 @@ Window {
                         acceptedButtons: Qt.LeftButton | Qt.RightButton
                         onClicked: mouse => {
                             if (mouse.button === Qt.RightButton) {
-                                sessionMenuButton.openedByButton = false
                                 sessionMenu.openAt(mouse.x, mouse.y)
                                 return
                             }
@@ -533,13 +538,11 @@ Window {
                     IconButton {
                         id: sessionMenuButton
                         iconName: "ellipsis"
-                        property bool openedByButton: false
-                        active: sessionMenu.opened && sessionMenuButton.openedByButton
+                        active: sessionMenu.opened
                         anchors.right: parent.right
                         anchors.rightMargin: 6
                         anchors.verticalCenter: parent.verticalCenter
                         onClicked: {
-                            sessionMenuButton.openedByButton = true
                             sessionMenu.x = sessionRow.width - sessionMenu.width
                             sessionMenu.y = sessionRow.height + 2
                             sessionMenu.toggle()
@@ -548,6 +551,9 @@ Window {
 
                     ContextMenu {
                         id: sessionMenu
+                        interactionController: root.interaction
+                        interactionDomain: "app.sessionMenu"
+                        layerKind: "contextMenu"
 
                         MenuButton {
                             width: sessionMenu.width - sessionMenu.padding * 2
@@ -575,6 +581,8 @@ Window {
 
     DropdownMenu {
         id: appMenu
+        interactionController: root.interaction
+        interactionDomain: "app.appMenu"
         x: Theme.metric.spacing
         y: topBar.menuAnchorBottom + 2
 
@@ -612,18 +620,21 @@ Window {
 
     ConfirmDialog {
         id: deleteDialog
+        interactionController: root.interaction
         message: qsTr("Are you sure you want to delete this session's history?")
         onAccepted: chat.deleteSession(root.pendingDelete)
     }
 
     ConfirmDialog {
         id: clearDialog
+        interactionController: root.interaction
         message: qsTr("Are you sure you want to clear all conversation history?")
         onAccepted: chat.clearHistory()
     }
 
     AboutDialog {
         id: aboutDialog
+        interactionController: root.interaction
         title: qsTr("mindtosis")
         version: qsTr("Version 0.0.0")
         description: chat.status.length > 0 ? chat.status : qsTr("An AI agent harness.")
@@ -653,6 +664,7 @@ Window {
 
     ConfirmDialog {
         id: quitDialog
+        interactionController: root.interaction
         message: qsTr("Are you sure you want to exit? Any in-flight responses will be cancelled.")
         confirmText: qsTr("Quit")
         cancelText: qsTr("Cancel")

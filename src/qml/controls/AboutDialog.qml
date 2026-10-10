@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Effects
+import Lib.Interaction
 import Lib.Theme
 
 Popup {
@@ -9,6 +10,10 @@ Popup {
     required property string title
     property string version: ""
     property string description: ""
+    property var interactionController: null
+    property string interactionDomain: "app.dialog"
+    property string layerKind: "dialog"
+    property var layerToken: 0
 
     modal: true
     width: 320
@@ -17,6 +22,32 @@ Popup {
     implicitHeight: contentColumn.implicitHeight + padding * 2
     x: (parent.width - width) / 2
     y: (parent.height - height) / 2
+    closePolicy: Popup.CloseOnPressOutside
+
+    function dismissLayer() {
+        control.close()
+    }
+
+    onAboutToShow: {
+        if (control.interactionController && control.layerToken === 0) {
+            control.layerToken = control.interactionController.pushLayer(
+                control,
+                control.layerKind,
+                control.interactionDomain,
+                0,
+                true,
+                true,
+                true
+            )
+        }
+    }
+
+    onClosed: {
+        if (control.interactionController && control.layerToken !== 0) {
+            control.interactionController.popLayer(control.layerToken)
+            control.layerToken = 0
+        }
+    }
 
     background: Item {
         RectangularShadow {
@@ -39,20 +70,11 @@ Popup {
 
     contentItem: Column {
         id: contentColumn
+        InteractionScope.domain: control.interactionDomain
+        InteractionScope.role: "layer-content"
+        InteractionScope.focusable: true
         width: control.width - control.padding * 2
         spacing: 8
-
-        Keys.onEscapePressed: {
-            control.close()
-            event.accepted = true
-        }
-
-        Shortcut {
-            sequence: "Escape"
-            context: Qt.WindowShortcut
-            enabled: control.opened
-            onActivated: control.close()
-        }
 
         Text {
             text: control.title

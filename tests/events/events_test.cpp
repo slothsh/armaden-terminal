@@ -49,3 +49,31 @@ TEST_CASE("event bus publishes interaction events synchronously", "[core][events
     REQUIRE(seen.current == 7);
     REQUIRE(seen.domain == "app.list");
 }
+
+TEST_CASE("event bus publishes layer lifecycle events synchronously", "[core][events]") {
+    mts::events::EventBus bus;
+    mts::events::LayerChanged seen{
+        .id = 0,
+        .depth = 0,
+        .domain = {},
+        .action = {},
+    };
+
+    [[maybe_unused]] auto const id = bus.subscribe<mts::events::LayerChanged>(
+        [&seen](mts::events::LayerChanged const& event) {
+            seen = event;
+        }
+    );
+
+    bus.publishDirect(mts::events::LayerChanged{
+        .id = 9,
+        .depth = 2,
+        .domain = "app.dialog",
+        .action = "pushed",
+    });
+
+    REQUIRE(seen.id == 9);
+    REQUIRE(seen.depth == 2);
+    REQUIRE(seen.domain == "app.dialog");
+    REQUIRE(seen.action == "pushed");
+}
