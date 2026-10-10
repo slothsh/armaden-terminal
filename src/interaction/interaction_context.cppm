@@ -26,6 +26,7 @@ enum class ContextChangeKind : u8 {
 struct ContextChange {
     ContextChangeKind kind;
     TargetId target;
+    TargetId previous;
     PointerButton button = PointerButton::None;
     Point position;
 };
@@ -62,8 +63,9 @@ public:
             return;
         }
 
+        TargetId const previous = m_focused;
         m_focused = target;
-        this->notify(ContextChangeKind::FocusChanged, target, PointerButton::None, this->pointerPosition());
+        this->notify(ContextChangeKind::FocusChanged, target, previous, PointerButton::None, this->pointerPosition());
     }
 
     auto setCurrent(TargetId target) -> void {
@@ -71,8 +73,9 @@ public:
             return;
         }
 
+        TargetId const previous = m_current;
         m_current = target;
-        this->notify(ContextChangeKind::CurrentChanged, target, PointerButton::None, this->pointerPosition());
+        this->notify(ContextChangeKind::CurrentChanged, target, previous, PointerButton::None, this->pointerPosition());
     }
 
     auto setLastClicked(TargetId target) -> void {
@@ -84,8 +87,9 @@ public:
             return;
         }
 
+        TargetId const previous = m_hovered;
         m_hovered = target;
-        this->notify(ContextChangeKind::HoverChanged, target, PointerButton::None, this->pointerPosition());
+        this->notify(ContextChangeKind::HoverChanged, target, previous, PointerButton::None, this->pointerPosition());
     }
 
     auto recordPress(PointerButton button, Point position, Modifiers modifiers) -> void {
@@ -102,7 +106,7 @@ public:
 
         m_lastPressTime = this->now();
         m_lastPressPosition = position;
-        this->notify(ContextChangeKind::Pressed, m_current, button, position);
+        this->notify(ContextChangeKind::Pressed, m_current, TargetId::invalid(), button, position);
     }
 
     auto recordRelease(PointerButton button, Point position, Modifiers modifiers) -> void {
@@ -110,7 +114,7 @@ public:
         m_pointer.y = position.y;
         m_pointer.modifiers = modifiers;
         this->applyButton(button, false);
-        this->notify(ContextChangeKind::Released, m_current, button, position);
+        this->notify(ContextChangeKind::Released, m_current, TargetId::invalid(), button, position);
     }
 
     auto recordMove(Point position, Modifiers modifiers) -> void {
@@ -125,13 +129,20 @@ public:
         }
 
         m_pointer.modifiers = modifiers;
-        this->notify(ContextChangeKind::ModifiersChanged, TargetId::invalid(), PointerButton::None, this->pointerPosition());
+        this->notify(
+            ContextChangeKind::ModifiersChanged,
+            TargetId::invalid(),
+            TargetId::invalid(),
+            PointerButton::None,
+            this->pointerPosition()
+        );
     }
 
     auto recordClick(TargetId target, PointerButton button, Point position) -> void {
+        TargetId const previous = m_current;
         this->setCurrent(target);
         m_lastClicked = target;
-        this->notify(ContextChangeKind::Clicked, target, button, position);
+        this->notify(ContextChangeKind::Clicked, target, previous, button, position);
     }
 
     [[nodiscard]] auto focused() const -> std::optional<TargetRef> {
@@ -271,8 +282,14 @@ private:
         return dx * dx + dy * dy < kRepeatDistance * kRepeatDistance;
     }
 
-    auto notify(ContextChangeKind kind, TargetId target, PointerButton button, Point position) const -> void {
-        ContextChange const change{kind, target, button, position};
+    auto notify(
+        ContextChangeKind kind,
+        TargetId target,
+        TargetId previous,
+        PointerButton button,
+        Point position
+    ) const -> void {
+        ContextChange const change{kind, target, previous, button, position};
         for (Entry const& entry : m_handlers) {
             entry.handler(change);
         }

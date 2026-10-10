@@ -9,6 +9,7 @@
 #include <QQuickItem>
 
 import std;
+import events;
 import interaction;
 
 namespace {
@@ -59,6 +60,12 @@ auto selectionModeFrom(QString const& value) -> mts::interaction::SelectionMode 
     return mts::interaction::SelectionMode::None;
 }
 
+auto domainOf(mts::interaction::TargetRegistry const& registry, mts::interaction::TargetId target) -> std::string {
+    auto const resolved = registry.find(target);
+
+    return resolved.has_value() ? std::string(resolved->domain.path()) : std::string{};
+}
+
 auto toDescriptor(InteractionScope const& scope) -> mts::interaction::TargetDescriptor {
     QRectF const geometry = scope.sceneGeometry();
 
@@ -93,9 +100,16 @@ auto toDescriptor(InteractionScope const& scope) -> mts::interaction::TargetDesc
 InteractionController::InteractionController(QObject* parent)
     : QObject(parent)
     , m_registry(std::make_unique<mts::interaction::TargetRegistry>())
-    , m_context(std::make_unique<mts::interaction::ContextStore>(*m_registry)) {
-    m_contextSubscription = m_context->subscribe([this](mts::interaction::ContextChange const&) {
+    , m_context(std::make_unique<mts::interaction::ContextStore>(*m_registry))
+    , m_selection(std::make_unique<mts::interaction::SelectionModel>(*m_registry))
+    , m_trace(std::make_unique<mts::interaction::TraceRing>()) {
+    m_contextSubscription = m_context->subscribe([this](mts::interaction::ContextChange const& change) {
+        this->recordContextChange(change);
         emit this->contextChanged();
+    });
+
+    m_selectionSubscription = m_selection->subscribe([this](mts::interaction::SelectionChange const& change) {
+        this->recordSelectionChange(change);
     });
 
     InteractionHub* hub = InteractionHub::instance();
@@ -109,6 +123,10 @@ InteractionController::InteractionController(QObject* parent)
 }
 
 InteractionController::~InteractionController() {
+    if (m_selection != nullptr) {
+        m_selection->unsubscribe(m_selectionSubscription);
+    }
+
     if (m_context != nullptr) {
         m_context->unsubscribe(m_contextSubscription);
     }
@@ -134,8 +152,20 @@ auto InteractionController::hoveredTarget() const -> quint64 {
     return m_context->hoveredId().packed();
 }
 
+auto InteractionController::setEventBus(mts::events::EventBus* bus) -> void {
+    m_bus = bus;
+}
+
 auto InteractionController::registry() -> mts::interaction::TargetRegistry& {
     return *m_registry;
+}
+
+auto InteractionController::selection() -> mts::interaction::SelectionModel& {
+    return *m_selection;
+}
+
+auto InteractionController::trace() -> mts::interaction::TraceRing& {
+    return *m_trace;
 }
 
 auto InteractionController::context() -> mts::interaction::ContextStore& {
@@ -329,4 +359,98 @@ auto InteractionController::onScopeDestroyed(InteractionScope* scope) -> void {
     m_ownerIndex.remove(scope->owner());
     m_bindings.erase(binding);
     emit this->registryChanged();
+}
+
+auto InteractionController::recordContextChange(mts::interaction::ContextChange const& change) -> void {
+    mts::interaction::TargetId const target = change.target;
+    mts::interaction::TargetId const previous = change.previous;
+    std::string const domain = domainOf(*m_registry, target);
+    mts::interaction::u64 const targetPacked = target.packed();
+    mts::interaction::u64 const previousPacked = previous.packed();
+
+    switch (change.kind) {
+        case mts::interaction::ContextChangeKind::FocusChanged: {
+            m_trace->record(mts::interaction::TraceKind::FocusChanged, target, mts::interaction::Domain(domain));
+            if (m_bus != nullptr) {
+                m_bus->publishDirect(mts::events::FocusChanged{previousPacked, targetPacked, domain});
+            }
+            mts::log::debug("focus changed {} -> {} ({})", previousPacked, targetPacked, domain);
+            break;
+        }
+
+        case mts::interaction::ContextChangeKind::CurrentChanged: {
+            m_trace->record(mts::interaction::TraceKind::CurrentChanged, target, mts::interaction::Domain(domain));
+            if (m_bus != nullptr) {
+                m_bus->publishDirect(mts::events::CurrentTargetChanged{previousPacked, targetPacked, domain});
+            }
+            mts::log::debug("current target changed {} -> {} ({})", previousPacked, targetPacked, domain);
+            break;
+        }
+
+        case mts::interaction::ContextChangeKind::HoverChanged: {
+            m_trace->record(mts::interaction::TraceKind::HoverChanged, target, mts::interaction::Domain(domain));
+            if (m_bus != nullptr) {
+                m_bus->publishDirect(mts::events::HoverChanged{previousPacked, targetPacked, domain});
+            }
+            mts::log::trace("hover changed {} -> {} ({})", previousPacked, targetPacked, domain);
+            break;
+        }
+
+        case mts::interaction::ContextChangeKind::Pressed: {
+            m_trace->record(mts::interaction::TraceKind::Pressed, target, mts::interaction::Domain(domain), std::format("{}@{},{}", static_cast<int>(change.button), change.position.x, change.position.y));
+            mts::log::debug("pressed {} at {},{} ({})", static_cast<int>(change.button), change.position.x, change.position.y, domain);
+            break;
+        }
+
+        case mts::interaction::ContextChangeKind::Released: {
+            m_trace->record(mts::interaction::TraceKind::Released, target, mts::interaction::Domain(domain), std::format("{}@{},{}", static_cast<int>(change.button), change.position.x, change.position.y));
+            mts::log::debug("released {} at {},{} ({})", static_cast<int>(change.button), change.position.x, change.position.y, domain);
+            break;
+        }
+
+        case mts::interaction::ContextChangeKind::ModifiersChanged: {
+            m_trace->record(mts::interaction::TraceKind::ModifiersChanged, target, mts::interaction::Domain(domain));
+            mts::log::trace("modifiers changed ({} domain)", domain);
+            break;
+        }
+
+        case mts::interaction::ContextChangeKind::Clicked: {
+            m_trace->record(mts::interaction::TraceKind::Clicked, target, mts::interaction::Domain(domain), std::format("{}@{},{}", static_cast<int>(change.button), change.position.x, change.position.y));
+            mts::log::debug("clicked {} {} at {},{} ({})", targetPacked, static_cast<int>(change.button), change.position.x, change.position.y, domain);
+            break;
+        }
+    }
+}
+
+auto InteractionController::recordSelectionChange(mts::interaction::SelectionChange const& change) -> void {
+    std::string const domain(change.domain.path());
+    mts::interaction::TraceKind const kind = change.kind == mts::interaction::SelectionChangeKind::Added
+        ? mts::interaction::TraceKind::SelectionAdded
+        : (change.kind == mts::interaction::SelectionChangeKind::Removed
+            ? mts::interaction::TraceKind::SelectionRemoved
+            : mts::interaction::TraceKind::SelectionReset);
+
+    auto const pack = [](std::vector<mts::interaction::TargetId> const& list) {
+        std::vector<mts::interaction::u64> result;
+        result.reserve(list.size());
+        for (mts::interaction::TargetId const id : list) {
+            result.push_back(id.packed());
+        }
+
+        return result;
+    };
+
+    m_trace->record(kind, mts::interaction::TargetId::invalid(), change.domain, std::format("{} targets", pack(change.added).size() + pack(change.removed).size()));
+
+    if (m_bus != nullptr) {
+        m_bus->publishDirect(mts::events::SelectionChanged{
+            domain,
+            m_selection->count(change.domain),
+            pack(m_selection->ordered(change.domain)),
+            pack(change.added),
+            pack(change.removed),
+        });
+    }
+
+    mts::log::debug("selection {} in {}: +{} -{} ({})", static_cast<int>(kind), domain, pack(change.added).size(), pack(change.removed).size(), m_selection->count(change.domain));
 }

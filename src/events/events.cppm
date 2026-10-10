@@ -74,6 +74,34 @@ struct CompactionApplied {
     std::string detail;
 };
 
+using InteractionTarget = std::uint64_t;
+
+struct FocusChanged {
+    InteractionTarget previous;
+    InteractionTarget current;
+    std::string domain;
+};
+
+struct CurrentTargetChanged {
+    InteractionTarget previous;
+    InteractionTarget current;
+    std::string domain;
+};
+
+struct HoverChanged {
+    InteractionTarget previous;
+    InteractionTarget current;
+    std::string domain;
+};
+
+struct SelectionChanged {
+    std::string domain;
+    std::size_t count;
+    std::vector<InteractionTarget> targets;
+    std::vector<InteractionTarget> added;
+    std::vector<InteractionTarget> removed;
+};
+
 using EventTypes = std::tuple<
     SessionCreated,
     SessionUpdated,
@@ -85,7 +113,11 @@ using EventTypes = std::tuple<
     ToolCallStarted,
     ToolCallFinished,
     BudgetExceeded,
-    CompactionApplied
+    CompactionApplied,
+    FocusChanged,
+    CurrentTargetChanged,
+    HoverChanged,
+    SelectionChanged
 >;
 
 template <class Event>
@@ -172,6 +204,11 @@ public:
         });
     }
 
+    template <class Event>
+    auto publishDirect(Event event) -> void {
+        std::get<Signal<Event>>(m_signals).publish(std::move(event));
+    }
+
 private:
     runtime::ThreadPool* m_pool;
     std::tuple<
@@ -185,7 +222,11 @@ private:
         Signal<ToolCallStarted>,
         Signal<ToolCallFinished>,
         Signal<BudgetExceeded>,
-        Signal<CompactionApplied>
+        Signal<CompactionApplied>,
+        Signal<FocusChanged>,
+        Signal<CurrentTargetChanged>,
+        Signal<HoverChanged>,
+        Signal<SelectionChanged>
     > m_signals;
 };
 

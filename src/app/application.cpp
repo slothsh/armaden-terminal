@@ -305,6 +305,7 @@ mts::app::Application::Application(int argc, char** argv)
     );
 
     m_interaction = new InteractionController(m_application.get());
+    m_interaction->setEventBus(m_bus.get());
 
     mts::app::AppContext const context{
         *m_pool,
