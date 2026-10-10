@@ -172,7 +172,8 @@ public:
             return false;
         }
 
-        return resolved->domain.isWithin(layer->descriptor.domain);
+        return resolved->domain.isWithin(layer->descriptor.domain)
+            || (layer->descriptor.kind == LayerKind::ContextMenu && layer->descriptor.owner == target);
     }
 
     [[nodiscard]] auto shouldDismissOnEscape() const -> bool {

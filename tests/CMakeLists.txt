@@ -1,3 +1,5 @@
+find_package(Qt6 6.11 REQUIRED COMPONENTS Core)
+
 add_test_target(core_test core/core_test.cpp)
 target_link_libraries(core_test PRIVATE LibCore)
 
@@ -48,3 +50,8 @@ target_link_libraries(interaction_navigation_test PRIVATE LibInteraction)
 
 add_test_target(interaction_commands_test interaction/interaction_commands_test.cpp)
 target_link_libraries(interaction_commands_test PRIVATE LibInteraction)
+
+add_test_target(map_view_test map/map_view_test.cpp)
+target_sources(map_view_test PRIVATE ../src/qobjects/map_view.cpp)
+target_include_directories(map_view_test PRIVATE ../src/qobjects)
+target_link_libraries(map_view_test PRIVATE Qt6::Core)

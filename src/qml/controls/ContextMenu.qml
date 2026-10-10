@@ -5,6 +5,7 @@ DropdownMenu {
     id: control
 
     actionSurface: "contextMenu"
+    layerKind: "contextMenu"
 
     function openAt(px, py) {
         if (control.interactionController) {

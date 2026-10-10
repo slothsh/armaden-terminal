@@ -6,6 +6,7 @@
 #include <QObject>
 #include <QPointer>
 #include <QQuickWindow>
+#include <QPointF>
 #include <QVariantList>
 #include <QtQml/qqmlregistration.h>
 
@@ -35,6 +36,7 @@ struct TargetId;
 }
 
 class InteractionScope;
+class QQuickItem;
 
 class InteractionController : public QObject {
     Q_OBJECT
@@ -46,6 +48,7 @@ class InteractionController : public QObject {
     Q_PROPERTY(QString focusedDomain READ focusedDomain NOTIFY contextChanged)
     Q_PROPERTY(quint64 currentTarget READ currentTarget NOTIFY contextChanged)
     Q_PROPERTY(quint64 hoveredTarget READ hoveredTarget NOTIFY contextChanged)
+    Q_PROPERTY(QPointF pointerPosition READ pointerPosition NOTIFY pointerMoved)
     Q_PROPERTY(int layerDepth READ layerDepth NOTIFY layersChanged)
     Q_PROPERTY(quint64 topLayerId READ topLayerId NOTIFY layersChanged)
     Q_PROPERTY(int actionRevision READ actionRevision NOTIFY actionsChanged)
@@ -64,6 +67,7 @@ public:
     [[nodiscard]] auto focusedDomain() const -> QString;
     [[nodiscard]] auto currentTarget() const -> quint64;
     [[nodiscard]] auto hoveredTarget() const -> quint64;
+    [[nodiscard]] auto pointerPosition() const -> QPointF;
     [[nodiscard]] auto layerDepth() const -> int;
     [[nodiscard]] auto topLayerId() const -> quint64;
     [[nodiscard]] auto actionRevision() const -> int;
@@ -142,6 +146,7 @@ public:
 signals:
     auto registryChanged() -> void;
     auto contextChanged() -> void;
+    auto pointerMoved(QPointF position) -> void;
     auto layersChanged() -> void;
     auto selectionChanged(QString domain) -> void;
     auto actionsChanged() -> void;
@@ -163,6 +168,14 @@ private:
     auto resolveFocus(QQuickWindow* window) -> void;
     [[nodiscard]] auto scopeForItem(QQuickItem const* item) const -> InteractionScope*;
     [[nodiscard]] auto hitTestTarget(QQuickWindow* window, QPointF const& scenePosition) const -> quint64;
+    [[nodiscard]] auto itemForTarget(quint64 target) const -> QQuickItem*;
+    [[nodiscard]] auto targetForGesture(
+        mts::interaction::TargetId target,
+        QPointF position,
+        bool pan
+    ) const -> mts::interaction::TargetId;
+    auto dispatchPan(quint64 target, QPointF delta) -> bool;
+    auto dispatchZoom(quint64 target, qreal delta, QPointF position) -> bool;
     auto recordContextChange(mts::interaction::ContextChange const& change) -> void;
     auto recordSelectionChange(mts::interaction::SelectionChange const& change) -> void;
     auto recordLayerChange(mts::interaction::LayerChange const& change) -> void;
@@ -194,6 +207,8 @@ private:
     QHash<QObject*, InteractionScope*> m_ownerIndex;
     QPointer<QQuickWindow> m_window;
     QMetaObject::Connection m_focusConnection;
+    quint64 m_pointerPanTarget = 0;
+    QPointF m_lastPointerPosition;
     std::size_t m_contextSubscription = 0;
     std::size_t m_selectionSubscription = 0;
     std::size_t m_layerSubscription = 0;

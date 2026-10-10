@@ -239,6 +239,9 @@ Window {
             id: mapCanvas
             InteractionScope.domain: "app.map"
             InteractionScope.role: "surface"
+            InteractionScope.label: qsTr("Map canvas")
+            InteractionScope.group: "map-camera"
+            InteractionScope.order: 0
             InteractionScope.hitTestable: true
             InteractionScope.contextMenuable: true
             InteractionScope.focusable: true
@@ -246,6 +249,8 @@ Window {
             InteractionScope.navigable: true
             InteractionScope.draggable: true
             InteractionScope.scrollable: true
+            InteractionScope.pannable: true
+            InteractionScope.zoomable: true
             anchors.fill: parent
             visible: root.mapPaneVisible
             controller: chat.mapController

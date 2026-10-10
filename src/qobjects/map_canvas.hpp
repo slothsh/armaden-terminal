@@ -2,16 +2,13 @@
 
 #include <QCanvasPainterItem>
 #include <QPointer>
-#include <QPointF>
 #include <QtQml/qqmlregistration.h>
 
 #include "map_controller.hpp"
 #include "map_view.hpp"
 
 class QCanvasPainterItemRenderer;
-class QMouseEvent;
 class QTimer;
-class QWheelEvent;
 
 class MapCanvas : public QCanvasPainterItem {
     Q_OBJECT
@@ -39,6 +36,8 @@ public:
     [[nodiscard]] auto view() const -> MapView const&;
 
     Q_INVOKABLE auto fitToMap() -> void;
+    Q_INVOKABLE auto interactionPan(qreal dx, qreal dy) -> void;
+    Q_INVOKABLE auto interactionZoom(qreal delta, qreal x, qreal y) -> void;
 
 signals:
     auto controllerChanged() -> void;
@@ -52,10 +51,6 @@ public slots:
 protected:
     auto componentComplete() -> void override;
     auto createItemRenderer() const -> QCanvasPainterItemRenderer* override;
-    auto mousePressEvent(QMouseEvent* event) -> void override;
-    auto mouseMoveEvent(QMouseEvent* event) -> void override;
-    auto mouseReleaseEvent(QMouseEvent* event) -> void override;
-    auto wheelEvent(QWheelEvent* event) -> void override;
 
 private:
     auto maybeApplyInitialView() -> void;
@@ -65,6 +60,4 @@ private:
     QMetaObject::Connection m_readyConnection;
     bool m_initialViewApplied = false;
     MapView m_view;
-    QPointF m_lastDragPosition;
-    bool m_dragging = false;
 };

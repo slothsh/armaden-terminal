@@ -8,6 +8,8 @@
 #include <QMouseEvent>
 #include <QQuickItem>
 #include <QTimer>
+#include <QtGlobal>
+#include <QWheelEvent>
 
 import std;
 import events;
@@ -47,6 +49,15 @@ auto modifiersFrom(Qt::KeyboardModifiers modifiers) -> mts::interaction::Modifie
 
 auto toPoint(QPointF const& position) -> mts::interaction::Point {
     return mts::interaction::Point{position.x(), position.y()};
+}
+
+auto wheelSteps(QWheelEvent const& event) -> qreal {
+    QPoint const angleDelta = event.angleDelta();
+    QPoint const pixelDelta = event.pixelDelta();
+
+    return angleDelta.y() != 0
+        ? qreal(angleDelta.y()) / 120.0
+        : qreal(pixelDelta.y()) / 100.0;
 }
 
 auto selectionModeFrom(QString const& value) -> mts::interaction::SelectionMode {
@@ -101,6 +112,14 @@ auto navigationKeyFrom(int key) -> std::optional<mts::interaction::NavigationKey
 
         case Qt::Key_Right: {
             return mts::interaction::NavigationKey::ArrowRight;
+        }
+
+        case Qt::Key_Plus: {
+            return mts::interaction::NavigationKey::Plus;
+        }
+
+        case Qt::Key_Minus: {
+            return mts::interaction::NavigationKey::Minus;
         }
 
         case Qt::Key_Menu: {
@@ -289,6 +308,8 @@ auto toDescriptor(InteractionScope const& scope) -> mts::interaction::TargetDesc
     descriptor.capabilities.draggable = scope.draggable();
     descriptor.capabilities.scrollable = scope.scrollable();
     descriptor.capabilities.hitTestable = scope.hitTestable();
+    descriptor.capabilities.pannable = scope.pannable();
+    descriptor.capabilities.zoomable = scope.zoomable();
     descriptor.capabilities.selection = selectionModeFrom(scope.selectionMode());
 
     return descriptor;
@@ -433,6 +454,12 @@ auto InteractionController::currentTarget() const -> quint64 {
 
 auto InteractionController::hoveredTarget() const -> quint64 {
     return m_context->hoveredId().packed();
+}
+
+auto InteractionController::pointerPosition() const -> QPointF {
+    mts::interaction::PointerState const pointer = m_context->pointer();
+
+    return QPointF(pointer.x, pointer.y);
 }
 
 auto InteractionController::layerDepth() const -> int {
@@ -1303,6 +1330,71 @@ auto InteractionController::routeKeyEvent(QQuickWindow* window, QEvent* event) -
             return this->extendSelection(domainName, QStringLiteral("right"));
         }
 
+        case mts::interaction::NavigationCommand::PanUp:
+        case mts::interaction::NavigationCommand::PanDown:
+        case mts::interaction::NavigationCommand::PanLeft:
+        case mts::interaction::NavigationCommand::PanRight: {
+            if (!target.has_value()) {
+                return false;
+            }
+
+            QPointF delta;
+            switch (binding->command) {
+                case mts::interaction::NavigationCommand::PanUp: {
+                    delta.setY(-48.0);
+                    break;
+                }
+
+                case mts::interaction::NavigationCommand::PanDown: {
+                    delta.setY(48.0);
+                    break;
+                }
+
+                case mts::interaction::NavigationCommand::PanLeft: {
+                    delta.setX(-48.0);
+                    break;
+                }
+
+                case mts::interaction::NavigationCommand::PanRight: {
+                    delta.setX(48.0);
+                    break;
+                }
+
+                default: {
+                    return false;
+                }
+            }
+
+            QPointF const position(
+                target->geometry.x + target->geometry.width * 0.5,
+                target->geometry.y + target->geometry.height * 0.5
+            );
+            mts::interaction::TargetId const panTarget = this->targetForGesture(current, position, true);
+
+            return panTarget.valid() && this->dispatchPan(panTarget.packed(), delta);
+        }
+
+        case mts::interaction::NavigationCommand::ZoomIn:
+        case mts::interaction::NavigationCommand::ZoomOut: {
+            if (!target.has_value()) {
+                return false;
+            }
+
+            QPointF const position(
+                target->geometry.x + target->geometry.width * 0.5,
+                target->geometry.y + target->geometry.height * 0.5
+            );
+            mts::interaction::TargetId const zoomTarget = this->targetForGesture(current, position, false);
+            QQuickItem* const item = this->itemForTarget(zoomTarget.packed());
+            if (!zoomTarget.valid() || item == nullptr) {
+                return false;
+            }
+
+            qreal const delta = binding->command == mts::interaction::NavigationCommand::ZoomIn ? 1.0 : -1.0;
+
+            return this->dispatchZoom(zoomTarget.packed(), delta, item->boundingRect().center());
+        }
+
         case mts::interaction::NavigationCommand::Activate: {
             return this->activateTarget(current.packed());
         }
@@ -1387,8 +1479,38 @@ auto InteractionController::syncWindowEvent(QQuickWindow* window, QEvent* event)
         case QEvent::MouseMove: {
             auto const* mouse = static_cast<QMouseEvent*>(event);
             m_context->recordMove(toPoint(mouse->position()), modifiersFrom(mouse->modifiers()));
+            emit this->pointerMoved(mouse->position());
             m_context->setHovered(mts::interaction::TargetId::fromPacked(this->hitTestTarget(window, mouse->position())));
-            break;
+
+            if (m_pointerPanTarget == 0) {
+                break;
+            }
+
+            auto const panTarget = mts::interaction::TargetId::fromPacked(m_pointerPanTarget);
+            auto const resolved = m_registry->find(panTarget);
+            if (!resolved.has_value() || !resolved->capabilities.pannable) {
+                m_pointerPanTarget = 0;
+                break;
+            }
+
+            if (!m_layers->ownsInput(panTarget, *m_registry)) {
+                m_pointerPanTarget = 0;
+
+                return true;
+            }
+
+            QQuickItem* const item = this->itemForTarget(m_pointerPanTarget);
+            if (item == nullptr) {
+                m_pointerPanTarget = 0;
+                break;
+            }
+
+            QPointF const previousPosition = item->mapFromScene(m_lastPointerPosition);
+            QPointF const currentPosition = item->mapFromScene(mouse->position());
+            m_lastPointerPosition = mouse->position();
+            static_cast<void>(this->dispatchPan(m_pointerPanTarget, currentPosition - previousPosition));
+
+            return true;
         }
 
         case QEvent::MouseButtonPress: {
@@ -1398,6 +1520,7 @@ auto InteractionController::syncWindowEvent(QQuickWindow* window, QEvent* event)
             );
 
             m_context->recordMove(toPoint(mouse->position()), modifiersFrom(mouse->modifiers()));
+            emit this->pointerMoved(mouse->position());
             m_context->setHovered(target);
             m_context->recordPress(buttonFrom(mouse->button()), toPoint(mouse->position()), modifiersFrom(mouse->modifiers()));
 
@@ -1419,6 +1542,16 @@ auto InteractionController::syncWindowEvent(QQuickWindow* window, QEvent* event)
                 } else {
                     this->resolveFocus(window);
                 }
+                if (mouse->button() == Qt::MiddleButton) {
+                    mts::interaction::TargetId const panTarget = this->targetForGesture(target, mouse->position(), true);
+                    if (panTarget.valid()) {
+                        m_pointerPanTarget = panTarget.packed();
+                        m_lastPointerPosition = mouse->position();
+                        static_cast<void>(window->setMouseGrabEnabled(true));
+
+                        return true;
+                    }
+                }
             } else {
                 m_context->setCurrent(mts::interaction::TargetId::invalid());
                 this->resolveFocus(window);
@@ -1428,7 +1561,13 @@ auto InteractionController::syncWindowEvent(QQuickWindow* window, QEvent* event)
 
         case QEvent::MouseButtonRelease: {
             auto const* mouse = static_cast<QMouseEvent*>(event);
+            emit this->pointerMoved(mouse->position());
             m_context->recordRelease(buttonFrom(mouse->button()), toPoint(mouse->position()), modifiersFrom(mouse->modifiers()));
+            bool const panRelease = mouse->button() == Qt::MiddleButton && m_pointerPanTarget != 0;
+            if (panRelease) {
+                m_pointerPanTarget = 0;
+                static_cast<void>(window->setMouseGrabEnabled(false));
+            }
             if (m_outsideDismissedObject != nullptr) {
                 QPointer<QObject> const dismissed = m_outsideDismissedObject;
                 m_outsideDismissedObject = nullptr;
@@ -1438,6 +1577,35 @@ auto InteractionController::syncWindowEvent(QQuickWindow* window, QEvent* event)
                     }
                 });
             }
+            if (panRelease) {
+                return true;
+            }
+            break;
+        }
+
+        case QEvent::Wheel: {
+            auto const* wheel = static_cast<QWheelEvent*>(event);
+            mts::interaction::TargetId const target = mts::interaction::TargetId::fromPacked(
+                this->hitTestTarget(window, wheel->position())
+            );
+            m_context->recordMove(toPoint(wheel->position()), modifiersFrom(wheel->modifiers()));
+            emit this->pointerMoved(wheel->position());
+            m_context->setHovered(target);
+            if (!m_layers->ownsInput(target, *m_registry)) {
+                return true;
+            }
+
+            qreal const delta = wheelSteps(*wheel);
+            if (!qFuzzyIsNull(delta)) {
+                mts::interaction::TargetId const zoomTarget = this->targetForGesture(target, wheel->position(), false);
+                QQuickItem* const item = this->itemForTarget(zoomTarget.packed());
+                if (zoomTarget.valid() && item != nullptr) {
+                    QPointF const position = item->mapFromScene(wheel->position());
+                    if (this->dispatchZoom(zoomTarget.packed(), delta, position)) {
+                        return true;
+                    }
+                }
+            }
             break;
         }
 
@@ -1445,6 +1613,14 @@ auto InteractionController::syncWindowEvent(QQuickWindow* window, QEvent* event)
         case QEvent::KeyRelease: {
             auto const* key = static_cast<QKeyEvent*>(event);
             m_context->recordModifiers(modifiersFrom(key->modifiers()));
+            break;
+        }
+
+        case QEvent::WindowDeactivate: {
+            if (m_pointerPanTarget != 0) {
+                m_pointerPanTarget = 0;
+                static_cast<void>(window->setMouseGrabEnabled(false));
+            }
             break;
         }
 
@@ -1493,6 +1669,13 @@ auto InteractionController::scopeForItem(QQuickItem const* item) const -> Intera
 }
 
 auto InteractionController::hitTestTarget(QQuickWindow* window, QPointF const& scenePosition) const -> quint64 {
+    auto const providerTargets = m_registry->hitTest(mts::interaction::Point{scenePosition.x(), scenePosition.y()});
+    for (mts::interaction::TargetRef const& target : providerTargets) {
+        if (target.visible) {
+            return target.id.packed();
+        }
+    }
+
     mts::interaction::TargetId best;
     double bestArea = std::numeric_limits<double>::max();
     std::size_t bestDomainDepth = 0;
@@ -1543,6 +1726,90 @@ auto InteractionController::hitTestTarget(QQuickWindow* window, QPointF const& s
     }
 
     return best.packed();
+}
+
+auto InteractionController::itemForTarget(quint64 target) const -> QQuickItem* {
+    for (auto const& [scope, packedTarget] : m_bindings.asKeyValueRange()) {
+        if (packedTarget == target) {
+            return qobject_cast<QQuickItem*>(scope->owner());
+        }
+    }
+
+    return nullptr;
+}
+
+auto InteractionController::targetForGesture(
+    mts::interaction::TargetId target,
+    QPointF position,
+    bool pan
+) const -> mts::interaction::TargetId {
+    auto const origin = m_registry->find(target);
+    if (!origin.has_value()) {
+        return mts::interaction::TargetId::invalid();
+    }
+
+    auto const supportsGesture = [pan](mts::interaction::TargetRef const& candidate) {
+        return pan ? candidate.capabilities.pannable : candidate.capabilities.zoomable;
+    };
+    if (supportsGesture(*origin) && origin->visible && origin->enabled) {
+        return target;
+    }
+
+    mts::interaction::TargetId best;
+    std::size_t bestDomainSize = 0;
+    double bestArea = std::numeric_limits<double>::max();
+    for (mts::interaction::TargetRef const& candidate : m_registry->targets()) {
+        if (!supportsGesture(candidate)
+            || !candidate.visible
+            || !candidate.enabled
+            || !candidate.geometry.contains(toPoint(position))
+            || !origin->domain.isWithin(candidate.domain)) {
+            continue;
+        }
+
+        double const area = candidate.geometry.width * candidate.geometry.height;
+        std::size_t const domainSize = candidate.domain.path().size();
+        if (!best.valid() || domainSize > bestDomainSize || (domainSize == bestDomainSize && area < bestArea)) {
+            best = candidate.id;
+            bestDomainSize = domainSize;
+            bestArea = area;
+        }
+    }
+
+    return best;
+}
+
+auto InteractionController::dispatchPan(quint64 target, QPointF delta) -> bool {
+    auto const resolved = m_registry->find(mts::interaction::TargetId::fromPacked(target));
+    QQuickItem* const item = this->itemForTarget(target);
+    if (!resolved.has_value() || !resolved->capabilities.pannable || item == nullptr) {
+        return false;
+    }
+
+    return QMetaObject::invokeMethod(
+        item,
+        "interactionPan",
+        Qt::DirectConnection,
+        Q_ARG(qreal, delta.x()),
+        Q_ARG(qreal, delta.y())
+    );
+}
+
+auto InteractionController::dispatchZoom(quint64 target, qreal delta, QPointF position) -> bool {
+    auto const resolved = m_registry->find(mts::interaction::TargetId::fromPacked(target));
+    QQuickItem* const item = this->itemForTarget(target);
+    if (!resolved.has_value() || !resolved->capabilities.zoomable || item == nullptr) {
+        return false;
+    }
+
+    return QMetaObject::invokeMethod(
+        item,
+        "interactionZoom",
+        Qt::DirectConnection,
+        Q_ARG(qreal, delta),
+        Q_ARG(qreal, position.x()),
+        Q_ARG(qreal, position.y())
+    );
 }
 
 auto InteractionController::onScopeCreated(InteractionScope* scope) -> void {

@@ -360,6 +360,8 @@ mts::app::Application::Application(int argc, char** argv)
 }
 
 mts::app::Application::~Application() {
+    m_engine.reset();
+
     delete m_chat;
     m_chat = nullptr;
 
@@ -375,7 +377,6 @@ mts::app::Application::~Application() {
     m_namingProvider.reset();
     m_provider.reset();
     m_store.reset();
-    m_engine.reset();
     m_bus.reset();
     m_application.reset();
 }

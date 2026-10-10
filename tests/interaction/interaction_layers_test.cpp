@@ -147,6 +147,29 @@ TEST_CASE("non-trapping layers leave input ownership unrestricted", "[interactio
     REQUIRE(layers.ownsInput(outside, registry));
 }
 
+TEST_CASE("context menu layers permit commands for their owner without weakening modal traps", "[interaction][layers]") {
+    TargetRegistry registry;
+    TargetId const owner = addTarget(registry, "app.map");
+    TargetId const unrelated = addTarget(registry, "app.toolbar");
+    LayerStack layers;
+
+    LayerDescriptor contextMenu = makeLayer("context-menu", "app.contextMenu", true, true, true);
+    contextMenu.kind = LayerKind::ContextMenu;
+    contextMenu.owner = owner;
+    [[maybe_unused]] u64 const menu = layers.push(contextMenu);
+
+    REQUIRE(layers.ownsInput(owner, registry));
+    REQUIRE_FALSE(layers.ownsInput(unrelated, registry));
+
+    layers.clear();
+    LayerDescriptor dialog = makeLayer("dialog", "app.dialog", true, false, true);
+    dialog.kind = LayerKind::Dialog;
+    dialog.owner = owner;
+    [[maybe_unused]] u64 const modal = layers.push(dialog);
+
+    REQUIRE_FALSE(layers.ownsInput(owner, registry));
+}
+
 TEST_CASE("clear removes all layers and notifies each pop", "[interaction][layers]") {
     LayerStack layers;
     LayerRecorder recorder;

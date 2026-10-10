@@ -251,6 +251,34 @@ auto InteractionScope::setHitTestable(bool value) -> void {
     this->announceChanged();
 }
 
+auto InteractionScope::pannable() const -> bool {
+    return m_pannable;
+}
+
+auto InteractionScope::setPannable(bool value) -> void {
+    if (m_pannable == value) {
+        return;
+    }
+
+    m_pannable = value;
+    emit this->capabilitiesChanged();
+    this->announceChanged();
+}
+
+auto InteractionScope::zoomable() const -> bool {
+    return m_zoomable;
+}
+
+auto InteractionScope::setZoomable(bool value) -> void {
+    if (m_zoomable == value) {
+        return;
+    }
+
+    m_zoomable = value;
+    emit this->capabilitiesChanged();
+    this->announceChanged();
+}
+
 auto InteractionScope::targetId() const -> quint64 {
     return m_targetId;
 }

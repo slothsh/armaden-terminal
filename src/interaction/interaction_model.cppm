@@ -116,6 +116,8 @@ struct Capabilities {
     bool draggable = false;
     bool scrollable = false;
     bool hitTestable = false;
+    bool pannable = false;
+    bool zoomable = false;
     SelectionMode selection = SelectionMode::None;
 
     [[nodiscard]] auto operator==(Capabilities const&) const noexcept -> bool = default;

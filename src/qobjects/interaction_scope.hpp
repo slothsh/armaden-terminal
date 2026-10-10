@@ -27,6 +27,8 @@ class InteractionScope : public QObject {
     Q_PROPERTY(bool draggable READ draggable WRITE setDraggable NOTIFY capabilitiesChanged)
     Q_PROPERTY(bool scrollable READ scrollable WRITE setScrollable NOTIFY capabilitiesChanged)
     Q_PROPERTY(bool hitTestable READ hitTestable WRITE setHitTestable NOTIFY capabilitiesChanged)
+    Q_PROPERTY(bool pannable READ pannable WRITE setPannable NOTIFY capabilitiesChanged)
+    Q_PROPERTY(bool zoomable READ zoomable WRITE setZoomable NOTIFY capabilitiesChanged)
     Q_PROPERTY(quint64 targetId READ targetId WRITE setTargetId NOTIFY targetIdChanged)
 
 public:
@@ -83,6 +85,12 @@ public:
     [[nodiscard]] auto hitTestable() const -> bool;
     auto setHitTestable(bool value) -> void;
 
+    [[nodiscard]] auto pannable() const -> bool;
+    auto setPannable(bool value) -> void;
+
+    [[nodiscard]] auto zoomable() const -> bool;
+    auto setZoomable(bool value) -> void;
+
     [[nodiscard]] auto targetId() const -> quint64;
     auto setTargetId(quint64 value) -> void;
 
@@ -123,4 +131,6 @@ private:
     bool m_draggable = false;
     bool m_scrollable = false;
     bool m_hitTestable = false;
+    bool m_pannable = false;
+    bool m_zoomable = false;
 };

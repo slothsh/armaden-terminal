@@ -292,3 +292,31 @@ TEST_CASE("anchor is preserved across add and toggle", "[interaction][selection]
     selection.toggle(list, b);
     REQUIRE(selection.anchor(list) == a);
 }
+
+TEST_CASE("map region domains support range toggle and invert selection", "[interaction][selection][map]") {
+    TargetRegistry registry;
+    SelectionModel selection(registry);
+    Domain const regions("app.map.regions");
+    auto attachRegion = [&registry](int order) {
+        TargetDescriptor descriptor;
+        descriptor.domain = Domain("app.map.regions");
+        descriptor.role = Role("region");
+        descriptor.order = order;
+        descriptor.capabilities.selectable = true;
+
+        return registry.attach(std::move(descriptor));
+    };
+    TargetId const north = attachRegion(0);
+    TargetId const center = attachRegion(1);
+    TargetId const south = attachRegion(2);
+
+    selection.select(regions, north, SelectionIntent::Replace);
+    selection.select(regions, south, SelectionIntent::Range);
+    REQUIRE(selection.ordered(regions) == std::vector<TargetId>{north, center, south});
+
+    selection.toggle(regions, center);
+    REQUIRE(selection.ordered(regions) == std::vector<TargetId>{north, south});
+
+    selection.invert(regions, {north, center, south});
+    REQUIRE(selection.ordered(regions) == std::vector<TargetId>{center});
+}

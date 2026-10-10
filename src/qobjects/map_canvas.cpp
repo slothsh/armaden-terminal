@@ -5,13 +5,11 @@
 #include "map_view.hpp"
 
 #include <QMetaObject>
-#include <QMouseEvent>
 #include <QPoint>
 #include <QRectF>
 #include <QSizeF>
 #include <QTimer>
 #include <QtGlobal>
-#include <QWheelEvent>
 
 import map;
 
@@ -33,7 +31,6 @@ MapCanvas::MapCanvas(QQuickItem* parent)
     m_idleTimer->setSingleShot(true);
     m_idleTimer->setInterval(kIdleReleaseTimerMs);
     this->connect(m_idleTimer, &QTimer::timeout, this, [this] { this->update(); });
-    this->setAcceptedMouseButtons(Qt::MiddleButton);
     this->connect(this, &QQuickItem::widthChanged, this, [this] { this->maybeApplyInitialView(); });
     this->connect(this, &QQuickItem::heightChanged, this, [this] { this->maybeApplyInitialView(); });
 }
@@ -150,38 +147,10 @@ auto MapCanvas::view() const -> MapView const& {
     return m_view;
 }
 
-auto MapCanvas::createItemRenderer() const -> QCanvasPainterItemRenderer* {
-    return new MapRenderer;
-}
-
-auto MapCanvas::handleTileUpdate() -> void {
-    this->update();
-}
-
-auto MapCanvas::mousePressEvent(QMouseEvent* event) -> void {
-    if (event->button() != Qt::MiddleButton) {
-        event->ignore();
-        return;
-    }
-
-    m_lastDragPosition = event->position();
-    m_dragging = true;
-    event->accept();
-}
-
-auto MapCanvas::mouseMoveEvent(QMouseEvent* event) -> void {
-    if (!m_dragging) {
-        event->ignore();
-        return;
-    }
-
-    QPointF const position = event->position();
-    QPointF const delta = position - m_lastDragPosition;
-    m_lastDragPosition = position;
-
+auto MapCanvas::interactionPan(qreal dx, qreal dy) -> void {
     float const previousX = m_view.translationX();
     float const previousY = m_view.translationY();
-    m_view.applyPan(delta);
+    m_view.applyPan(QPointF(dx, dy));
 
     if (!qFuzzyCompare(previousX, m_view.translationX())) {
         emit this->translationXChanged();
@@ -193,35 +162,17 @@ auto MapCanvas::mouseMoveEvent(QMouseEvent* event) -> void {
 
     restartIdleTimer(m_idleTimer);
     this->update();
-    event->accept();
 }
 
-auto MapCanvas::mouseReleaseEvent(QMouseEvent* event) -> void {
-    if (event->button() != Qt::MiddleButton || !m_dragging) {
-        event->ignore();
-        return;
-    }
-
-    m_dragging = false;
-    event->accept();
-}
-
-auto MapCanvas::wheelEvent(QWheelEvent* event) -> void {
-    QPoint const angleDelta = event->angleDelta();
-    QPoint const pixelDelta = event->pixelDelta();
-    float const delta = angleDelta.y() != 0
-        ? float(angleDelta.y()) / 120.0f
-        : float(pixelDelta.y()) / 100.0f;
-
+auto MapCanvas::interactionZoom(qreal delta, qreal x, qreal y) -> void {
     if (qFuzzyIsNull(delta)) {
-        event->ignore();
         return;
     }
 
     float const previousX = m_view.translationX();
     float const previousY = m_view.translationY();
     float const previousDepth = m_view.zDepth();
-    m_view.applyZoom(delta, event->position(), QSizeF(this->width(), this->height()));
+    m_view.applyZoom(float(delta), QPointF(x, y), QSizeF(this->width(), this->height()));
 
     if (!qFuzzyCompare(previousX, m_view.translationX())) {
         emit this->translationXChanged();
@@ -237,5 +188,12 @@ auto MapCanvas::wheelEvent(QWheelEvent* event) -> void {
 
     restartIdleTimer(m_idleTimer);
     this->update();
-    event->accept();
+}
+
+auto MapCanvas::createItemRenderer() const -> QCanvasPainterItemRenderer* {
+    return new MapRenderer;
+}
+
+auto MapCanvas::handleTileUpdate() -> void {
+    this->update();
 }

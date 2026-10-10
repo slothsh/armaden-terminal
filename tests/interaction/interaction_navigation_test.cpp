@@ -194,6 +194,11 @@ TEST_CASE("key router resolves standard navigation bindings", "[interaction][nav
     REQUIRE(router.resolve(key(NavigationKey::Menu), Domain("app.list"))->command == NavigationCommand::ShowContextMenu);
     REQUIRE(router.resolve(key(NavigationKey::F10, shift), Domain("app.list"))->command == NavigationCommand::ShowContextMenu);
     REQUIRE(router.resolve(key(NavigationKey::A, control), Domain("app.list"))->command == NavigationCommand::SelectAll);
+    REQUIRE(router.resolve(key(NavigationKey::ArrowUp), Domain("app.map"))->command == NavigationCommand::PanUp);
+    REQUIRE(router.resolve(key(NavigationKey::ArrowRight), Domain("app.map"))->command == NavigationCommand::PanRight);
+    REQUIRE(router.resolve(key(NavigationKey::Plus), Domain("app.map"))->command == NavigationCommand::ZoomIn);
+    REQUIRE(router.resolve(key(NavigationKey::Plus, shift), Domain("app.map"))->command == NavigationCommand::ZoomIn);
+    REQUIRE(router.resolve(key(NavigationKey::Minus), Domain("app.map"))->command == NavigationCommand::ZoomOut);
 }
 
 TEST_CASE("key router prefers domain and layer-specific bindings", "[interaction][navigation]") {
@@ -229,7 +234,7 @@ TEST_CASE("key router replaces and removes custom bindings", "[interaction][navi
 
     binding.command = NavigationCommand::ShowContextMenu;
     router.bind(binding);
-    REQUIRE(router.bindings().size() == 18);
+    REQUIRE(router.bindings().size() == 25);
     REQUIRE(router.resolve(key(NavigationKey::F10), Domain("app.window"))->command == NavigationCommand::ShowContextMenu);
     REQUIRE(router.unbind(key(NavigationKey::F10), Domain("app")));
     REQUIRE_FALSE(router.resolve(key(NavigationKey::F10), Domain("app.window")).has_value());

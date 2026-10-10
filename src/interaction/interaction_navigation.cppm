@@ -23,6 +23,8 @@ enum class NavigationKey : u8 {
     ArrowDown,
     ArrowLeft,
     ArrowRight,
+    Plus,
+    Minus,
     Menu,
     F10,
     A,
@@ -37,6 +39,12 @@ enum class NavigationCommand : u8 {
     MoveDown,
     MoveLeft,
     MoveRight,
+    PanUp,
+    PanDown,
+    PanLeft,
+    PanRight,
+    ZoomIn,
+    ZoomOut,
     ExtendUp,
     ExtendDown,
     ExtendLeft,
@@ -155,6 +163,14 @@ private:
         this->bind(KeyBinding{KeyStroke{NavigationKey::ArrowDown, {}}, {}, std::nullopt, NavigationCommand::MoveDown});
         this->bind(KeyBinding{KeyStroke{NavigationKey::ArrowLeft, {}}, {}, std::nullopt, NavigationCommand::MoveLeft});
         this->bind(KeyBinding{KeyStroke{NavigationKey::ArrowRight, {}}, {}, std::nullopt, NavigationCommand::MoveRight});
+        Domain const mapDomain("app.map");
+        this->bind(KeyBinding{KeyStroke{NavigationKey::ArrowUp, {}}, mapDomain, std::nullopt, NavigationCommand::PanUp, 1});
+        this->bind(KeyBinding{KeyStroke{NavigationKey::ArrowDown, {}}, mapDomain, std::nullopt, NavigationCommand::PanDown, 1});
+        this->bind(KeyBinding{KeyStroke{NavigationKey::ArrowLeft, {}}, mapDomain, std::nullopt, NavigationCommand::PanLeft, 1});
+        this->bind(KeyBinding{KeyStroke{NavigationKey::ArrowRight, {}}, mapDomain, std::nullopt, NavigationCommand::PanRight, 1});
+        this->bind(KeyBinding{KeyStroke{NavigationKey::Plus, {}}, mapDomain, std::nullopt, NavigationCommand::ZoomIn, 1});
+        this->bind(KeyBinding{KeyStroke{NavigationKey::Plus, shift}, mapDomain, std::nullopt, NavigationCommand::ZoomIn, 1});
+        this->bind(KeyBinding{KeyStroke{NavigationKey::Minus, {}}, mapDomain, std::nullopt, NavigationCommand::ZoomOut, 1});
         this->bind(KeyBinding{KeyStroke{NavigationKey::ArrowUp, shift}, {}, std::nullopt, NavigationCommand::ExtendUp});
         this->bind(KeyBinding{KeyStroke{NavigationKey::ArrowDown, shift}, {}, std::nullopt, NavigationCommand::ExtendDown});
         this->bind(KeyBinding{KeyStroke{NavigationKey::ArrowLeft, shift}, {}, std::nullopt, NavigationCommand::ExtendLeft});

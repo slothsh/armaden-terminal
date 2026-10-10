@@ -70,7 +70,7 @@ Popup {
                 control,
                 control.layerKind,
                 control.interactionDomain,
-                0,
+                control.actionTarget,
                 control.dismissOnEscape,
                 control.dismissOnOutsideClick,
                 control.focusTrap

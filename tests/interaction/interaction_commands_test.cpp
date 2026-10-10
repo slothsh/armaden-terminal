@@ -254,6 +254,14 @@ TEST_CASE("activation, actions and context menus return structured statuses", "[
     REQUIRE(facade.execute(menu).succeeded());
     REQUIRE(fixture.contextClosed);
 
+    LayerDescriptor contextMenu;
+    contextMenu.name = "context-menu";
+    contextMenu.kind = LayerKind::ContextMenu;
+    contextMenu.domain = Domain("app.contextMenu");
+    contextMenu.owner = target;
+    contextMenu.focusTrap = true;
+    [[maybe_unused]] u64 const menuLayer = fixture.layers.push(contextMenu);
+
     CommandRequest invoke;
     invoke.kind = CommandKind::InvokeAction;
     invoke.target = target;
