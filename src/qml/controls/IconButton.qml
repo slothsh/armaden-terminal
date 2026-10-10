@@ -24,12 +24,13 @@ Rectangle {
     property real iconSize: 16
     property color iconColor: Theme.color.text
     property bool active: false
-    property bool interactive: true
     property string actionId: ""
     property string actionSurface: "button"
     property var interactionController: null
     property var actionTarget: 0
-    property alias hovered: mouseArea.containsMouse
+    readonly property bool hovered: control.interactionController && InteractionScope.targetId !== 0
+        ? control.interactionController.hoveredTarget === InteractionScope.targetId
+        : mouseArea.containsMouse
     readonly property bool actionAllowed: {
         if (control.actionId.length === 0) {
             return true
@@ -45,19 +46,19 @@ Rectangle {
     signal clicked()
 
     function activate() {
-        if (control.enabled && control.actionAllowed && control.interactive) {
+        if (control.enabled && control.actionAllowed) {
             control.clicked()
         }
     }
 
-    enabled: control.actionAllowed && control.interactive
+    enabled: control.actionAllowed
     implicitWidth: 24
     implicitHeight: 24
     radius: Theme.metric.radius
-    opacity: control.interactive && control.enabled && control.actionAllowed ? 1.0 : 0.4
-    color: control.interactive && control.enabled && control.actionAllowed && control.hovered
+    opacity: control.enabled && control.actionAllowed ? 1.0 : 0.4
+    color: control.enabled && control.actionAllowed && control.hovered
         ? Theme.color.hover
-        : (control.activeFocus || (control.interactive && control.active) ? Theme.color.active : "transparent")
+        : (control.activeFocus || control.active ? Theme.color.active : "transparent")
 
     LucideIcon {
         anchors.centerIn: parent
@@ -71,10 +72,10 @@ Rectangle {
         id: mouseArea
         anchors.fill: parent
         hoverEnabled: true
-        enabled: control.enabled && control.interactive && control.actionAllowed
+        enabled: control.enabled && control.actionAllowed
         cursorShape: enabled ? Qt.PointingHandCursor : Qt.ForbiddenCursor
         onClicked: {
-            if (control.interactive && control.enabled && control.actionAllowed) {
+            if (control.enabled && control.actionAllowed) {
                 control.clicked()
             }
         }

@@ -188,6 +188,7 @@ TEST_CASE("key router resolves standard navigation bindings", "[interaction][nav
     REQUIRE(router.resolve(key(NavigationKey::ArrowDown), Domain("app.list"))->command == NavigationCommand::MoveDown);
     REQUIRE(router.resolve(key(NavigationKey::ArrowDown, shift), Domain("app.list"))->command == NavigationCommand::ExtendDown);
     REQUIRE(router.resolve(key(NavigationKey::Enter), Domain("app.list"))->command == NavigationCommand::Activate);
+    REQUIRE(router.resolve(key(NavigationKey::Enter, control), Domain("app.prompt"))->command == NavigationCommand::Activate);
     REQUIRE(router.resolve(key(NavigationKey::Space), Domain("app.list"))->command == NavigationCommand::Activate);
     REQUIRE(router.resolve(key(NavigationKey::Escape), Domain("app.list"))->command == NavigationCommand::DismissLayer);
     REQUIRE(router.resolve(key(NavigationKey::Menu), Domain("app.list"))->command == NavigationCommand::ShowContextMenu);
@@ -228,7 +229,7 @@ TEST_CASE("key router replaces and removes custom bindings", "[interaction][navi
 
     binding.command = NavigationCommand::ShowContextMenu;
     router.bind(binding);
-    REQUIRE(router.bindings().size() == 17);
+    REQUIRE(router.bindings().size() == 18);
     REQUIRE(router.resolve(key(NavigationKey::F10), Domain("app.window"))->command == NavigationCommand::ShowContextMenu);
     REQUIRE(router.unbind(key(NavigationKey::F10), Domain("app")));
     REQUIRE_FALSE(router.resolve(key(NavigationKey::F10), Domain("app.window")).has_value());

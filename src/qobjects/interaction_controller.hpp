@@ -49,6 +49,7 @@ class InteractionController : public QObject {
     Q_PROPERTY(int layerDepth READ layerDepth NOTIFY layersChanged)
     Q_PROPERTY(quint64 topLayerId READ topLayerId NOTIFY layersChanged)
     Q_PROPERTY(int actionRevision READ actionRevision NOTIFY actionsChanged)
+    Q_PROPERTY(int selectionRevision READ selectionRevision NOTIFY selectionChanged)
     Q_PROPERTY(QVariantMap lastCommandResult READ lastCommandResult NOTIFY commandResultChanged)
 
 public:
@@ -66,6 +67,7 @@ public:
     [[nodiscard]] auto layerDepth() const -> int;
     [[nodiscard]] auto topLayerId() const -> quint64;
     [[nodiscard]] auto actionRevision() const -> int;
+    [[nodiscard]] auto selectionRevision() const -> int;
 
     [[nodiscard]] auto registry() -> mts::interaction::TargetRegistry&;
     [[nodiscard]] auto context() -> mts::interaction::ContextStore&;
@@ -94,6 +96,8 @@ public:
     Q_INVOKABLE auto setBusinessValue(QString const& key, QString const& value) -> void;
     Q_INVOKABLE auto executeCommand(QVariantMap const& request) -> QVariantMap;
     Q_INVOKABLE auto selectionCount(QString const& domain) const -> int;
+    Q_INVOKABLE auto isSelected(quint64 target) const -> bool;
+    Q_INVOKABLE auto selectionIntent(bool shift, bool control) const -> QString;
     Q_INVOKABLE auto selectedTargets(QString const& domain) const -> QVariantList;
     Q_INVOKABLE auto selectionSummary(QString const& domain) const -> QVariantMap;
     Q_INVOKABLE auto layersSnapshot() const -> QVariantList;
@@ -194,5 +198,6 @@ private:
     std::size_t m_selectionSubscription = 0;
     std::size_t m_layerSubscription = 0;
     int m_actionRevision = 0;
+    int m_selectionRevision = 0;
     QVariantMap m_lastCommandResult;
 };

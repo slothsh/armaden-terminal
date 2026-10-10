@@ -1,8 +1,12 @@
 import QtQuick
+import Lib.Interaction
 import Lib.Theme
 
 Rectangle {
     id: control
+
+    InteractionScope.domain: "app.bottomBar"
+    InteractionScope.role: "pane"
 
     implicitHeight: 32
     color: Theme.color.medium

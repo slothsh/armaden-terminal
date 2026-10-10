@@ -159,14 +159,16 @@ private:
         this->bind(KeyBinding{KeyStroke{NavigationKey::ArrowDown, shift}, {}, std::nullopt, NavigationCommand::ExtendDown});
         this->bind(KeyBinding{KeyStroke{NavigationKey::ArrowLeft, shift}, {}, std::nullopt, NavigationCommand::ExtendLeft});
         this->bind(KeyBinding{KeyStroke{NavigationKey::ArrowRight, shift}, {}, std::nullopt, NavigationCommand::ExtendRight});
+
+        Modifiers control;
+        control.control = true;
         this->bind(KeyBinding{KeyStroke{NavigationKey::Enter, {}}, {}, std::nullopt, NavigationCommand::Activate});
+        this->bind(KeyBinding{KeyStroke{NavigationKey::Enter, control}, {}, std::nullopt, NavigationCommand::Activate});
         this->bind(KeyBinding{KeyStroke{NavigationKey::Space, {}}, {}, std::nullopt, NavigationCommand::Activate});
         this->bind(KeyBinding{KeyStroke{NavigationKey::Escape, {}}, {}, std::nullopt, NavigationCommand::DismissLayer});
         this->bind(KeyBinding{KeyStroke{NavigationKey::Menu, {}}, {}, std::nullopt, NavigationCommand::ShowContextMenu});
         this->bind(KeyBinding{KeyStroke{NavigationKey::F10, shift}, {}, std::nullopt, NavigationCommand::ShowContextMenu});
 
-        Modifiers control;
-        control.control = true;
         this->bind(KeyBinding{KeyStroke{NavigationKey::A, control}, {}, std::nullopt, NavigationCommand::SelectAll});
     }
 

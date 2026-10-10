@@ -23,7 +23,9 @@ Rectangle {
     property string actionSurface: "button"
     property var interactionController: null
     property var actionTarget: 0
-    property alias hovered: mouseArea.containsMouse
+    readonly property bool hovered: control.interactionController && InteractionScope.targetId !== 0
+        ? control.interactionController.hoveredTarget === InteractionScope.targetId
+        : mouseArea.containsMouse
     readonly property bool actionAllowed: {
         if (control.actionId.length === 0) {
             return true

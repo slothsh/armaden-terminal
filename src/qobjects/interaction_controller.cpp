@@ -315,6 +315,7 @@ InteractionController::InteractionController(QObject* parent)
 
     m_selectionSubscription = m_selection->subscribe([this](mts::interaction::SelectionChange const& change) {
         this->recordSelectionChange(change);
+        m_selectionRevision += 1;
         emit this->selectionChanged(QString::fromUtf8(
             change.domain.path().data(),
             static_cast<qsizetype>(change.domain.path().size())
@@ -448,6 +449,10 @@ auto InteractionController::actionRevision() const -> int {
     return m_actionRevision;
 }
 
+auto InteractionController::selectionRevision() const -> int {
+    return m_selectionRevision;
+}
+
 auto InteractionController::setEventBus(mts::events::EventBus* bus) -> void {
     m_bus = bus;
 }
@@ -506,6 +511,25 @@ auto InteractionController::executeAndReport(mts::interaction::CommandRequest co
 
 auto InteractionController::selectionCount(QString const& domain) const -> int {
     return static_cast<int>(m_selection->count(mts::interaction::Domain(domain.toStdString())));
+}
+
+auto InteractionController::isSelected(quint64 target) const -> bool {
+    mts::interaction::TargetId const id = mts::interaction::TargetId::fromPacked(target);
+    auto const resolved = m_registry->find(id);
+    return resolved.has_value() && m_selection->contains(resolved->domain, id);
+}
+
+auto InteractionController::selectionIntent(bool shift, bool control) const -> QString {
+    mts::interaction::SelectionIntent const intent = mts::interaction::intentFrom(shift, control);
+    switch (intent) {
+        case mts::interaction::SelectionIntent::Replace: { return QStringLiteral("replace"); }
+        case mts::interaction::SelectionIntent::Toggle: { return QStringLiteral("toggle"); }
+        case mts::interaction::SelectionIntent::Range: { return QStringLiteral("range"); }
+        case mts::interaction::SelectionIntent::AddRange: { return QStringLiteral("addRange"); }
+        case mts::interaction::SelectionIntent::Add: { return QStringLiteral("add"); }
+    }
+
+    return QStringLiteral("replace");
 }
 
 auto InteractionController::selectedTargets(QString const& domain) const -> QVariantList {
@@ -1215,7 +1239,15 @@ auto InteractionController::routeKeyEvent(QQuickWindow* window, QEvent* event) -
         || binding->command == mts::interaction::NavigationCommand::FocusPrevious;
     bool const layerDismiss = binding->command == mts::interaction::NavigationCommand::DismissLayer;
     bool const contextMenu = binding->command == mts::interaction::NavigationCommand::ShowContextMenu;
-    if (target.has_value() && target->capabilities.editable && !traversal && !layerDismiss && !contextMenu) {
+    bool const textSubmit = binding->command == mts::interaction::NavigationCommand::Activate
+        && keyEvent->modifiers().testFlag(Qt::ControlModifier)
+        && (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter);
+    if (target.has_value()
+        && target->capabilities.editable
+        && !traversal
+        && !layerDismiss
+        && !contextMenu
+        && !textSubmit) {
         return false;
     }
 
@@ -1690,6 +1722,11 @@ auto InteractionController::installDefaultActions() -> void {
         mts::interaction::Action action;
         action.id = std::move(id);
         action.label = std::move(label);
+        if (action.id == "app.quit") {
+            action.group = "secondary";
+        } else if (action.id.starts_with("app.")) {
+            action.group = "primary";
+        }
         action.scope.domain = mts::interaction::Domain(std::move(domain));
         action.scope.role = mts::interaction::Role(std::move(role));
         action.order = order;

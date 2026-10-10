@@ -230,18 +230,6 @@ TEST_CASE("activation, actions and context menus return structured statuses", "[
     REQUIRE(facade.execute(activate).succeeded());
     REQUIRE(fixture.activated == target);
 
-    CommandRequest menu;
-    menu.kind = CommandKind::OpenContextMenu;
-    menu.target = target;
-    menu.position = Point{12, 24};
-    REQUIRE(facade.execute(menu).succeeded());
-    REQUIRE(fixture.contextTarget == target);
-    REQUIRE(fixture.contextPosition == Point{12, 24});
-
-    menu.kind = CommandKind::CloseContextMenu;
-    REQUIRE(facade.execute(menu).succeeded());
-    REQUIRE(fixture.contextClosed);
-
     Action registered;
     registered.id = "row.inspect";
     registered.label = "Inspect";
@@ -253,6 +241,18 @@ TEST_CASE("activation, actions and context menus return structured statuses", "[
         [](ActionContext const&) {}
     );
     REQUIRE(fixture.actions.registerAction(std::move(registered)));
+
+    CommandRequest menu;
+    menu.kind = CommandKind::OpenContextMenu;
+    menu.target = target;
+    menu.position = Point{12, 24};
+    REQUIRE(facade.execute(menu).succeeded());
+    REQUIRE(fixture.contextTarget == target);
+    REQUIRE(fixture.contextPosition == Point{12, 24});
+
+    menu.kind = CommandKind::CloseContextMenu;
+    REQUIRE(facade.execute(menu).succeeded());
+    REQUIRE(fixture.contextClosed);
 
     CommandRequest invoke;
     invoke.kind = CommandKind::InvokeAction;
@@ -348,4 +348,56 @@ TEST_CASE("pending commands are completed as cancelled when the facade closes", 
     REQUIRE(future.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready);
     REQUIRE(future.get().status == CommandStatus::FacadeClosed);
     queued.front()();
+}
+
+TEST_CASE("dispatching an action can open a new layer before closing its menu target", "[interaction][commands]") {
+    Fixture fixture;
+    Capabilities capabilities;
+    capabilities.activatable = true;
+    capabilities.contextMenuable = true;
+    TargetId const menuTarget = fixture.attach("app.appMenu", "layer-content", capabilities);
+    LayerDescriptor menu;
+    menu.name = "app-menu";
+    menu.kind = LayerKind::Popup;
+    menu.domain = Domain("app.appMenu");
+    u64 const menuLayer = fixture.layers.push(menu);
+
+    Action about;
+    about.id = "app.about";
+    about.scope.domain = Domain("app.appMenu");
+    about.scope.role = Role("layer-content");
+    about.requirements.activatable = true;
+    about.policy = ActionPolicy(
+        [](ActionContext const&) { return true; },
+        [](ActionContext const&) { return true; },
+        [&fixture](ActionContext const&) {
+            LayerDescriptor dialog;
+            dialog.name = "about";
+            dialog.kind = LayerKind::Dialog;
+            dialog.domain = Domain("app.dialog");
+            dialog.focusTrap = true;
+            [[maybe_unused]] u64 const layer = fixture.layers.push(dialog);
+        }
+    );
+    REQUIRE(fixture.actions.registerAction(std::move(about)));
+
+    CommandFacade facade = fixture.facade();
+    CommandRequest invoke;
+    invoke.kind = CommandKind::InvokeAction;
+    invoke.target = menuTarget;
+    invoke.actionId = "app.about";
+
+    REQUIRE(facade.execute(invoke).succeeded());
+    REQUIRE(fixture.layers.depth() == 2);
+    REQUIRE(fixture.layers.top()->descriptor.domain == Domain("app.dialog"));
+
+    TargetDescriptor hidden;
+    hidden.domain = Domain("app.appMenu");
+    hidden.role = Role("layer-content");
+    hidden.capabilities = capabilities;
+    hidden.visible = false;
+    fixture.registry.rekey(menuTarget, std::move(hidden));
+    REQUIRE(fixture.layers.remove(menuLayer));
+    REQUIRE(fixture.layers.depth() == 1);
+    REQUIRE(fixture.layers.top()->descriptor.domain == Domain("app.dialog"));
 }

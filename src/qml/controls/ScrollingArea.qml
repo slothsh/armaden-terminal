@@ -1,9 +1,17 @@
 import QtQuick
 import QtQuick.Window
+import Lib.Interaction
 import Lib.Theme
 
 Item {
     id: control
+
+    InteractionScope.domain: control.interactionDomain
+    InteractionScope.role: "scroll-area"
+    InteractionScope.scrollable: true
+    InteractionScope.hitTestable: true
+
+    property string interactionDomain: "app.scroll"
 
     default property alias content: contentColumn.data
 

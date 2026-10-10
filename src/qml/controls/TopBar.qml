@@ -45,6 +45,7 @@ Rectangle {
         interactionDomain: "app.topBar"
         interactionGroup: "top-bar"
         interactionOrder: 0
+        interactionController: control.interactionController
         active: control.menuActive
         anchors.left: parent.left
         anchors.leftMargin: Theme.metric.spacing
@@ -69,10 +70,11 @@ Rectangle {
         interactionDomain: "app.topBar"
         interactionGroup: "top-bar"
         interactionOrder: 1
+        interactionController: control.interactionController
         x: Math.max(control.contentX + Math.max(control.contentInset, Theme.metric.spacing), menuButton.x + menuButton.width + Theme.metric.spacing)
         anchors.verticalCenter: parent.verticalCenter
         visible: control.expandVisible
-        interactive: control.expandEnabled
+        enabled: control.expandEnabled
         iconColor: control.expandActive ? Theme.color.accent : Theme.color.textMuted
         onClicked: control.expandRequested()
     }

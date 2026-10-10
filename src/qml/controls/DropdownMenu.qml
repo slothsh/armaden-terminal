@@ -115,21 +115,43 @@ Popup {
         Repeater {
             model: control.actionModel
 
-            delegate: MenuButton {
+            delegate: Column {
                 required property var modelData
 
                 width: control.width - control.padding * 2
-                label: modelData.label
-                interactionDomain: control.interactionDomain
-                interactionGroup: control.interactionDomain
-                interactionOrder: modelData.order
-                actionId: modelData.id
-                actionSurface: control.actionSurface
-                actionTarget: control.actionTarget
-                interactionController: control.interactionController
-                onClicked: {
-                    control.close()
-                    control.interactionController.invokeAction(modelData.id, control.actionTarget)
+                spacing: 0
+
+                Rectangle {
+                    readonly property bool separatorVisible: index > 0
+                        && control.actionModel[index - 1].group !== modelData.group
+                    width: parent.width
+                    height: separatorVisible ? 9 : 0
+                    color: "transparent"
+                    visible: separatorVisible
+
+                    Rectangle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width
+                        height: 1
+                        color: "#1affffff"
+                    }
+                }
+
+                MenuButton {
+                    width: parent.width
+                    label: modelData.label
+                    interactionDomain: control.interactionDomain
+                    interactionGroup: control.interactionDomain
+                    interactionOrder: modelData.order
+                    actionId: modelData.id
+                    actionSurface: control.actionSurface
+                    actionTarget: control.actionTarget
+                    interactionController: control.interactionController
+                    onClicked: {
+                        if (control.interactionController.invokeAction(modelData.id, control.actionTarget)) {
+                            control.close()
+                        }
+                    }
                 }
             }
         }

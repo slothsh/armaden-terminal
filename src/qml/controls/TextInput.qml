@@ -10,6 +10,7 @@ Rectangle {
 
     InteractionScope.domain: control.interactionDomain
     InteractionScope.role: control.interactionRole
+    InteractionScope.label: control.placeholderText
     InteractionScope.focusable: true
     InteractionScope.activatable: true
     InteractionScope.contextMenuable: true
@@ -81,12 +82,6 @@ Rectangle {
 
             onCursorRectangleChanged: control.ensureCursorVisible()
 
-            Keys.onPressed: event => {
-                if (event.key === Qt.Key_Return && event.modifiers & Qt.ControlModifier) {
-                    control.accepted()
-                    event.accepted = true
-                }
-            }
         }
     }
 }

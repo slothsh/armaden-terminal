@@ -1,9 +1,15 @@
 import QtQuick
+import Lib.Interaction
 import Lib.Controls
 import Lib.Theme
 
 Rectangle {
     id: drawer
+
+    InteractionScope.domain: drawer.interactionDomain
+    InteractionScope.role: "pane"
+
+    property string interactionDomain: "app.pane"
 
     required property int size
     required property int sizeMin

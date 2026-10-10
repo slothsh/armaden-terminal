@@ -94,6 +94,7 @@ Popup {
             spacing: 8
 
             TextButton {
+                interactionController: control.interactionController
                 interactionDomain: control.interactionDomain
                 interactionGroup: control.interactionDomain
                 interactionOrder: 0
@@ -105,6 +106,7 @@ Popup {
             }
 
             TextButton {
+                interactionController: control.interactionController
                 interactionDomain: control.interactionDomain
                 interactionGroup: control.interactionDomain
                 interactionOrder: 1

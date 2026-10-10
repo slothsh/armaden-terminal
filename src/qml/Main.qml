@@ -170,6 +170,11 @@ Window {
         IconButton {
             id: historyButton
             iconName: "history"
+            interactionController: root.interaction
+            interactionDomain: "app.bottomBar"
+            interactionGroup: "bottom-bar"
+            interactionOrder: 0
+            accessibleLabel: qsTr("Session history")
             iconColor: leftDrawer.width > 0 ? Theme.color.accent : Theme.color.textMuted
             x: Theme.metric.spacing
             anchors.verticalCenter: parent.verticalCenter
@@ -179,10 +184,11 @@ Window {
         IconButton {
             id: inputDrawerButton
             iconName: "keyboard"
+            interactionController: root.interaction
             accessibleLabel: qsTr("Show message input")
-            interactionDomain: "app.topBar"
-            interactionGroup: "top-bar"
-            interactionOrder: 3
+            interactionDomain: "app.bottomBar"
+            interactionGroup: "bottom-bar"
+            interactionOrder: 1
             iconColor: inputDrawer.size > 0 ? Theme.color.accent : Theme.color.textMuted
             x: Math.max(content.x + Theme.metric.spacing, historyButton.x + historyButton.width + Theme.metric.spacing)
             anchors.verticalCenter: parent.verticalCenter
@@ -192,11 +198,11 @@ Window {
         IconButton {
             id: mapPaneButton
             iconName: "map"
-            actionId: "map.toggle"
-            interactionDomain: "app.topBar"
-            interactionGroup: "top-bar"
-            interactionOrder: 4
             interactionController: root.interaction
+            actionId: "map.toggle"
+            interactionDomain: "app.bottomBar"
+            interactionGroup: "bottom-bar"
+            interactionOrder: 2
             actionTarget: root.InteractionScope.targetId
             iconColor: root.mapPaneVisible ? Theme.color.accent : Theme.color.textMuted
             x: Math.max(content.x + Theme.metric.spacing, inputDrawerButton.x + inputDrawerButton.width + Theme.metric.spacing)
@@ -247,6 +253,7 @@ Window {
 
         ScrollingArea {
             id: conversationView
+            interactionDomain: "app.conversation"
             visible: !root.mapPaneVisible
             anchors.left: parent.left
             anchors.right: parent.right
@@ -342,8 +349,7 @@ Window {
 
         VerticalDrawer {
             id: inputDrawer
-            InteractionScope.domain: "app.promptPane"
-            InteractionScope.role: "pane"
+            interactionDomain: "app.promptPane"
             visible: !root.mapPaneVisible
             side: DrawerSide.Bottom
             size: 120
@@ -458,8 +464,7 @@ Window {
 
         HorizontalDrawer {
             id: leftDrawer
-            InteractionScope.domain: "app.sessionPane"
-            InteractionScope.role: "pane"
+            interactionDomain: "app.sessionPane"
             size: 220
             sizeMin: 140
             sizeMax: root.width > 500 ? root.width / 2 : 250
@@ -490,6 +495,11 @@ Window {
                 IconButton {
                     id: clearHistoryButton
                     iconName: "ellipsis"
+                    accessibleLabel: qsTr("History actions")
+                    interactionController: root.interaction
+                    interactionDomain: "app.sessionPane"
+                    interactionGroup: "session-toolbar"
+                    interactionOrder: 0
                     active: historyMenu.opened
                     anchors.right: parent.right
                     anchors.rightMargin: 6
@@ -500,6 +510,11 @@ Window {
                 IconButton {
                     id: addSessionButton
                     iconName: "plus"
+                    accessibleLabel: qsTr("Create session")
+                    interactionController: root.interaction
+                    interactionDomain: "app.sessionPane"
+                    interactionGroup: "session-toolbar"
+                    interactionOrder: 1
                     anchors.right: clearHistoryButton.left
                     anchors.verticalCenter: parent.verticalCenter
                     onClicked: {
@@ -555,24 +570,31 @@ Window {
 
                     readonly property bool renaming: root.renamingSession === model.sessionId
 
-                    function activate() {
+                    readonly property bool selected: root.interaction.selectionRevision >= 0
+                        && root.interaction.isSelected(sessionRow.InteractionScope.targetId)
+
+                    function selectWithModifiers(modifiers) {
+                        const intent = root.interaction.selectionIntent(
+                            (modifiers & Qt.ShiftModifier) !== 0,
+                            (modifiers & Qt.ControlModifier) !== 0
+                        )
                         root.interaction.executeCommand({
                             kind: "select",
                             domain: "app.sessionList",
                             targets: [sessionRow.InteractionScope.targetId],
-                            intent: "replace",
+                            intent: intent,
                         })
                     }
 
-                    color: model.sessionId === chat.activeSession
+                    function activate() {
+                        sessionRow.selectWithModifiers(0)
+                    }
+
+                    color: model.sessionId === chat.activeSession || sessionRow.selected
                         ? Theme.color.active
-                        : ((rowHover.hovered || (interactionContextMenu.opened && interactionContextMenu.actionTarget === sessionRow.InteractionScope.targetId) || sessionRow.activeFocus) ? Theme.color.hover : "transparent")
+                        : ((root.interaction.hoveredTarget === sessionRow.InteractionScope.targetId || (interactionContextMenu.opened && interactionContextMenu.actionTarget === sessionRow.InteractionScope.targetId) || sessionRow.activeFocus) ? Theme.color.hover : "transparent")
                     border.color: sessionRow.activeFocus ? Theme.color.accent : "transparent"
                     border.width: sessionRow.activeFocus ? 1 : 0
-
-                    HoverHandler {
-                        id: rowHover
-                    }
 
                     MouseArea {
                         anchors.fill: parent
@@ -590,7 +612,7 @@ Window {
                                 })
                                 return
                             }
-                            sessionRow.activate()
+                            sessionRow.selectWithModifiers(mouse.modifiers)
                         }
                     }
 
@@ -669,6 +691,7 @@ Window {
                     IconButton {
                         id: sessionMenuButton
                         iconName: "ellipsis"
+                        interactionController: root.interaction
                         accessibleLabel: qsTr("Session actions")
                         interactionDomain: "app.sessionList"
                         interactionGroup: "session-list"

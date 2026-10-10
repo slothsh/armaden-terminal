@@ -602,6 +602,10 @@ private:
         if (!resolved->capabilities.contextMenuable) {
             return CommandResult{CommandStatus::CapabilityDenied, target, 0, {}, "target does not support context menus"};
         }
+        ActionContext const context = m_actions.makeContext(*resolved, m_context, m_selection);
+        if (m_actions.resolve(context, ActionSurface::ContextMenu).empty()) {
+            return CommandResult{CommandStatus::Unsupported, target, 0, {}, "target has no available context actions"};
+        }
         if (!this->targetAllowed(target)) {
             return CommandResult{CommandStatus::LayerBlocked, target, 0, {}, "an active layer blocks this context menu"};
         }
