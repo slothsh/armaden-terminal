@@ -11,6 +11,7 @@ Item {
     property var interactionController: null
     property real contentHeight: 0
     property Item overlay: null
+    property bool chatActive: true
 
     readonly property alias drawerSize: inputDrawer.size
     readonly property var promptTargetId: promptInput.InteractionScope.targetId
@@ -37,7 +38,7 @@ Item {
 
     RectangularShadow {
         anchors.fill: inputDrawer
-        visible: inputDrawer.height > 0
+        visible: control.chatActive && inputDrawer.height > 0
         radius: inputDrawer.radius
         color: "#20000000"
         blur: 10

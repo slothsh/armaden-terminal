@@ -157,10 +157,17 @@ Window {
         actionTarget: root.InteractionScope.targetId
         contentX: content.x
         historyActive: sessionPane.drawerWidth > 0
-        inputActive: promptPane.drawerSize > 0
+        inputActive: !root.mapPaneVisible && promptPane.drawerSize > 0
         mapActive: root.mapPaneVisible
         onHistoryRequested: sessionPane.toggleHistory()
-        onInputDrawerRequested: promptPane.toggle()
+        onInputDrawerRequested: {
+            if (root.mapPaneVisible) {
+                root.interaction.invokeAction("map.toggle", root.InteractionScope.targetId)
+                return
+            }
+
+            promptPane.toggle()
+        }
         onMapToggleRequested: root.interaction.invokeAction("map.toggle", root.InteractionScope.targetId)
     }
 
@@ -216,6 +223,7 @@ Window {
         PromptPane {
             id: promptPane
             visible: !root.mapPaneVisible
+            chatActive: !root.mapPaneVisible
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.bottom: parent.bottom
