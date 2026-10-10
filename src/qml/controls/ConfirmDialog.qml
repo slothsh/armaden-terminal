@@ -47,6 +47,14 @@ Popup {
         }
     }
 
+    onOpened: {
+        if (control.interactionController) {
+            Qt.callLater(function() {
+                control.interactionController.focusWithin(control.interactionDomain)
+            })
+        }
+    }
+
     onClosed: {
         if (control.interactionController && control.layerToken !== 0) {
             control.interactionController.popLayer(control.layerToken)

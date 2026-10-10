@@ -104,6 +104,9 @@ Window {
 
             case "map.toggle": {
                 root.mapPaneVisible = !root.mapPaneVisible
+                if (!root.mapPaneVisible) {
+                    promptPane.open()
+                }
                 break
             }
         }
@@ -138,7 +141,7 @@ Window {
         closeActionId: "app.quit"
         interactionController: root.interaction
         actionTarget: root.InteractionScope.targetId
-        expandVisible: chat.conversation.count > 0
+        expandVisible: !root.mapPaneVisible && chat.conversation.count > 0
         expandActive: root.chatExpanded
         expandEnabled: !root.chatNarrow
         contentX: content.x

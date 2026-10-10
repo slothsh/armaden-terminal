@@ -24,6 +24,12 @@ Item {
         inputDrawer.toggle()
     }
 
+    function open() {
+        if (inputDrawer.size === 0) {
+            inputDrawer.toggle()
+        }
+    }
+
     function currentText() {
         return promptInput.text
     }
