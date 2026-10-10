@@ -14,6 +14,9 @@ Rectangle {
     property bool expandVisible: true
     property bool expandActive: false
     property bool expandEnabled: true
+    property string closeActionId: ""
+    property var interactionController: null
+    property var actionTarget: 0
     property real contentX: 0
     property real contentInset: 0
     readonly property real menuAnchorBottom: menuButton.y + menuButton.height
@@ -66,6 +69,9 @@ Rectangle {
         id: closeButton
         iconName: "x"
         iconSize: 20
+        actionId: control.closeActionId
+        interactionController: control.interactionController
+        actionTarget: control.actionTarget
         anchors.right: parent.right
         anchors.rightMargin: Theme.metric.spacing
         anchors.verticalCenter: parent.verticalCenter

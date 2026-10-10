@@ -109,6 +109,13 @@ struct LayerChanged {
     std::string action;
 };
 
+struct ActionInvoked {
+    std::string actionId;
+    InteractionTarget target;
+    std::string domain;
+    std::string semanticKey;
+};
+
 using EventTypes = std::tuple<
     SessionCreated,
     SessionUpdated,
@@ -125,7 +132,8 @@ using EventTypes = std::tuple<
     CurrentTargetChanged,
     HoverChanged,
     SelectionChanged,
-    LayerChanged
+    LayerChanged,
+    ActionInvoked
 >;
 
 template <class Event>
@@ -235,7 +243,8 @@ private:
         Signal<CurrentTargetChanged>,
         Signal<HoverChanged>,
         Signal<SelectionChanged>,
-        Signal<LayerChanged>
+        Signal<LayerChanged>,
+        Signal<ActionInvoked>
     > m_signals;
 };
 

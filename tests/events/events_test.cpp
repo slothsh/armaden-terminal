@@ -11,7 +11,7 @@ TEST_CASE("event bus delivers to subscribers and stops after unsubscribe", "[cor
     auto const startedId = bus.subscribe<mts::events::RunStarted>(
         [&started](mts::events::RunStarted const&) { ++started; }
     );
-    bus.subscribe<mts::events::RunFinished>(
+    [[maybe_unused]] auto const finishedId = bus.subscribe<mts::events::RunFinished>(
         [&finished](mts::events::RunFinished const&) { ++finished; }
     );
 
@@ -76,4 +76,32 @@ TEST_CASE("event bus publishes layer lifecycle events synchronously", "[core][ev
     REQUIRE(seen.depth == 2);
     REQUIRE(seen.domain == "app.dialog");
     REQUIRE(seen.action == "pushed");
+}
+
+TEST_CASE("event bus publishes action invocation events synchronously", "[core][events]") {
+    mts::events::EventBus bus;
+    mts::events::ActionInvoked seen{
+        .actionId = {},
+        .target = 0,
+        .domain = {},
+        .semanticKey = {},
+    };
+
+    [[maybe_unused]] auto const id = bus.subscribe<mts::events::ActionInvoked>(
+        [&seen](mts::events::ActionInvoked const& event) {
+            seen = event;
+        }
+    );
+
+    bus.publishDirect(mts::events::ActionInvoked{
+        .actionId = "session.remove",
+        .target = 42,
+        .domain = "app.sessionList",
+        .semanticKey = "session-1",
+    });
+
+    REQUIRE(seen.actionId == "session.remove");
+    REQUIRE(seen.target == 42);
+    REQUIRE(seen.domain == "app.sessionList");
+    REQUIRE(seen.semanticKey == "session-1");
 }

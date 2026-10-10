@@ -148,6 +148,7 @@ inline auto TargetRegistry::find(TargetId id) const -> std::optional<TargetRef> 
     reference.geometry = entry->descriptor.geometry;
     reference.label = entry->descriptor.label;
     reference.group = entry->descriptor.group;
+    reference.semanticKey = entry->descriptor.semanticKey;
     reference.order = entry->descriptor.order;
 
     return reference;

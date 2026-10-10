@@ -4,6 +4,8 @@ import Lib.Controls
 DropdownMenu {
     id: control
 
+    actionSurface: "contextMenu"
+
     function openAt(px, py) {
         if (control.interactionController) {
             control.interactionController.positionLayer(control, px, py)

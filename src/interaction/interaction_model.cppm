@@ -175,6 +175,7 @@ struct TargetDescriptor {
     Rect geometry;
     std::string label;
     std::string group;
+    std::string semanticKey;
     int order = 0;
 };
 
@@ -186,6 +187,7 @@ struct TargetRef {
     Rect geometry;
     std::string label;
     std::string group;
+    std::string semanticKey;
     int order = 0;
 
     [[nodiscard]] auto valid() const noexcept -> bool {

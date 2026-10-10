@@ -15,6 +15,7 @@ class InteractionScope : public QObject {
     Q_PROPERTY(QString role READ role WRITE setRole NOTIFY roleChanged)
     Q_PROPERTY(QString label READ label WRITE setLabel NOTIFY labelChanged)
     Q_PROPERTY(QString group READ group WRITE setGroup NOTIFY groupChanged)
+    Q_PROPERTY(QString semanticKey READ semanticKey WRITE setSemanticKey NOTIFY semanticKeyChanged)
     Q_PROPERTY(int order READ order WRITE setOrder NOTIFY orderChanged)
     Q_PROPERTY(QString selectionMode READ selectionMode WRITE setSelectionMode NOTIFY capabilitiesChanged)
     Q_PROPERTY(bool focusable READ focusable WRITE setFocusable NOTIFY capabilitiesChanged)
@@ -45,6 +46,9 @@ public:
 
     [[nodiscard]] auto group() const -> QString;
     auto setGroup(QString const& value) -> void;
+
+    [[nodiscard]] auto semanticKey() const -> QString;
+    auto setSemanticKey(QString const& value) -> void;
 
     [[nodiscard]] auto order() const -> int;
     auto setOrder(int value) -> void;
@@ -93,6 +97,7 @@ signals:
     auto roleChanged() -> void;
     auto labelChanged() -> void;
     auto groupChanged() -> void;
+    auto semanticKeyChanged() -> void;
     auto orderChanged() -> void;
     auto capabilitiesChanged() -> void;
     auto targetIdChanged() -> void;
@@ -106,6 +111,7 @@ private:
     QString m_role;
     QString m_label;
     QString m_group;
+    QString m_semanticKey;
     int m_order = 0;
     QString m_selectionMode;
     bool m_focusable = false;

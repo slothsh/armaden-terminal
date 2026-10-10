@@ -17,6 +17,7 @@ enum class TraceKind : u8 {
     SelectionRemoved,
     SelectionReset,
     LayerChanged,
+    ActionInvoked,
 };
 
 struct TraceEntry {

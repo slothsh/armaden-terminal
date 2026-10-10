@@ -81,6 +81,20 @@ auto InteractionScope::setGroup(QString const& value) -> void {
     this->announceChanged();
 }
 
+auto InteractionScope::semanticKey() const -> QString {
+    return m_semanticKey;
+}
+
+auto InteractionScope::setSemanticKey(QString const& value) -> void {
+    if (m_semanticKey == value) {
+        return;
+    }
+
+    m_semanticKey = value;
+    emit this->semanticKeyChanged();
+    this->announceChanged();
+}
+
 auto InteractionScope::order() const -> int {
     return m_order;
 }

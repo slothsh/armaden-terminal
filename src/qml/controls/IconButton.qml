@@ -10,15 +10,30 @@ Rectangle {
     property color iconColor: Theme.color.text
     property bool active: false
     property bool interactive: true
+    property string actionId: ""
+    property string actionSurface: "button"
+    property var interactionController: null
+    property var actionTarget: 0
     property alias hovered: mouseArea.containsMouse
+    readonly property bool actionAllowed: {
+        if (control.actionId.length === 0) {
+            return true
+        }
+        if (!control.interactionController) {
+            return false
+        }
+
+        return control.interactionController.actionRevision >= 0
+            && control.interactionController.actionEnabled(control.actionId, control.actionTarget, control.actionSurface)
+    }
 
     signal clicked()
 
     implicitWidth: 24
     implicitHeight: 24
     radius: Theme.metric.radius
-    opacity: control.interactive ? 1.0 : 0.4
-    color: control.interactive && control.hovered
+    opacity: control.interactive && control.enabled && control.actionAllowed ? 1.0 : 0.4
+    color: control.interactive && control.enabled && control.actionAllowed && control.hovered
         ? Theme.color.hover
         : (control.interactive && control.active ? Theme.color.active : "transparent")
 
@@ -34,9 +49,10 @@ Rectangle {
         id: mouseArea
         anchors.fill: parent
         hoverEnabled: true
-        cursorShape: control.interactive ? Qt.PointingHandCursor : Qt.ForbiddenCursor
+        enabled: control.enabled && control.interactive && control.actionAllowed
+        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ForbiddenCursor
         onClicked: {
-            if (control.interactive) {
+            if (control.interactive && control.enabled && control.actionAllowed) {
                 control.clicked()
             }
         }

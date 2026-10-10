@@ -13,6 +13,9 @@ Popup {
     property bool dismissOnEscape: true
     property bool dismissOnOutsideClick: true
     property bool focusTrap: true
+    property string actionSurface: "menu"
+    property var actionTarget: 0
+    property var actionModel: []
     property var layerToken: 0
 
     width: 160
@@ -41,7 +44,27 @@ Popup {
         control.close()
     }
 
+    onActionTargetChanged: control.refreshActions()
+    onActionSurfaceChanged: control.refreshActions()
+    onInteractionControllerChanged: control.refreshActions()
+
+    function refreshActions() {
+        if (!control.interactionController || control.actionTarget === 0) {
+            control.actionModel = []
+            return
+        }
+
+        const revision = control.interactionController.actionRevision
+        control.actionModel = revision >= 0
+            ? control.interactionController.actionsFor(control.actionTarget, control.actionSurface)
+            : []
+    }
+
     onAboutToShow: {
+        if (control.interactionController && control.actionTarget === 0) {
+            control.actionTarget = control.interactionController.targetForDomain(control.interactionDomain, "layer-content")
+        }
+        control.refreshActions()
         if (control.interactionController && control.layerToken === 0) {
             control.layerToken = control.interactionController.pushLayer(
                 control,
@@ -86,6 +109,34 @@ Popup {
         InteractionScope.domain: control.interactionDomain
         InteractionScope.role: "layer-content"
         InteractionScope.focusable: true
+        InteractionScope.activatable: true
         spacing: 0
+
+        Repeater {
+            model: control.actionModel
+
+            delegate: MenuButton {
+                required property var modelData
+
+                width: control.width - control.padding * 2
+                label: modelData.label
+                actionId: modelData.id
+                actionSurface: control.actionSurface
+                actionTarget: control.actionTarget
+                interactionController: control.interactionController
+                onClicked: {
+                    control.close()
+                    control.interactionController.invokeAction(modelData.id, control.actionTarget)
+                }
+            }
+        }
+    }
+
+    Connections {
+        target: control.interactionController
+
+        function onActionsChanged() {
+            control.refreshActions()
+        }
     }
 }

@@ -28,6 +28,7 @@ import persistence;
 import provider;
 import harness;
 import orchestration;
+import interaction;
 import logging;
 import imagery;
 import map;
@@ -322,6 +323,20 @@ mts::app::Application::Application(int argc, char** argv)
     };
 
     m_chat = new ChatController(context, m_application.get());
+    ChatController* const chat = m_chat;
+    MapController* const mapController = m_mapController.get();
+
+    m_interaction->actions().setBusinessAccessor("chat.running", [chat](mts::interaction::TargetRef const&) {
+        return std::optional<std::string>{chat->running() ? "true" : "false"};
+    });
+    m_interaction->actions().setBusinessAccessor("session.running", [chat](mts::interaction::TargetRef const& target) {
+        bool const running = chat->running() && target.semanticKey == chat->activeSession().toStdString();
+
+        return std::optional<std::string>{running ? "true" : "false"};
+    });
+    m_interaction->actions().setBusinessAccessor("map.ready", [mapController](mts::interaction::TargetRef const&) {
+        return std::optional<std::string>{mapController->ready() ? "true" : "false"};
+    });
 
     mts::log::info("Done! Connecting application to GUI engine...");
 

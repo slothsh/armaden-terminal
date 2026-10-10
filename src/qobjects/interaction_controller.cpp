@@ -67,6 +67,22 @@ auto domainOf(mts::interaction::TargetRegistry const& registry, mts::interaction
     return resolved.has_value() ? std::string(resolved->domain.path()) : std::string{};
 }
 
+auto actionSurfaceFrom(QString const& value) -> mts::interaction::ActionSurface {
+    if (value == QStringLiteral("contextMenu")) {
+        return mts::interaction::ActionSurface::ContextMenu;
+    }
+
+    if (value == QStringLiteral("button")) {
+        return mts::interaction::ActionSurface::Button;
+    }
+
+    if (value == QStringLiteral("shortcut")) {
+        return mts::interaction::ActionSurface::Shortcut;
+    }
+
+    return mts::interaction::ActionSurface::Menu;
+}
+
 auto layerKindFrom(QString const& value) -> mts::interaction::LayerKind {
     if (value == QStringLiteral("dialog")) {
         return mts::interaction::LayerKind::Dialog;
@@ -91,6 +107,7 @@ auto toDescriptor(InteractionScope const& scope) -> mts::interaction::TargetDesc
     descriptor.role = mts::interaction::Role(scope.role().toStdString());
     descriptor.label = scope.label().toStdString();
     descriptor.group = scope.group().toStdString();
+    descriptor.semanticKey = scope.semanticKey().toStdString();
     descriptor.order = scope.order();
     descriptor.geometry = mts::interaction::Rect{
         geometry.x(),
@@ -120,14 +137,19 @@ InteractionController::InteractionController(QObject* parent)
     , m_context(std::make_unique<mts::interaction::ContextStore>(*m_registry))
     , m_selection(std::make_unique<mts::interaction::SelectionModel>(*m_registry))
     , m_trace(std::make_unique<mts::interaction::TraceRing>())
-    , m_layers(std::make_unique<mts::interaction::LayerStack>()) {
+    , m_layers(std::make_unique<mts::interaction::LayerStack>())
+    , m_actions(std::make_unique<mts::interaction::ActionRegistry>()) {
     m_contextSubscription = m_context->subscribe([this](mts::interaction::ContextChange const& change) {
         this->recordContextChange(change);
         emit this->contextChanged();
+        m_actionRevision += 1;
+        emit this->actionsChanged();
     });
 
     m_selectionSubscription = m_selection->subscribe([this](mts::interaction::SelectionChange const& change) {
         this->recordSelectionChange(change);
+        m_actionRevision += 1;
+        emit this->actionsChanged();
     });
 
     m_layerSubscription = m_layers->subscribe([this](mts::interaction::LayerChange const& change) {
@@ -139,6 +161,7 @@ InteractionController::InteractionController(QObject* parent)
     this->connect(hub, &InteractionHub::scopeCreated, this, &InteractionController::onScopeCreated);
     this->connect(hub, &InteractionHub::scopeChanged, this, &InteractionController::onScopeChanged);
     this->connect(hub, &InteractionHub::scopeDestroyed, this, &InteractionController::onScopeDestroyed);
+    this->installDefaultActions();
 
     if (QGuiApplication::instance() != nullptr) {
         QGuiApplication::instance()->installEventFilter(this);
@@ -189,6 +212,10 @@ auto InteractionController::topLayerId() const -> quint64 {
     return top.has_value() ? top->id : 0;
 }
 
+auto InteractionController::actionRevision() const -> int {
+    return m_actionRevision;
+}
+
 auto InteractionController::setEventBus(mts::events::EventBus* bus) -> void {
     m_bus = bus;
 }
@@ -209,8 +236,115 @@ auto InteractionController::layers() -> mts::interaction::LayerStack& {
     return *m_layers;
 }
 
+auto InteractionController::actions() -> mts::interaction::ActionRegistry& {
+    return *m_actions;
+}
+
 auto InteractionController::context() -> mts::interaction::ContextStore& {
     return *m_context;
+}
+
+auto InteractionController::targetForDomain(QString const& domain, QString const& role) const -> quint64 {
+    auto const targets = m_registry->byDomain(mts::interaction::Domain(domain.toStdString()));
+    for (mts::interaction::TargetRef const& target : targets) {
+        if (role.isEmpty() || target.role.name() == role.toStdString()) {
+            return target.id.packed();
+        }
+    }
+
+    return 0;
+}
+
+auto InteractionController::actionsFor(quint64 target, QString const& surface) const -> QVariantList {
+    mts::interaction::TargetId const targetId = mts::interaction::TargetId::fromPacked(target);
+    auto const resolved = m_registry->find(targetId);
+    if (!resolved.has_value()) {
+        return {};
+    }
+
+    mts::interaction::ActionContext const context = m_actions->makeContext(*resolved, *m_context, *m_selection);
+    mts::interaction::ActionSurface const actionSurface = actionSurfaceFrom(surface);
+
+    QVariantList result;
+    for (mts::interaction::ResolvedAction const& action : m_actions->resolve(context, actionSurface)) {
+        QVariantMap model;
+        model.insert(QStringLiteral("id"), QString::fromStdString(action.id));
+        model.insert(QStringLiteral("label"), QString::fromStdString(action.label));
+        model.insert(QStringLiteral("group"), QString::fromStdString(action.group));
+        model.insert(QStringLiteral("icon"), QString::fromStdString(action.icon));
+        model.insert(QStringLiteral("shortcut"), QString::fromStdString(action.shortcut));
+        model.insert(QStringLiteral("enabled"), action.enabled);
+        model.insert(QStringLiteral("disabledReason"), QString::fromStdString(action.disabledReason));
+        model.insert(QStringLiteral("order"), action.order);
+        result.push_back(model);
+    }
+
+    return result;
+}
+
+auto InteractionController::actionEnabled(
+    QString const& actionId,
+    quint64 target,
+    QString const& surface
+) const -> bool {
+    mts::interaction::TargetId const targetId = mts::interaction::TargetId::fromPacked(target);
+    auto const resolved = m_registry->find(targetId);
+    if (!resolved.has_value()) {
+        return false;
+    }
+
+    mts::interaction::ActionContext const context = m_actions->makeContext(*resolved, *m_context, *m_selection);
+
+    return m_actions->isEnabled(actionId.toStdString(), context, actionSurfaceFrom(surface));
+}
+
+auto InteractionController::invokeAction(
+    QString const& actionId,
+    quint64 target,
+    QVariantMap const& arguments
+) -> bool {
+    mts::interaction::TargetId targetId = mts::interaction::TargetId::fromPacked(target);
+    if (!targetId.valid()) {
+        targetId = m_context->currentId();
+    }
+    if (!targetId.valid()) {
+        targetId = m_context->focusedId();
+    }
+
+    auto const resolved = m_registry->find(targetId);
+    if (!resolved.has_value()) {
+        return false;
+    }
+
+    std::vector<mts::interaction::ActionArgument> actionArguments;
+    actionArguments.reserve(static_cast<std::size_t>(arguments.size()));
+    for (auto iterator = arguments.cbegin(); iterator != arguments.cend(); ++iterator) {
+        actionArguments.push_back(mts::interaction::ActionArgument{
+            iterator.key().toStdString(),
+            iterator.value().toString().toStdString(),
+        });
+    }
+
+    mts::interaction::ActionContext const context = m_actions->makeContext(
+        *resolved,
+        *m_context,
+        *m_selection,
+        std::move(actionArguments)
+    );
+    auto const result = m_actions->invoke(actionId.toStdString(), context);
+    if (!result.invoked()) {
+        return false;
+    }
+
+    this->recordActionInvocation(actionId, targetId);
+
+    return true;
+}
+
+auto InteractionController::setBusinessValue(QString const& key, QString const& value) -> void {
+    m_actions->setBusinessValue(key.toStdString(), value.toStdString());
+    m_actionRevision += 1;
+    emit this->actionsChanged();
 }
 
 auto InteractionController::pushLayer(
@@ -503,6 +637,8 @@ auto InteractionController::scopeForItem(QQuickItem const* item) const -> Intera
 auto InteractionController::hitTestTarget(QQuickWindow* window, QPointF const& scenePosition) const -> quint64 {
     mts::interaction::TargetId best;
     double bestArea = std::numeric_limits<double>::max();
+    std::size_t bestDomainDepth = 0;
+    bool bestHitTestable = false;
 
     for (auto const& [owner, scope] : m_ownerIndex.asKeyValueRange()) {
         auto* item = qobject_cast<QQuickItem*>(owner);
@@ -515,17 +651,37 @@ auto InteractionController::hitTestTarget(QQuickWindow* window, QPointF const& s
             continue;
         }
 
-        double const area = geometry.width() * geometry.height();
-        if (best.valid() && area >= bestArea) {
+        auto const binding = m_bindings.find(scope);
+        if (binding == m_bindings.end()) {
             continue;
         }
 
-        bestArea = area;
-
-        auto const binding = m_bindings.find(scope);
-        if (binding != m_bindings.end()) {
-            best = mts::interaction::TargetId::fromPacked(binding.value());
+        mts::interaction::TargetId const candidateId = mts::interaction::TargetId::fromPacked(binding.value());
+        auto const candidate = m_registry->find(candidateId);
+        if (!candidate.has_value()) {
+            continue;
         }
+
+        double const area = geometry.width() * geometry.height();
+        std::size_t const domainDepth = static_cast<std::size_t>(std::count(
+            candidate->domain.path().begin(),
+            candidate->domain.path().end(),
+            '.'
+        ));
+        bool const hitTestable = candidate->capabilities.hitTestable;
+        bool const better = !best.valid()
+            || area < bestArea
+            || (area == bestArea && hitTestable && !bestHitTestable)
+            || (area == bestArea && hitTestable == bestHitTestable && domainDepth > bestDomainDepth)
+            || (area == bestArea && hitTestable == bestHitTestable && domainDepth == bestDomainDepth && candidateId.index < best.index);
+        if (!better) {
+            continue;
+        }
+
+        best = candidateId;
+        bestArea = area;
+        bestDomainDepth = domainDepth;
+        bestHitTestable = hitTestable;
     }
 
     return best.packed();
@@ -542,6 +698,8 @@ auto InteractionController::onScopeCreated(InteractionScope* scope) -> void {
     m_ownerIndex.insert(scope->owner(), scope);
     scope->setTargetId(packed);
     emit this->registryChanged();
+    m_actionRevision += 1;
+    emit this->actionsChanged();
 }
 
 auto InteractionController::onScopeChanged(InteractionScope* scope) -> void {
@@ -559,6 +717,8 @@ auto InteractionController::onScopeChanged(InteractionScope* scope) -> void {
         mts::interaction::TargetId::fromPacked(m_bindings.value(scope)),
         toDescriptor(*scope)
     );
+    m_actionRevision += 1;
+    emit this->actionsChanged();
 }
 
 auto InteractionController::onScopeDestroyed(InteractionScope* scope) -> void {
@@ -589,6 +749,8 @@ auto InteractionController::onScopeDestroyed(InteractionScope* scope) -> void {
     m_ownerIndex.remove(scope->owner());
     m_bindings.erase(binding);
     emit this->registryChanged();
+    m_actionRevision += 1;
+    emit this->actionsChanged();
 }
 
 auto InteractionController::recordContextChange(mts::interaction::ContextChange const& change) -> void {
@@ -683,6 +845,202 @@ auto InteractionController::recordSelectionChange(mts::interaction::SelectionCha
     }
 
     mts::log::debug("selection {} in {}: +{} -{} ({})", static_cast<int>(kind), domain, pack(change.added).size(), pack(change.removed).size(), m_selection->count(change.domain));
+}
+
+auto InteractionController::installDefaultActions() -> void {
+    auto const alwaysVisible = [](mts::interaction::ActionContext const&) { return true; };
+    auto const registerUiAction = [this, alwaysVisible](
+        std::string id,
+        std::string label,
+        std::string domain,
+        std::string role,
+        int order,
+        std::vector<mts::interaction::ActionSurface> surfaces,
+        mts::interaction::ActionRequirements requirements,
+        mts::interaction::ActionPolicy::Predicate enabled,
+        std::string disabledReason
+    ) {
+        mts::interaction::Action action;
+        action.id = std::move(id);
+        action.label = std::move(label);
+        action.scope.domain = mts::interaction::Domain(std::move(domain));
+        action.scope.role = mts::interaction::Role(std::move(role));
+        action.order = order;
+        action.surfaces = std::move(surfaces);
+        action.requirements = requirements;
+        action.disabledReason = std::move(disabledReason);
+        std::string const actionId = action.id;
+        action.policy = mts::interaction::ActionPolicy(
+            alwaysVisible,
+            std::move(enabled),
+            [this, actionId](mts::interaction::ActionContext const& context) {
+                emit this->actionRequested(
+                    QString::fromStdString(actionId),
+                    context.target.id.packed(),
+                    QString::fromStdString(context.target.semanticKey)
+                );
+            }
+        );
+        m_actions->registerAction(std::move(action));
+    };
+
+    auto const truePredicate = [](mts::interaction::ActionContext const&) { return true; };
+    auto const sessionNotRunning = [](mts::interaction::ActionContext const& context) {
+        auto const running = context.businessValue("session.running");
+
+        return !running.has_value() || *running != "true";
+    };
+
+    mts::interaction::ActionRequirements const menuTarget{.contextMenuable = true};
+    mts::interaction::ActionRequirements const activatableTarget{.activatable = true};
+    mts::interaction::ActionRequirements const mapTarget{
+        .activatable = true,
+        .contextMenuable = true,
+        .hitTestable = true,
+    };
+    mts::interaction::ActionRequirements const none;
+
+    registerUiAction(
+        "session.rename",
+        "Rename",
+        "app.sessionList",
+        "session-row",
+        10,
+        {mts::interaction::ActionSurface::ContextMenu},
+        menuTarget,
+        sessionNotRunning,
+        "The running session cannot be renamed."
+    );
+    registerUiAction(
+        "session.remove",
+        "Remove",
+        "app.sessionList",
+        "session-row",
+        20,
+        {mts::interaction::ActionSurface::ContextMenu},
+        menuTarget,
+        sessionNotRunning,
+        "The running session cannot be removed."
+    );
+    registerUiAction(
+        "history.clear",
+        "Clear history",
+        "app.historyMenu",
+        "layer-content",
+        10,
+        {mts::interaction::ActionSurface::Menu},
+        activatableTarget,
+        truePredicate,
+        {}
+    );
+    registerUiAction(
+        "app.about",
+        "About",
+        "app.appMenu",
+        "layer-content",
+        10,
+        {mts::interaction::ActionSurface::Menu},
+        activatableTarget,
+        truePredicate,
+        {}
+    );
+    registerUiAction(
+        "app.quit",
+        "Quit",
+        "app",
+        "",
+        20,
+        {mts::interaction::ActionSurface::Menu, mts::interaction::ActionSurface::Button},
+        activatableTarget,
+        truePredicate,
+        {}
+    );
+    registerUiAction(
+        "prompt.send",
+        "Send message",
+        "app.prompt",
+        "input",
+        10,
+        {mts::interaction::ActionSurface::Button, mts::interaction::ActionSurface::Shortcut, mts::interaction::ActionSurface::ContextMenu},
+        activatableTarget,
+        [](mts::interaction::ActionContext const& context) {
+            auto const text = context.businessValue("prompt.text");
+            auto const running = context.businessValue("chat.running");
+
+            return text.has_value()
+                && !text->empty()
+                && (!running.has_value() || *running != "true");
+        },
+        "Enter a message while the agent is idle."
+    );
+    registerUiAction(
+        "prompt.cancel",
+        "Stop response",
+        "app.prompt",
+        "input",
+        20,
+        {mts::interaction::ActionSurface::Button, mts::interaction::ActionSurface::ContextMenu},
+        activatableTarget,
+        [](mts::interaction::ActionContext const& context) {
+            auto const running = context.businessValue("chat.running");
+
+            return running.has_value() && *running == "true";
+        },
+        "There is no response to stop."
+    );
+    registerUiAction(
+        "map.fit",
+        "Fit map to view",
+        "app.map",
+        "surface",
+        10,
+        {mts::interaction::ActionSurface::ContextMenu},
+        mapTarget,
+        [](mts::interaction::ActionContext const& context) {
+            auto const ready = context.businessValue("map.ready");
+
+            return !ready.has_value() || *ready == "true";
+        },
+        "The map is not ready."
+    );
+    registerUiAction(
+        "map.toggle",
+        "Toggle map pane",
+        "app",
+        "window",
+        30,
+        {mts::interaction::ActionSurface::Button},
+        activatableTarget,
+        truePredicate,
+        {}
+    );
+
+    m_actionRevision += 1;
+    emit this->actionsChanged();
+}
+
+auto InteractionController::recordActionInvocation(QString const& actionId, mts::interaction::TargetId target) -> void {
+    auto const resolved = m_registry->find(target);
+    std::string const domain = resolved.has_value() ? std::string(resolved->domain.path()) : std::string{};
+    std::string const semanticKey = resolved.has_value() ? resolved->semanticKey : std::string{};
+
+    m_trace->record(
+        mts::interaction::TraceKind::ActionInvoked,
+        target,
+        mts::interaction::Domain(domain),
+        actionId.toStdString()
+    );
+
+    if (m_bus != nullptr) {
+        m_bus->publishDirect(mts::events::ActionInvoked{
+            actionId.toStdString(),
+            target.packed(),
+            domain,
+            semanticKey,
+        });
+    }
+
+    mts::log::debug("action invoked {} target={} domain={}", actionId.toStdString(), target.packed(), domain);
 }
 
 auto InteractionController::recordLayerChange(mts::interaction::LayerChange const& change) -> void {

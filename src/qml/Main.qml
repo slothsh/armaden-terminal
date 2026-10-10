@@ -12,6 +12,7 @@ Window {
     id: root
     InteractionScope.domain: "app"
     InteractionScope.role: "window"
+    InteractionScope.activatable: true
     visible: true
     color: Theme.color.dark
     width: 960
@@ -24,6 +25,16 @@ Window {
     property string renamingSession: ""
 
     signal contextMenuRequested(real x, real y)
+
+    onContextMenuRequested: (x, y) => {
+        const available = root.interaction.actionsFor(root.interaction.hoveredTarget, "contextMenu")
+        if (available.length === 0) {
+            return
+        }
+
+        interactionContextMenu.actionTarget = root.interaction.hoveredTarget
+        interactionContextMenu.openAt(x, y)
+    }
 
     property bool mapPaneVisible: false
     property bool chatExpanded: false
@@ -52,12 +63,77 @@ Window {
     }
 
     function commitRename(id, title) {
-        if (root.renamingSession !== id)
+        if (root.renamingSession !== id) {
             return
+        }
+
         root.renamingSession = ""
         const trimmed = title.trim()
-        if (trimmed.length > 0)
+        if (trimmed.length > 0) {
             chat.renameSession(id, trimmed)
+        }
+    }
+
+    function sendPrompt() {
+        conversationView.stickToBottom = true
+        chat.sendMessage(promptInput.text)
+        promptInput.text = ""
+    }
+
+    function handleInteractionAction(actionId, target, semanticKey) {
+        switch (actionId) {
+            case "session.rename": {
+                root.renamingSession = semanticKey
+                break
+            }
+
+            case "session.remove": {
+                root.pendingDelete = semanticKey
+                deleteDialog.open()
+                break
+            }
+
+            case "history.clear": {
+                clearDialog.open()
+                break
+            }
+
+            case "app.about": {
+                aboutDialog.open()
+                break
+            }
+
+            case "app.quit": {
+                root.requestQuit()
+                break
+            }
+
+            case "prompt.send": {
+                root.sendPrompt()
+                break
+            }
+
+            case "prompt.cancel": {
+                chat.cancel()
+                break
+            }
+
+            case "map.fit": {
+                mapCanvas.fitToMap()
+                break
+            }
+
+            case "map.toggle": {
+                root.mapPaneVisible = !root.mapPaneVisible
+                break
+            }
+        }
+    }
+
+    Component.onCompleted: {
+        interaction.setBusinessValue("chat.running", chat.running ? "true" : "false")
+        interaction.setBusinessValue("prompt.text", promptInput.text.trim())
+        interaction.setBusinessValue("map.ready", chat.mapController.ready ? "true" : "false")
     }
 
     onClosing: close => {
@@ -73,13 +149,16 @@ Window {
         width: parent.width
         z: 9
         menuActive: appMenu.opened
+        closeActionId: "app.quit"
+        interactionController: root.interaction
+        actionTarget: root.InteractionScope.targetId
         expandVisible: chat.conversation.count > 0
         expandActive: root.chatExpanded
         expandEnabled: !root.chatNarrow
         contentX: content.x
         contentInset: root.chatColumnInset
         onMenuRequested: appMenu.toggle()
-        onCloseRequested: root.requestQuit()
+        onCloseRequested: interaction.invokeAction("app.quit", root.InteractionScope.targetId)
         onExpandRequested: root.chatExpanded = !root.chatExpanded
     }
 
@@ -110,10 +189,13 @@ Window {
         IconButton {
             id: mapPaneButton
             iconName: "map"
+            actionId: "map.toggle"
+            interactionController: root.interaction
+            actionTarget: root.InteractionScope.targetId
             iconColor: root.mapPaneVisible ? Theme.color.accent : Theme.color.textMuted
             x: Math.max(content.x + Theme.metric.spacing, inputDrawerButton.x + inputDrawerButton.width + Theme.metric.spacing)
             anchors.verticalCenter: parent.verticalCenter
-            onClicked: root.mapPaneVisible = !root.mapPaneVisible
+            onClicked: interaction.invokeAction(actionId, actionTarget)
         }
 
         Rectangle {
@@ -137,7 +219,8 @@ Window {
         color: Theme.color.dark
         T.ContextMenu.menu: null
         T.ContextMenu.onRequested: function(position) {
-            root.contextMenuRequested(position.x, position.y)
+            const point = content.mapToItem(root.contentItem, position.x, position.y)
+            root.contextMenuRequested(point.x, point.y)
         }
 
         MapCanvas {
@@ -145,6 +228,8 @@ Window {
             InteractionScope.domain: "app.map"
             InteractionScope.role: "surface"
             InteractionScope.hitTestable: true
+            InteractionScope.contextMenuable: true
+            InteractionScope.activatable: true
             InteractionScope.navigable: true
             InteractionScope.draggable: true
             InteractionScope.scrollable: true
@@ -274,22 +359,23 @@ Window {
                     anchors.left: parent.left
                     anchors.leftMargin: Theme.metric.spacing
                     anchors.verticalCenter: parent.verticalCenter
-                    interactive: !chat.running && promptInput.text.trim().length > 0
-                    onClicked: {
-                        conversationView.stickToBottom = true
-                        chat.sendMessage(promptInput.text)
-                        promptInput.text = ""
-                    }
+                    actionId: "prompt.send"
+                    interactionController: root.interaction
+                    actionTarget: promptInput.InteractionScope.targetId
+                    onClicked: interaction.invokeAction(actionId, actionTarget)
                 }
 
                 IconButton {
                     id: stopButton
                     iconName: "square"
+                    actionId: "prompt.cancel"
+                    interactionController: root.interaction
+                    actionTarget: promptInput.InteractionScope.targetId
                     anchors.left: sendButton.right
                     anchors.leftMargin: Theme.metric.spacing
                     anchors.verticalCenter: parent.verticalCenter
                     visible: chat.running
-                    onClicked: chat.cancel()
+                    onClicked: interaction.invokeAction(actionId, actionTarget)
                 }
 
                 Rectangle {
@@ -303,20 +389,29 @@ Window {
 
             TextInput {
                 id: promptInput
+                InteractionScope.domain: "app.prompt"
+                InteractionScope.role: "input"
+                InteractionScope.focusable: true
+                InteractionScope.activatable: true
+                InteractionScope.contextMenuable: true
+                InteractionScope.editable: true
+                InteractionScope.navigable: true
                 anchors.top: inputGutter.bottom
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
                 placeholderText: qsTr("Message the agent...")
                 readOnly: chat.running
-                onTextChanged: draftSaveTimer.restart()
-                Component.onCompleted: text = chat.draft
-                onAccepted: {
-                    conversationView.stickToBottom = true
-                    chat.sendMessage(text)
-                    text = ""
+                onTextChanged: {
+                    draftSaveTimer.restart()
+                    interaction.setBusinessValue("prompt.text", text.trim())
                 }
-                onContextMenuRequested: (x, y) => root.contextMenuRequested(x, y)
+                Component.onCompleted: text = chat.draft
+                onAccepted: interaction.invokeAction("prompt.send", InteractionScope.targetId)
+                onContextMenuRequested: (x, y) => {
+                    const point = promptInput.mapToItem(root.contentItem, x, y)
+                    root.contextMenuRequested(point.x, point.y)
+                }
             }
         }
 
@@ -421,14 +516,6 @@ Window {
                 x: leftDrawer.width - width
                 y: historyGutter.y + clearHistoryButton.y + clearHistoryButton.height + 2
 
-                MenuButton {
-                    width: historyMenu.width - historyMenu.padding * 2
-                    label: qsTr("Clear history")
-                    onClicked: {
-                        historyMenu.close()
-                        clearDialog.open()
-                    }
-                }
             }
 
             ListView {
@@ -444,6 +531,16 @@ Window {
                     id: sessionRow
                     width: ListView.view.width
                     height: 28
+                    InteractionScope.domain: "app.sessionList"
+                    InteractionScope.role: "session-row"
+                    InteractionScope.semanticKey: model.sessionId
+                    InteractionScope.order: index
+                    InteractionScope.focusable: true
+                    InteractionScope.selectable: true
+                    InteractionScope.activatable: true
+                    InteractionScope.contextMenuable: true
+                    InteractionScope.navigable: true
+                    InteractionScope.selectionMode: "multiple"
 
                     readonly property bool renaming: root.renamingSession === model.sessionId
                     color: model.sessionId === chat.activeSession
@@ -461,6 +558,7 @@ Window {
                         acceptedButtons: Qt.LeftButton | Qt.RightButton
                         onClicked: mouse => {
                             if (mouse.button === Qt.RightButton) {
+                                sessionMenu.actionTarget = sessionRow.InteractionScope.targetId
                                 sessionMenu.openAt(mouse.x, mouse.y)
                                 return
                             }
@@ -543,6 +641,7 @@ Window {
                         anchors.rightMargin: 6
                         anchors.verticalCenter: parent.verticalCenter
                         onClicked: {
+                            sessionMenu.actionTarget = sessionRow.InteractionScope.targetId
                             sessionMenu.x = sessionRow.width - sessionMenu.width
                             sessionMenu.y = sessionRow.height + 2
                             sessionMenu.toggle()
@@ -554,25 +653,6 @@ Window {
                         interactionController: root.interaction
                         interactionDomain: "app.sessionMenu"
                         layerKind: "contextMenu"
-
-                        MenuButton {
-                            width: sessionMenu.width - sessionMenu.padding * 2
-                            label: qsTr("Rename")
-                            onClicked: {
-                                sessionMenu.close()
-                                root.renamingSession = model.sessionId
-                            }
-                        }
-
-                        MenuButton {
-                            width: sessionMenu.width - sessionMenu.padding * 2
-                            label: qsTr("Remove")
-                            onClicked: {
-                                sessionMenu.close()
-                                root.pendingDelete = model.sessionId
-                                deleteDialog.open()
-                            }
-                        }
                     }
                 }
             }
@@ -585,36 +665,35 @@ Window {
         interactionDomain: "app.appMenu"
         x: Theme.metric.spacing
         y: topBar.menuAnchorBottom + 2
+    }
 
-        MenuButton {
-            width: appMenu.width - appMenu.padding * 2
-            label: qsTr("About")
-            onClicked: {
-                appMenu.close()
-                aboutDialog.open()
-            }
+    ContextMenu {
+        id: interactionContextMenu
+        interactionController: root.interaction
+        interactionDomain: "app.contextMenu"
+    }
+
+    Connections {
+        target: root.interaction
+
+        function onActionRequested(actionId, target, semanticKey) {
+            root.handleInteractionAction(actionId, target, semanticKey)
         }
+    }
 
-        Rectangle {
-            width: appMenu.width - appMenu.padding * 2
-            height: 9
-            color: "transparent"
+    Connections {
+        target: chat
 
-            Rectangle {
-                anchors.verticalCenter: parent.verticalCenter
-                width: parent.width
-                height: 1
-                color: "#1affffff"
-            }
+        function onRunningChanged() {
+            root.interaction.setBusinessValue("chat.running", chat.running ? "true" : "false")
         }
+    }
 
-        MenuButton {
-            width: appMenu.width - appMenu.padding * 2
-            label: qsTr("Quit")
-            onClicked: {
-                appMenu.close()
-                root.requestQuit()
-            }
+    Connections {
+        target: chat.mapController
+
+        function onReadyChanged() {
+            root.interaction.setBusinessValue("map.ready", chat.mapController.ready ? "true" : "false")
         }
     }
 
