@@ -76,6 +76,28 @@ Do NOT add documentation comments to ANY code. This will only be required on req
     } // END OF NAMESPACE `mts::map`
     ```
 
+- For class constructors, though, when the initializer list spans multiple lines place the opening brace on its own new line:
+
+```
+Foo::Foo()
+    : foo{1}
+    , bar{2}
+    , baz{3}
+{
+
+}
+```
+
+- When specifying a `requires` clause always indent one level:
+
+```
+template<typename Foo>
+    requires(some_trait<Foo>)
+class Bar {
+
+}
+```
+
 - Module partitions: split an oversized module by concern. The primary module interface unit stays thin and re-exports the public partitions; internal partitions are imported but never re-exported.
   - File naming: `<module>_<partition>.cppm`, declaring `export module <module>:<partition>;` (e.g. `map_loader.cppm` → `export module map:loader;`).
   - Public surface: declare the partition as `export module M:P;` and re-export it from the primary with `export import :P;`.
