@@ -180,6 +180,10 @@ Window {
         IconButton {
             id: inputDrawerButton
             iconName: "keyboard"
+            accessibleLabel: qsTr("Show message input")
+            interactionDomain: "app.topBar"
+            interactionGroup: "top-bar"
+            interactionOrder: 3
             iconColor: inputDrawer.size > 0 ? Theme.color.accent : Theme.color.textMuted
             x: Math.max(content.x + Theme.metric.spacing, historyButton.x + historyButton.width + Theme.metric.spacing)
             anchors.verticalCenter: parent.verticalCenter
@@ -190,6 +194,9 @@ Window {
             id: mapPaneButton
             iconName: "map"
             actionId: "map.toggle"
+            interactionDomain: "app.topBar"
+            interactionGroup: "top-bar"
+            interactionOrder: 4
             interactionController: root.interaction
             actionTarget: root.InteractionScope.targetId
             iconColor: root.mapPaneVisible ? Theme.color.accent : Theme.color.textMuted
@@ -229,6 +236,7 @@ Window {
             InteractionScope.role: "surface"
             InteractionScope.hitTestable: true
             InteractionScope.contextMenuable: true
+            InteractionScope.focusable: true
             InteractionScope.activatable: true
             InteractionScope.navigable: true
             InteractionScope.draggable: true
@@ -360,6 +368,9 @@ Window {
                     anchors.leftMargin: Theme.metric.spacing
                     anchors.verticalCenter: parent.verticalCenter
                     actionId: "prompt.send"
+                    interactionDomain: "app.prompt"
+                    interactionGroup: "prompt"
+                    interactionOrder: 1
                     interactionController: root.interaction
                     actionTarget: promptInput.InteractionScope.targetId
                     onClicked: interaction.invokeAction(actionId, actionTarget)
@@ -369,6 +380,9 @@ Window {
                     id: stopButton
                     iconName: "square"
                     actionId: "prompt.cancel"
+                    interactionDomain: "app.prompt"
+                    interactionGroup: "prompt"
+                    interactionOrder: 2
                     interactionController: root.interaction
                     actionTarget: promptInput.InteractionScope.targetId
                     anchors.left: sendButton.right
@@ -389,13 +403,9 @@ Window {
 
             TextInput {
                 id: promptInput
-                InteractionScope.domain: "app.prompt"
-                InteractionScope.role: "input"
-                InteractionScope.focusable: true
-                InteractionScope.activatable: true
-                InteractionScope.contextMenuable: true
-                InteractionScope.editable: true
-                InteractionScope.navigable: true
+                interactionDomain: "app.prompt"
+                interactionGroup: "prompt"
+                interactionOrder: 0
                 anchors.top: inputGutter.bottom
                 anchors.left: parent.left
                 anchors.right: parent.right
@@ -534,8 +544,10 @@ Window {
                     InteractionScope.domain: "app.sessionList"
                     InteractionScope.role: "session-row"
                     InteractionScope.semanticKey: model.sessionId
-                    InteractionScope.order: index
-                    InteractionScope.focusable: true
+                    InteractionScope.label: model.title
+                    InteractionScope.group: "session-list"
+                    InteractionScope.order: index * 2
+                    InteractionScope.focusable: !sessionRow.renaming
                     InteractionScope.selectable: true
                     InteractionScope.activatable: true
                     InteractionScope.contextMenuable: true
@@ -543,9 +555,18 @@ Window {
                     InteractionScope.selectionMode: "multiple"
 
                     readonly property bool renaming: root.renamingSession === model.sessionId
+
+                    function activate() {
+                        conversationView.stickToBottom = true
+                        chat.saveDraft(promptInput.text)
+                        chat.selectSession(model.sessionId)
+                    }
+
                     color: model.sessionId === chat.activeSession
                         ? Theme.color.active
-                        : ((rowHover.hovered || sessionMenu.opened) ? Theme.color.hover : "transparent")
+                        : ((rowHover.hovered || sessionMenu.opened || sessionRow.activeFocus) ? Theme.color.hover : "transparent")
+                    border.color: sessionRow.activeFocus ? Theme.color.accent : "transparent"
+                    border.width: sessionRow.activeFocus ? 1 : 0
 
                     HoverHandler {
                         id: rowHover
@@ -562,9 +583,7 @@ Window {
                                 sessionMenu.openAt(mouse.x, mouse.y)
                                 return
                             }
-                            conversationView.stickToBottom = true
-                            chat.saveDraft(promptInput.text)
-                            chat.selectSession(model.sessionId)
+                            sessionRow.activate()
                         }
                     }
 
@@ -583,6 +602,14 @@ Window {
 
                     Quick.TextInput {
                         id: sessionRename
+                        InteractionScope.domain: "app.sessionList"
+                        InteractionScope.role: "session-rename"
+                        InteractionScope.semanticKey: model.sessionId
+                        InteractionScope.order: index
+                        InteractionScope.group: ""
+                        InteractionScope.focusable: true
+                        InteractionScope.editable: true
+                        InteractionScope.navigable: true
                         visible: sessionRow.renaming
                         anchors.left: parent.left
                         anchors.right: sessionMenuButton.left
@@ -601,17 +628,16 @@ Window {
                             color: Theme.color.accent
                         }
 
+                        function cancelEditing() {
+                            root.renamingSession = ""
+                        }
+
                         onAccepted: root.commitRename(model.sessionId, text)
 
                         onActiveFocusChanged: {
                             if (!activeFocus && sessionRow.renaming) {
                                 root.commitRename(model.sessionId, text)
                             }
-                        }
-
-                        Keys.onEscapePressed: event => {
-                            root.renamingSession = ""
-                            event.accepted = true
                         }
 
                         onVisibleChanged: {
@@ -636,6 +662,10 @@ Window {
                     IconButton {
                         id: sessionMenuButton
                         iconName: "ellipsis"
+                        accessibleLabel: qsTr("Session actions")
+                        interactionDomain: "app.sessionList"
+                        interactionGroup: "session-list"
+                        interactionOrder: index * 2 + 1
                         active: sessionMenu.opened
                         anchors.right: parent.right
                         anchors.rightMargin: 6
@@ -678,6 +708,11 @@ Window {
 
         function onActionRequested(actionId, target, semanticKey) {
             root.handleInteractionAction(actionId, target, semanticKey)
+        }
+
+        function onContextMenuForTarget(target, x, y) {
+            interactionContextMenu.actionTarget = target
+            interactionContextMenu.openAt(x, y)
         }
     }
 

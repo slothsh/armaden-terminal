@@ -108,8 +108,8 @@ Popup {
         id: contentColumn
         InteractionScope.domain: control.interactionDomain
         InteractionScope.role: "layer-content"
-        InteractionScope.focusable: true
-        InteractionScope.activatable: true
+        InteractionScope.focusable: false
+        InteractionScope.activatable: false
         spacing: 0
 
         Repeater {
@@ -120,6 +120,9 @@ Popup {
 
                 width: control.width - control.padding * 2
                 label: modelData.label
+                interactionDomain: control.interactionDomain
+                interactionGroup: control.interactionDomain
+                interactionOrder: modelData.order
                 actionId: modelData.id
                 actionSurface: control.actionSurface
                 actionTarget: control.actionTarget

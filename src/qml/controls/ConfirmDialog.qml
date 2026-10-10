@@ -77,7 +77,7 @@ Popup {
         id: contentColumn
         InteractionScope.domain: control.interactionDomain
         InteractionScope.role: "layer-content"
-        InteractionScope.focusable: true
+        InteractionScope.focusable: false
         width: control.width - control.padding * 2
         spacing: 16
 
@@ -94,6 +94,9 @@ Popup {
             spacing: 8
 
             TextButton {
+                interactionDomain: control.interactionDomain
+                interactionGroup: control.interactionDomain
+                interactionOrder: 0
                 label: control.cancelText
                 onClicked: {
                     control.rejected()
@@ -102,6 +105,9 @@ Popup {
             }
 
             TextButton {
+                interactionDomain: control.interactionDomain
+                interactionGroup: control.interactionDomain
+                interactionOrder: 1
                 label: control.confirmText
                 onClicked: {
                     control.accepted()

@@ -42,3 +42,6 @@ target_link_libraries(interaction_layers_test PRIVATE LibInteraction)
 
 add_test_target(interaction_actions_test interaction/interaction_actions_test.cpp)
 target_link_libraries(interaction_actions_test PRIVATE LibInteraction)
+
+add_test_target(interaction_navigation_test interaction/interaction_navigation_test.cpp)
+target_link_libraries(interaction_navigation_test PRIVATE LibInteraction)

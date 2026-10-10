@@ -173,6 +173,8 @@ struct TargetDescriptor {
     Role role;
     Capabilities capabilities;
     Rect geometry;
+    bool visible = true;
+    bool enabled = true;
     std::string label;
     std::string group;
     std::string semanticKey;
@@ -185,6 +187,8 @@ struct TargetRef {
     Role role;
     Capabilities capabilities;
     Rect geometry;
+    bool visible = true;
+    bool enabled = true;
     std::string label;
     std::string group;
     std::string semanticKey;

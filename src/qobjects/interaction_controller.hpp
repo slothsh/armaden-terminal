@@ -23,6 +23,8 @@ class SelectionModel;
 class TraceRing;
 class LayerStack;
 class ActionRegistry;
+class NavigationModel;
+class KeyRouter;
 struct ContextChange;
 struct SelectionChange;
 struct LayerChange;
@@ -37,6 +39,8 @@ class InteractionController : public QObject {
     QML_UNCREATABLE("InteractionController is owned by the Application")
     Q_PROPERTY(int targetCount READ targetCount NOTIFY registryChanged)
     Q_PROPERTY(quint64 focusedTarget READ focusedTarget NOTIFY contextChanged)
+    Q_PROPERTY(QString focusedLabel READ focusedLabel NOTIFY contextChanged)
+    Q_PROPERTY(QString focusedDomain READ focusedDomain NOTIFY contextChanged)
     Q_PROPERTY(quint64 currentTarget READ currentTarget NOTIFY contextChanged)
     Q_PROPERTY(quint64 hoveredTarget READ hoveredTarget NOTIFY contextChanged)
     Q_PROPERTY(int layerDepth READ layerDepth NOTIFY layersChanged)
@@ -51,6 +55,8 @@ public:
 
     [[nodiscard]] auto targetCount() const -> int;
     [[nodiscard]] auto focusedTarget() const -> quint64;
+    [[nodiscard]] auto focusedLabel() const -> QString;
+    [[nodiscard]] auto focusedDomain() const -> QString;
     [[nodiscard]] auto currentTarget() const -> quint64;
     [[nodiscard]] auto hoveredTarget() const -> quint64;
     [[nodiscard]] auto layerDepth() const -> int;
@@ -63,6 +69,8 @@ public:
     [[nodiscard]] auto trace() -> mts::interaction::TraceRing&;
     [[nodiscard]] auto layers() -> mts::interaction::LayerStack&;
     [[nodiscard]] auto actions() -> mts::interaction::ActionRegistry&;
+    [[nodiscard]] auto navigation() -> mts::interaction::NavigationModel&;
+    [[nodiscard]] auto keyRouter() -> mts::interaction::KeyRouter&;
 
     Q_INVOKABLE auto targetForDomain(QString const& domain, QString const& role) const -> quint64;
     Q_INVOKABLE auto actionsFor(quint64 target, QString const& surface) const -> QVariantList;
@@ -77,6 +85,16 @@ public:
         QVariantMap const& arguments = {}
     ) -> bool;
     Q_INVOKABLE auto setBusinessValue(QString const& key, QString const& value) -> void;
+    Q_INVOKABLE auto focusTarget(quint64 target) -> bool;
+    Q_INVOKABLE auto focusNext(QString const& domain, QString const& group = QString{}, bool wrap = true) -> bool;
+    Q_INVOKABLE auto focusPrevious(QString const& domain, QString const& group = QString{}, bool wrap = true) -> bool;
+    Q_INVOKABLE auto focusFirst(QString const& domain, QString const& group = QString{}) -> bool;
+    Q_INVOKABLE auto focusLast(QString const& domain, QString const& group = QString{}) -> bool;
+    Q_INVOKABLE auto focusDirection(QString const& domain, QString const& direction, QString const& group = {}) -> bool;
+    Q_INVOKABLE auto focusWithin(QString const& domain, QString const& group = {}) -> bool;
+    Q_INVOKABLE auto activateTarget(quint64 target) -> bool;
+    Q_INVOKABLE auto selectAll(QString const& domain) -> void;
+    Q_INVOKABLE auto extendSelection(QString const& domain, QString const& direction) -> bool;
 
     Q_INVOKABLE auto pushLayer(
         QObject* object,
@@ -99,6 +117,7 @@ signals:
     auto layersChanged() -> void;
     auto actionsChanged() -> void;
     auto actionRequested(QString actionId, quint64 target, QString semanticKey) -> void;
+    auto contextMenuForTarget(quint64 target, qreal x, qreal y) -> void;
 
 protected:
     auto eventFilter(QObject* watched, QEvent* event) -> bool override;
@@ -109,6 +128,7 @@ private:
     auto onScopeDestroyed(InteractionScope* scope) -> void;
     auto attachWindow(QQuickWindow* window) -> void;
     auto syncWindowEvent(QQuickWindow* window, QEvent* event) -> bool;
+    auto routeKeyEvent(QQuickWindow* window, QEvent* event) -> bool;
     auto resolveFocus(QQuickWindow* window) -> void;
     [[nodiscard]] auto scopeForItem(QQuickItem const* item) const -> InteractionScope*;
     [[nodiscard]] auto hitTestTarget(QQuickWindow* window, QPointF const& scenePosition) const -> quint64;
@@ -128,6 +148,8 @@ private:
     std::unique_ptr<mts::interaction::TraceRing> m_trace;
     std::unique_ptr<mts::interaction::LayerStack> m_layers;
     std::unique_ptr<mts::interaction::ActionRegistry> m_actions;
+    std::unique_ptr<mts::interaction::NavigationModel> m_navigation;
+    std::unique_ptr<mts::interaction::KeyRouter> m_keyRouter;
     QHash<quint64, QPointer<QObject>> m_layerObjects;
     QPointer<QObject> m_outsideDismissedObject;
     QHash<InteractionScope*, quint64> m_bindings;

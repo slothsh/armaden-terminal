@@ -1,12 +1,27 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Templates as T
+import Lib.Interaction
 import Lib.Controls
 import Lib.Theme
 
 Rectangle {
     id: control
 
+    InteractionScope.domain: control.interactionDomain
+    InteractionScope.role: control.interactionRole
+    InteractionScope.focusable: true
+    InteractionScope.activatable: true
+    InteractionScope.contextMenuable: true
+    InteractionScope.editable: true
+    InteractionScope.navigable: true
+    InteractionScope.group: control.interactionGroup
+    InteractionScope.order: control.interactionOrder
+
+    property string interactionDomain: "app.prompt"
+    property string interactionRole: "input"
+    property string interactionGroup: ""
+    property int interactionOrder: 0
     property alias text: area.text
     property alias placeholderText: area.placeholderText
     property bool readOnly: false
@@ -15,6 +30,10 @@ Rectangle {
     signal contextMenuRequested(real x, real y)
 
     color: Theme.color.menu
+
+    function activate() {
+        control.accepted()
+    }
 
     function ensureCursorVisible() {
         const r = area.cursorRectangle;

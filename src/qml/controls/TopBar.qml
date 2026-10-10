@@ -1,10 +1,14 @@
 import QtQuick
 import QtQuick.Window
+import Lib.Interaction
 import Lib.Controls
 import Lib.Theme
 
 Rectangle {
     id: control
+
+    InteractionScope.domain: "app.topBar"
+    InteractionScope.role: "pane"
 
     signal menuRequested()
     signal closeRequested()
@@ -37,6 +41,10 @@ Rectangle {
     IconButton {
         id: menuButton
         iconName: "menu"
+        accessibleLabel: qsTr("Application menu")
+        interactionDomain: "app.topBar"
+        interactionGroup: "top-bar"
+        interactionOrder: 0
         active: control.menuActive
         anchors.left: parent.left
         anchors.leftMargin: Theme.metric.spacing
@@ -57,6 +65,10 @@ Rectangle {
     IconButton {
         id: expandButton
         iconName: "expand"
+        accessibleLabel: qsTr("Expand conversation")
+        interactionDomain: "app.topBar"
+        interactionGroup: "top-bar"
+        interactionOrder: 1
         x: Math.max(control.contentX + Math.max(control.contentInset, Theme.metric.spacing), menuButton.x + menuButton.width + Theme.metric.spacing)
         anchors.verticalCenter: parent.verticalCenter
         visible: control.expandVisible
@@ -68,6 +80,10 @@ Rectangle {
     IconButton {
         id: closeButton
         iconName: "x"
+        accessibleLabel: qsTr("Close application")
+        interactionDomain: "app.topBar"
+        interactionGroup: "top-bar"
+        interactionOrder: 2
         iconSize: 20
         actionId: control.closeActionId
         interactionController: control.interactionController

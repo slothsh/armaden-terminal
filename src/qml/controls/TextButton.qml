@@ -1,10 +1,24 @@
 import QtQuick
+import Lib.Interaction
 import Lib.Theme
 
 Rectangle {
     id: control
 
+    InteractionScope.domain: control.interactionDomain
+    InteractionScope.role: control.interactionRole
+    InteractionScope.label: control.label
+    InteractionScope.group: control.interactionGroup
+    InteractionScope.order: control.interactionOrder
+    InteractionScope.focusable: true
+    InteractionScope.activatable: true
+    InteractionScope.navigable: true
+
     required property string label
+    property string interactionDomain: "app.controls"
+    property string interactionRole: "button"
+    property string interactionGroup: ""
+    property int interactionOrder: 0
     property string actionId: ""
     property string actionSurface: "button"
     property var interactionController: null
@@ -24,11 +38,18 @@ Rectangle {
 
     signal clicked()
 
+    function activate() {
+        if (control.enabled && control.actionAllowed) {
+            control.clicked()
+        }
+    }
+
+    enabled: control.actionAllowed
     implicitWidth: labelText.implicitWidth + 24
     implicitHeight: 30
     radius: Theme.metric.radius
     opacity: control.enabled && control.actionAllowed ? 1.0 : 0.45
-    color: control.enabled && control.actionAllowed && control.hovered ? Theme.color.hover : "transparent"
+    color: control.enabled && control.actionAllowed && (control.hovered || control.activeFocus) ? Theme.color.hover : "transparent"
 
     Text {
         id: labelText

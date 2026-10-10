@@ -1,11 +1,26 @@
 import QtQuick
+import Lib.Interaction
 import Lib.Theme
 import Lucide
 
 Rectangle {
     id: control
 
+    InteractionScope.domain: control.interactionDomain
+    InteractionScope.role: control.interactionRole
+    InteractionScope.label: control.accessibleLabel.length > 0 ? control.accessibleLabel : control.iconName
+    InteractionScope.group: control.interactionGroup
+    InteractionScope.order: control.interactionOrder
+    InteractionScope.focusable: true
+    InteractionScope.activatable: true
+    InteractionScope.navigable: true
+
     required property string iconName
+    property string accessibleLabel: ""
+    property string interactionDomain: "app.controls"
+    property string interactionRole: "button"
+    property string interactionGroup: ""
+    property int interactionOrder: 0
     property real iconSize: 16
     property color iconColor: Theme.color.text
     property bool active: false
@@ -29,13 +44,20 @@ Rectangle {
 
     signal clicked()
 
+    function activate() {
+        if (control.enabled && control.actionAllowed && control.interactive) {
+            control.clicked()
+        }
+    }
+
+    enabled: control.actionAllowed && control.interactive
     implicitWidth: 24
     implicitHeight: 24
     radius: Theme.metric.radius
     opacity: control.interactive && control.enabled && control.actionAllowed ? 1.0 : 0.4
     color: control.interactive && control.enabled && control.actionAllowed && control.hovered
         ? Theme.color.hover
-        : (control.interactive && control.active ? Theme.color.active : "transparent")
+        : (control.activeFocus || (control.interactive && control.active) ? Theme.color.active : "transparent")
 
     LucideIcon {
         anchors.centerIn: parent

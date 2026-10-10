@@ -16,6 +16,8 @@ InteractionScope::InteractionScope(QObject* object)
         this->connect(item, &QQuickItem::yChanged, this, [this] { this->announceChanged(); });
         this->connect(item, &QQuickItem::widthChanged, this, [this] { this->announceChanged(); });
         this->connect(item, &QQuickItem::heightChanged, this, [this] { this->announceChanged(); });
+        this->connect(item, &QQuickItem::visibleChanged, this, [this] { this->announceChanged(); });
+        this->connect(item, &QQuickItem::enabledChanged, this, [this] { this->announceChanged(); });
     }
 
     InteractionHub::instance()->notifyScopeCreated(this);

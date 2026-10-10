@@ -269,6 +269,10 @@ public:
     }
 
     [[nodiscard]] auto resolve(ActionContext const& context, ActionSurface surface = ActionSurface::Any) const -> std::vector<ResolvedAction> {
+        if (!context.target.visible || !context.target.enabled) {
+            return {};
+        }
+
         std::vector<RegisteredAction const*> candidates = this->candidates(context.target);
         std::vector<RegisteredAction const*> applicable;
         applicable.reserve(candidates.size());
@@ -327,6 +331,8 @@ public:
     ) const -> bool {
         Action const* action = this->findAction(id);
         return action != nullptr
+            && context.target.visible
+            && context.target.enabled
             && action->scope.matches(context.target)
             && action->requirements.satisfiedBy(context.target.capabilities)
             && this->hasSurface(*action, surface)
@@ -340,6 +346,14 @@ public:
         Action const* action = this->findAction(id);
         if (action == nullptr) {
             return ActionDispatchResult{ActionDispatchStatus::NotFound, std::string(id), "unknown action"};
+        }
+
+        if (!context.target.visible) {
+            return ActionDispatchResult{ActionDispatchStatus::Hidden, action->id, "target is not visible"};
+        }
+
+        if (!context.target.enabled) {
+            return ActionDispatchResult{ActionDispatchStatus::Disabled, action->id, "target is disabled"};
         }
 
         if (!action->scope.matches(context.target)) {

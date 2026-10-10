@@ -146,6 +146,8 @@ inline auto TargetRegistry::find(TargetId id) const -> std::optional<TargetRef> 
     reference.role = entry->descriptor.role;
     reference.capabilities = entry->descriptor.capabilities;
     reference.geometry = entry->descriptor.geometry;
+    reference.visible = entry->descriptor.visible;
+    reference.enabled = entry->descriptor.enabled;
     reference.label = entry->descriptor.label;
     reference.group = entry->descriptor.group;
     reference.semanticKey = entry->descriptor.semanticKey;

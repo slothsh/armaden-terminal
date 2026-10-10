@@ -67,6 +67,77 @@ auto domainOf(mts::interaction::TargetRegistry const& registry, mts::interaction
     return resolved.has_value() ? std::string(resolved->domain.path()) : std::string{};
 }
 
+auto navigationKeyFrom(int key) -> std::optional<mts::interaction::NavigationKey> {
+    switch (key) {
+        case Qt::Key_Tab:
+        case Qt::Key_Backtab: {
+            return mts::interaction::NavigationKey::Tab;
+        }
+
+        case Qt::Key_Return:
+        case Qt::Key_Enter: {
+            return mts::interaction::NavigationKey::Enter;
+        }
+
+        case Qt::Key_Space: {
+            return mts::interaction::NavigationKey::Space;
+        }
+
+        case Qt::Key_Escape: {
+            return mts::interaction::NavigationKey::Escape;
+        }
+
+        case Qt::Key_Up: {
+            return mts::interaction::NavigationKey::ArrowUp;
+        }
+
+        case Qt::Key_Down: {
+            return mts::interaction::NavigationKey::ArrowDown;
+        }
+
+        case Qt::Key_Left: {
+            return mts::interaction::NavigationKey::ArrowLeft;
+        }
+
+        case Qt::Key_Right: {
+            return mts::interaction::NavigationKey::ArrowRight;
+        }
+
+        case Qt::Key_Menu: {
+            return mts::interaction::NavigationKey::Menu;
+        }
+
+        case Qt::Key_F10: {
+            return mts::interaction::NavigationKey::F10;
+        }
+
+        case Qt::Key_A: {
+            return mts::interaction::NavigationKey::A;
+        }
+
+        default: {
+            return std::nullopt;
+        }
+    }
+}
+
+auto directionFrom(QString const& value) -> std::optional<mts::interaction::NavigationDirection> {
+    if (value == QStringLiteral("up")) {
+        return mts::interaction::NavigationDirection::Up;
+    }
+    if (value == QStringLiteral("down")) {
+        return mts::interaction::NavigationDirection::Down;
+    }
+    if (value == QStringLiteral("left")) {
+        return mts::interaction::NavigationDirection::Left;
+    }
+    if (value == QStringLiteral("right")) {
+        return mts::interaction::NavigationDirection::Right;
+    }
+
+    return std::nullopt;
+}
+
 auto actionSurfaceFrom(QString const& value) -> mts::interaction::ActionSurface {
     if (value == QStringLiteral("contextMenu")) {
         return mts::interaction::ActionSurface::ContextMenu;
@@ -115,6 +186,10 @@ auto toDescriptor(InteractionScope const& scope) -> mts::interaction::TargetDesc
         geometry.width(),
         geometry.height(),
     };
+    if (auto* item = qobject_cast<QQuickItem*>(scope.owner()); item != nullptr) {
+        descriptor.visible = item->isVisible();
+        descriptor.enabled = item->isEnabled();
+    }
     descriptor.capabilities.focusable = scope.focusable();
     descriptor.capabilities.selectable = scope.selectable();
     descriptor.capabilities.activatable = scope.activatable();
@@ -138,7 +213,9 @@ InteractionController::InteractionController(QObject* parent)
     , m_selection(std::make_unique<mts::interaction::SelectionModel>(*m_registry))
     , m_trace(std::make_unique<mts::interaction::TraceRing>())
     , m_layers(std::make_unique<mts::interaction::LayerStack>())
-    , m_actions(std::make_unique<mts::interaction::ActionRegistry>()) {
+    , m_actions(std::make_unique<mts::interaction::ActionRegistry>())
+    , m_navigation(std::make_unique<mts::interaction::NavigationModel>(*m_registry, *m_layers))
+    , m_keyRouter(std::make_unique<mts::interaction::KeyRouter>()) {
     m_contextSubscription = m_context->subscribe([this](mts::interaction::ContextChange const& change) {
         this->recordContextChange(change);
         emit this->contextChanged();
@@ -194,6 +271,18 @@ auto InteractionController::focusedTarget() const -> quint64 {
     return m_context->focusedId().packed();
 }
 
+auto InteractionController::focusedLabel() const -> QString {
+    auto const target = m_registry->find(m_context->focusedId());
+
+    return target.has_value() ? QString::fromStdString(target->label) : QString{};
+}
+
+auto InteractionController::focusedDomain() const -> QString {
+    auto const target = m_registry->find(m_context->focusedId());
+
+    return target.has_value() ? QString::fromStdString(std::string(target->domain.path())) : QString{};
+}
+
 auto InteractionController::currentTarget() const -> quint64 {
     return m_context->currentId().packed();
 }
@@ -238,6 +327,14 @@ auto InteractionController::layers() -> mts::interaction::LayerStack& {
 
 auto InteractionController::actions() -> mts::interaction::ActionRegistry& {
     return *m_actions;
+}
+
+auto InteractionController::navigation() -> mts::interaction::NavigationModel& {
+    return *m_navigation;
+}
+
+auto InteractionController::keyRouter() -> mts::interaction::KeyRouter& {
+    return *m_keyRouter;
 }
 
 auto InteractionController::context() -> mts::interaction::ContextStore& {
@@ -345,6 +442,203 @@ auto InteractionController::setBusinessValue(QString const& key, QString const& 
     m_actions->setBusinessValue(key.toStdString(), value.toStdString());
     m_actionRevision += 1;
     emit this->actionsChanged();
+}
+
+auto InteractionController::focusTarget(quint64 target) -> bool {
+    mts::interaction::TargetId const id = mts::interaction::TargetId::fromPacked(target);
+    auto const resolved = m_registry->find(id);
+    if (!resolved.has_value()
+        || !resolved->capabilities.focusable
+        || !resolved->visible
+        || !resolved->enabled
+        || !m_layers->ownsInput(id, *m_registry)) {
+        return false;
+    }
+
+    for (auto iterator = m_bindings.cbegin(); iterator != m_bindings.cend(); ++iterator) {
+        if (iterator.value() != target) {
+            continue;
+        }
+
+        if (auto* item = qobject_cast<QQuickItem*>(iterator.key()->owner()); item != nullptr) {
+            item->forceActiveFocus(Qt::TabFocusReason);
+            m_context->setFocused(id);
+            m_navigation->remember(resolved->domain, id);
+
+            return true;
+        }
+    }
+
+    return false;
+}
+
+auto InteractionController::focusNext(QString const& domain, QString const& group, bool wrap) -> bool {
+    mts::interaction::TargetId current = m_context->focusedId();
+    if (!current.valid()) {
+        auto const remembered = m_navigation->remembered(mts::interaction::Domain(domain.toStdString()));
+        current = remembered.value_or(m_context->currentId());
+    }
+
+    auto const target = m_navigation->focusNext(
+        mts::interaction::Domain(domain.toStdString()),
+        current,
+        wrap,
+        group.toStdString()
+    );
+
+    return target.has_value() && this->focusTarget(target->packed());
+}
+
+auto InteractionController::focusPrevious(QString const& domain, QString const& group, bool wrap) -> bool {
+    mts::interaction::TargetId current = m_context->focusedId();
+    if (!current.valid()) {
+        auto const remembered = m_navigation->remembered(mts::interaction::Domain(domain.toStdString()));
+        current = remembered.value_or(m_context->currentId());
+    }
+
+    auto const target = m_navigation->focusPrevious(
+        mts::interaction::Domain(domain.toStdString()),
+        current,
+        wrap,
+        group.toStdString()
+    );
+
+    return target.has_value() && this->focusTarget(target->packed());
+}
+
+auto InteractionController::focusFirst(QString const& domain, QString const& group) -> bool {
+    auto const target = m_navigation->focusFirst(
+        mts::interaction::Domain(domain.toStdString()),
+        group.toStdString()
+    );
+
+    return target.has_value() && this->focusTarget(target->packed());
+}
+
+auto InteractionController::focusLast(QString const& domain, QString const& group) -> bool {
+    auto const target = m_navigation->focusLast(
+        mts::interaction::Domain(domain.toStdString()),
+        group.toStdString()
+    );
+
+    return target.has_value() && this->focusTarget(target->packed());
+}
+
+auto InteractionController::focusDirection(
+    QString const& domain,
+    QString const& direction,
+    QString const& group
+) -> bool {
+    auto const navigationDirection = directionFrom(direction);
+    if (!navigationDirection.has_value()) {
+        return false;
+    }
+
+    mts::interaction::TargetId current = m_context->focusedId();
+    if (!current.valid()) {
+        current = m_context->currentId();
+    }
+
+    auto const target = m_navigation->focusDirection(
+        mts::interaction::Domain(domain.toStdString()),
+        current,
+        *navigationDirection,
+        group.toStdString()
+    );
+    if (!target.has_value()) {
+        return false;
+    }
+
+    auto const resolved = m_registry->find(*target);
+    if (!resolved.has_value()) {
+        return false;
+    }
+
+    bool const focused = this->focusTarget(target->packed());
+    if (focused && resolved->capabilities.selectable) {
+        m_selection->select(resolved->domain, *target, mts::interaction::SelectionIntent::Replace);
+    }
+
+    return focused;
+}
+
+auto InteractionController::focusWithin(QString const& domain, QString const& group) -> bool {
+    return this->focusFirst(domain, group);
+}
+
+auto InteractionController::activateTarget(quint64 target) -> bool {
+    auto const resolved = m_registry->find(mts::interaction::TargetId::fromPacked(target));
+    if (!resolved.has_value()
+        || !resolved->capabilities.activatable
+        || !resolved->visible
+        || !resolved->enabled
+        || !m_layers->ownsInput(resolved->id, *m_registry)) {
+        return false;
+    }
+
+    for (auto iterator = m_bindings.cbegin(); iterator != m_bindings.cend(); ++iterator) {
+        if (iterator.value() != target) {
+            continue;
+        }
+
+        QObject* const owner = iterator.key()->owner();
+        return QMetaObject::invokeMethod(owner, "activate", Qt::DirectConnection);
+    }
+
+    return false;
+}
+
+auto InteractionController::selectAll(QString const& domain) -> void {
+    mts::interaction::Domain const scope(domain.toStdString());
+    std::vector<mts::interaction::TargetId> candidates;
+    for (mts::interaction::TargetId const id : m_navigation->focusRing(scope)) {
+        auto const target = m_registry->find(id);
+        if (target.has_value() && target->capabilities.selectable) {
+            candidates.push_back(id);
+        }
+    }
+
+    m_selection->selectAll(scope, candidates);
+}
+
+auto InteractionController::extendSelection(QString const& domain, QString const& direction) -> bool {
+    auto const navigationDirection = directionFrom(direction);
+    if (!navigationDirection.has_value()) {
+        return false;
+    }
+
+    mts::interaction::TargetId current = m_context->focusedId();
+    if (!current.valid()) {
+        current = m_context->currentId();
+    }
+
+    mts::interaction::Domain const scope(domain.toStdString());
+    auto const currentTarget = m_registry->find(current);
+    auto const target = m_navigation->focusDirection(
+        scope,
+        current,
+        *navigationDirection,
+        currentTarget.has_value() ? std::string_view(currentTarget->group) : std::string_view{}
+    );
+    if (!target.has_value()) {
+        return false;
+    }
+
+    auto const nextTarget = m_registry->find(*target);
+    if (!currentTarget.has_value()
+        || !nextTarget.has_value()
+        || !currentTarget->capabilities.selectable
+        || !nextTarget->capabilities.selectable) {
+        return false;
+    }
+
+    if (!m_selection->anchor(scope).valid()) {
+        m_selection->setAnchor(scope, current);
+    }
+
+    m_selection->select(scope, *target, mts::interaction::SelectionIntent::Range);
+
+    return this->focusTarget(target->packed());
 }
 
 auto InteractionController::pushLayer(
@@ -499,19 +793,26 @@ auto InteractionController::closeLayerOutside(quint64 id) -> bool {
 }
 
 auto InteractionController::eventFilter(QObject* watched, QEvent* event) -> bool {
-    if (auto* window = qobject_cast<QQuickWindow*>(watched); window != nullptr) {
+    QQuickWindow* window = qobject_cast<QQuickWindow*>(watched);
+    bool const windowCoordinates = window != nullptr;
+    if (window == nullptr) {
+        if (auto* item = qobject_cast<QQuickItem*>(watched); item != nullptr) {
+            window = item->window();
+        }
+    }
+
+    if (window != nullptr) {
         this->attachWindow(window);
 
-        if (event->type() == QEvent::KeyPress) {
-            auto const* key = static_cast<QKeyEvent*>(event);
-            if (key->key() == Qt::Key_Escape && this->dismissTopLayer()) {
-                event->accept();
+        if (event->type() == QEvent::KeyPress && this->routeKeyEvent(window, event)) {
+            event->accept();
 
-                return true;
-            }
+            return true;
         }
 
-        if (this->syncWindowEvent(window, event)) {
+        if (event->type() == QEvent::KeyPress || event->type() == QEvent::KeyRelease) {
+            this->syncWindowEvent(window, event);
+        } else if (windowCoordinates && this->syncWindowEvent(window, event)) {
             event->accept();
 
             return true;
@@ -521,16 +822,180 @@ auto InteractionController::eventFilter(QObject* watched, QEvent* event) -> bool
     return QObject::eventFilter(watched, event);
 }
 
+auto InteractionController::routeKeyEvent(QQuickWindow* window, QEvent* event) -> bool {
+    if (event->type() != QEvent::KeyPress) {
+        return false;
+    }
+
+    auto const* keyEvent = static_cast<QKeyEvent*>(event);
+    auto const navigationKey = navigationKeyFrom(keyEvent->key());
+    if (!navigationKey.has_value()) {
+        return false;
+    }
+
+    mts::interaction::Modifiers const modifiers = modifiersFrom(keyEvent->modifiers());
+    m_context->recordModifiers(modifiers);
+    mts::interaction::TargetId current = m_context->focusedId();
+    if (!current.valid()) {
+        current = m_context->currentId();
+    }
+
+    auto const target = m_registry->find(current);
+    auto const top = m_layers->top();
+    mts::interaction::Domain domain;
+    if (top.has_value() && top->descriptor.focusTrap) {
+        domain = top->descriptor.domain;
+    } else if (target.has_value()) {
+        domain = target->domain;
+    }
+
+    std::optional<mts::interaction::LayerKind> const layerKind = top.has_value()
+        ? std::optional<mts::interaction::LayerKind>{top->descriptor.kind}
+        : std::nullopt;
+    auto const binding = m_keyRouter->resolve(
+        mts::interaction::KeyStroke{*navigationKey, modifiers},
+        domain,
+        layerKind
+    );
+    if (!binding.has_value()) {
+        return false;
+    }
+
+    bool const traversal = binding->command == mts::interaction::NavigationCommand::FocusNext
+        || binding->command == mts::interaction::NavigationCommand::FocusPrevious;
+    bool const layerDismiss = binding->command == mts::interaction::NavigationCommand::DismissLayer;
+    bool const contextMenu = binding->command == mts::interaction::NavigationCommand::ShowContextMenu;
+    if (target.has_value() && target->capabilities.editable && !traversal && !layerDismiss && !contextMenu) {
+        return false;
+    }
+
+    QString const domainName = QString::fromUtf8(domain.path().data(), static_cast<qsizetype>(domain.path().size()));
+    QString const group = target.has_value() ? QString::fromStdString(target->group) : QString{};
+
+    switch (binding->command) {
+        case mts::interaction::NavigationCommand::FocusNext: {
+            return this->focusNext(domainName, group, true);
+        }
+
+        case mts::interaction::NavigationCommand::FocusPrevious: {
+            return this->focusPrevious(domainName, group, true);
+        }
+
+        case mts::interaction::NavigationCommand::FocusFirst: {
+            return this->focusFirst(domainName, group);
+        }
+
+        case mts::interaction::NavigationCommand::FocusLast: {
+            return this->focusLast(domainName, group);
+        }
+
+        case mts::interaction::NavigationCommand::MoveUp: {
+            return this->focusDirection(domainName, QStringLiteral("up"), group);
+        }
+
+        case mts::interaction::NavigationCommand::MoveDown: {
+            return this->focusDirection(domainName, QStringLiteral("down"), group);
+        }
+
+        case mts::interaction::NavigationCommand::MoveLeft: {
+            return this->focusDirection(domainName, QStringLiteral("left"), group);
+        }
+
+        case mts::interaction::NavigationCommand::MoveRight: {
+            return this->focusDirection(domainName, QStringLiteral("right"), group);
+        }
+
+        case mts::interaction::NavigationCommand::ExtendUp: {
+            return this->extendSelection(domainName, QStringLiteral("up"));
+        }
+
+        case mts::interaction::NavigationCommand::ExtendDown: {
+            return this->extendSelection(domainName, QStringLiteral("down"));
+        }
+
+        case mts::interaction::NavigationCommand::ExtendLeft: {
+            return this->extendSelection(domainName, QStringLiteral("left"));
+        }
+
+        case mts::interaction::NavigationCommand::ExtendRight: {
+            return this->extendSelection(domainName, QStringLiteral("right"));
+        }
+
+        case mts::interaction::NavigationCommand::Activate: {
+            return this->activateTarget(current.packed());
+        }
+
+        case mts::interaction::NavigationCommand::SelectAll: {
+            bool hasSelectableTarget = false;
+            for (mts::interaction::TargetId const id : m_navigation->focusRing(domain)) {
+                auto const candidate = m_registry->find(id);
+                if (candidate.has_value() && candidate->capabilities.selectable) {
+                    hasSelectableTarget = true;
+                    break;
+                }
+            }
+            if (!hasSelectableTarget) {
+                return false;
+            }
+
+            this->selectAll(domainName);
+
+            return true;
+        }
+
+        case mts::interaction::NavigationCommand::ShowContextMenu: {
+            if (!target.has_value() || !target->capabilities.contextMenuable) {
+                return false;
+            }
+
+            emit this->contextMenuForTarget(
+                target->id.packed(),
+                target->geometry.x + target->geometry.width * 0.5,
+                target->geometry.y + target->geometry.height * 0.5
+            );
+
+            return true;
+        }
+
+        case mts::interaction::NavigationCommand::DismissLayer: {
+            if (this->dismissTopLayer()) {
+                return true;
+            }
+
+            for (auto iterator = m_bindings.cbegin(); iterator != m_bindings.cend(); ++iterator) {
+                if (iterator.value() == current.packed()) {
+                    return QMetaObject::invokeMethod(iterator.key()->owner(), "cancelEditing", Qt::DirectConnection);
+                }
+            }
+
+            return false;
+        }
+    }
+
+    static_cast<void>(window);
+
+    return false;
+}
+
 auto InteractionController::attachWindow(QQuickWindow* window) -> void {
     if (m_window == window || window == nullptr) {
         return;
     }
 
     m_window = window;
-    m_focusConnection = this->connect(window, &QQuickWindow::activeFocusItemChanged, this, [this, window] {
-        this->resolveFocus(window);
+    QPointer<QQuickWindow> const guardedWindow(window);
+    m_focusConnection = this->connect(window, &QQuickWindow::activeFocusItemChanged, this, [this, guardedWindow] {
+        QTimer::singleShot(0, this, [this, guardedWindow] {
+            if (guardedWindow != nullptr) {
+                this->resolveFocus(guardedWindow);
+            }
+        });
     });
-    this->resolveFocus(window);
+    QTimer::singleShot(0, this, [this, guardedWindow] {
+        if (guardedWindow != nullptr) {
+            this->resolveFocus(guardedWindow);
+        }
+    });
 }
 
 auto InteractionController::syncWindowEvent(QQuickWindow* window, QEvent* event) -> bool {
@@ -564,11 +1029,16 @@ auto InteractionController::syncWindowEvent(QQuickWindow* window, QEvent* event)
 
             if (target.valid()) {
                 m_context->recordClick(target, buttonFrom(mouse->button()), toPoint(mouse->position()));
+                auto const resolved = m_registry->find(target);
+                if (resolved.has_value() && resolved->capabilities.focusable) {
+                    this->focusTarget(target.packed());
+                } else {
+                    this->resolveFocus(window);
+                }
             } else {
                 m_context->setCurrent(mts::interaction::TargetId::invalid());
+                this->resolveFocus(window);
             }
-
-            this->resolveFocus(window);
             break;
         }
 
@@ -621,7 +1091,11 @@ auto InteractionController::resolveFocus(QQuickWindow* window) -> void {
         return;
     }
 
-    m_context->setFocused(mts::interaction::TargetId::fromPacked(binding.value()));
+    mts::interaction::TargetId const focused = mts::interaction::TargetId::fromPacked(binding.value());
+    m_context->setFocused(focused);
+    if (auto const target = m_registry->find(focused); target.has_value()) {
+        m_navigation->remember(target->domain, focused);
+    }
 }
 
 auto InteractionController::scopeForItem(QQuickItem const* item) const -> InteractionScope* {
@@ -746,6 +1220,7 @@ auto InteractionController::onScopeDestroyed(InteractionScope* scope) -> void {
     }
 
     m_registry->detach(target);
+    m_navigation->forget(target);
     m_ownerIndex.remove(scope->owner());
     m_bindings.erase(binding);
     emit this->registryChanged();
