@@ -51,7 +51,9 @@ Rectangle {
     implicitWidth: 160
     radius: 2
     opacity: control.enabled && control.actionAllowed ? 1.0 : 0.45
-    color: control.enabled && control.actionAllowed && (control.hovered || control.activeFocus) ? Theme.color.hover : "transparent"
+    color: control.enabled && control.actionAllowed && control.hovered ? Theme.color.hover : "transparent"
+    border.color: control.activeFocus ? Theme.color.accent : "transparent"
+    border.width: control.activeFocus ? 1 : 0
 
     Text {
         anchors.verticalCenter: parent.verticalCenter

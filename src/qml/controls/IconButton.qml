@@ -58,7 +58,9 @@ Rectangle {
     opacity: control.enabled && control.actionAllowed ? 1.0 : 0.4
     color: control.enabled && control.actionAllowed && control.hovered
         ? Theme.color.hover
-        : (control.activeFocus || control.active ? Theme.color.active : "transparent")
+        : (control.active ? Theme.color.active : "transparent")
+    border.color: control.activeFocus ? Theme.color.accent : "transparent"
+    border.width: control.activeFocus ? 1 : 0
 
     LucideIcon {
         anchors.centerIn: parent
