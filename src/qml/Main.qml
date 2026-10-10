@@ -1,9 +1,6 @@
 import QtQuick
-import QtQuick as Quick
 import QtQuick.Window
-import QtQuick.Controls
 import QtQuick.Templates as T
-import QtQuick.Effects
 import Lib.Controls
 import Lib.Interaction
 import Lib.Theme
@@ -44,23 +41,6 @@ Window {
     readonly property real chatColumnInset: chatFullWidth ? 0 : Math.round((content.width - chatPageWidth) / 2)
     readonly property real chatColumnWidth: chatFullWidth ? content.width : chatPageWidth
 
-    property bool quitConfirmed: false
-
-    function requestQuit() {
-        quitDialog.open()
-    }
-
-    function performQuit() {
-        quitConfirmed = true
-        chat.cancelAll()
-        if (!chat.hasInFlight()) {
-            Qt.quit()
-        } else {
-            quitDrainTimer.restart()
-            quitTimeoutTimer.restart()
-        }
-    }
-
     function commitRename(id, title) {
         if (root.renamingSession !== id) {
             return
@@ -74,9 +54,9 @@ Window {
     }
 
     function sendPrompt() {
-        conversationView.stickToBottom = true
-        chat.sendMessage(promptInput.text)
-        promptInput.text = ""
+        conversationView.snapToBottom()
+        chat.sendMessage(promptPane.currentText())
+        promptPane.clearInput()
     }
 
     function handleInteractionAction(actionId, target, semanticKey) {
@@ -103,7 +83,7 @@ Window {
             }
 
             case "app.quit": {
-                root.requestQuit()
+                quitController.requestQuit()
                 break
             }
 
@@ -131,15 +111,22 @@ Window {
 
     Component.onCompleted: {
         interaction.setBusinessValue("chat.running", chat.running ? "true" : "false")
-        interaction.setBusinessValue("prompt.text", promptInput.text.trim())
+        interaction.setBusinessValue("prompt.text", promptPane.currentText().trim())
         interaction.setBusinessValue("map.ready", chat.mapController.ready ? "true" : "false")
     }
 
     onClosing: close => {
-        if (!quitConfirmed) {
+        if (!quitController.quitConfirmed) {
             close.accepted = false
-            requestQuit()
+            quitController.requestQuit()
         }
+    }
+
+    QuitController {
+        id: quitController
+        anchors.fill: parent
+        chatController: chat
+        interactionController: root.interaction
     }
 
     TopBar {
@@ -166,67 +153,24 @@ Window {
         anchors.bottom: parent.bottom
         width: parent.width
         z: 9
-
-        IconButton {
-            id: historyButton
-            iconName: "history"
-            interactionController: root.interaction
-            interactionDomain: "app.bottomBar"
-            interactionGroup: "bottom-bar"
-            interactionOrder: 0
-            accessibleLabel: qsTr("Session history")
-            iconColor: leftDrawer.width > 0 ? Theme.color.accent : Theme.color.textMuted
-            x: Theme.metric.spacing
-            anchors.verticalCenter: parent.verticalCenter
-            onClicked: leftDrawer.toggle()
-        }
-
-        IconButton {
-            id: inputDrawerButton
-            iconName: "keyboard"
-            interactionController: root.interaction
-            accessibleLabel: qsTr("Show message input")
-            interactionDomain: "app.bottomBar"
-            interactionGroup: "bottom-bar"
-            interactionOrder: 1
-            iconColor: inputDrawer.size > 0 ? Theme.color.accent : Theme.color.textMuted
-            x: Math.max(content.x + Theme.metric.spacing, historyButton.x + historyButton.width + Theme.metric.spacing)
-            anchors.verticalCenter: parent.verticalCenter
-            onClicked: inputDrawer.toggle()
-        }
-
-        IconButton {
-            id: mapPaneButton
-            iconName: "map"
-            interactionController: root.interaction
-            actionId: "map.toggle"
-            interactionDomain: "app.bottomBar"
-            interactionGroup: "bottom-bar"
-            interactionOrder: 2
-            actionTarget: root.InteractionScope.targetId
-            iconColor: root.mapPaneVisible ? Theme.color.accent : Theme.color.textMuted
-            x: Math.max(content.x + Theme.metric.spacing, inputDrawerButton.x + inputDrawerButton.width + Theme.metric.spacing)
-            anchors.verticalCenter: parent.verticalCenter
-            onClicked: interaction.invokeAction(actionId, actionTarget)
-        }
-
-        Rectangle {
-            anchors.top: parent.top
-            anchors.bottom: parent.bottom
-            x: content.x - 1
-            width: 1
-            color: Theme.color.borderStrong
-            visible: content.x > 0
-        }
+        interactionController: root.interaction
+        actionTarget: root.InteractionScope.targetId
+        contentX: content.x
+        historyActive: sessionPane.drawerWidth > 0
+        inputActive: promptPane.drawerSize > 0
+        mapActive: root.mapPaneVisible
+        onHistoryRequested: sessionPane.toggleHistory()
+        onInputDrawerRequested: promptPane.toggle()
+        onMapToggleRequested: root.interaction.invokeAction("map.toggle", root.InteractionScope.targetId)
     }
 
     Rectangle {
         id: content
         InteractionScope.domain: "app.main"
         InteractionScope.role: "pane"
-        x: leftDrawer.width
+        x: sessionPane.drawerWidth
         y: topBar.height
-        width: parent.width - leftDrawer.width
+        width: parent.width - sessionPane.drawerWidth
         height: parent.height - topBar.height - bottomBar.height
         color: Theme.color.dark
         T.ContextMenu.menu: null
@@ -256,474 +200,51 @@ Window {
             controller: chat.mapController
         }
 
-        ScrollingArea {
+        ConversationView {
             id: conversationView
-            interactionDomain: "app.conversation"
             visible: !root.mapPaneVisible
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
-            anchors.bottom: inputDrawer.top
+            anchors.bottom: promptPane.top
             stickToBottom: true
-            contentCursorShape: Qt.IBeamCursor
-            contentCursorStart: root.chatColumnInset
-            contentCursorWidth: root.chatColumnWidth
-            barTopMargin: Theme.metric.spacing
-            barBottomMargin: Theme.metric.spacing
-
-            Item {
-                width: root.chatColumnWidth
-                x: (conversationView.width - width) / 2
-                height: threadColumn.height
-
-                Column {
-                    id: threadColumn
-                    width: parent.width
-
-                    Repeater {
-                        model: chat.conversation
-
-                        onItemAdded: {
-                            if (conversationView.stickToBottom) {
-                                conversationView.snapToEnd();
-                            }
-                        }
-
-                        delegate: Rectangle {
-                            width: threadColumn.width
-                            height: blockText.contentHeight + 24
-                            radius: 0
-                            color: {
-                                switch (model.kind) {
-                                    case ConversationModel.UserText: return Theme.color.medium;
-                                    case ConversationModel.Reasoning: return Theme.color.menu;
-                                    case ConversationModel.ToolCall: return Theme.color.menu;
-                                    case ConversationModel.ToolResult: return Theme.color.menu;
-                                    case ConversationModel.Error: return "#3a1f1f";
-                                    default: return Theme.color.menu;
-                                }
-                            }
-
-                            Rectangle {
-                                anchors.top: parent.top
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                height: 1
-                                visible: index > 0
-                                color: Theme.color.borderStrong
-                            }
-
-                            TextEdit {
-                                id: blockText
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                anchors.top: parent.top
-                                anchors.margins: 12
-                                height: contentHeight
-                                readOnly: true
-                                selectByMouse: true
-                                textFormat: TextEdit.PlainText
-                                wrapMode: TextEdit.Wrap
-                                text: model.kind === ConversationModel.ToolResult && model.payload.length > 0
-                                    ? model.text + " " + model.payload
-                                    : (model.kind === ConversationModel.ToolCall ? model.text + " " + model.payload : model.text)
-                                color: model.kind === ConversationModel.Reasoning ? Theme.color.textMuted : Theme.color.text
-                                font.pixelSize: 12
-                                font.italic: model.kind === ConversationModel.Reasoning
-                                font.family: (model.kind === ConversationModel.ToolCall || model.kind === ConversationModel.ToolResult)
-                                    ? "monospace" : ""
-                                selectionColor: Theme.color.accent
-                                selectedTextColor: Theme.color.text
-                            }
-                        }
-                    }
-                }
-            }
+            chatController: chat
+            columnWidth: root.chatColumnWidth
+            columnInset: root.chatColumnInset
         }
 
-        RectangularShadow {
-            anchors.fill: inputDrawer
-            visible: inputDrawer.height > 0
-            radius: inputDrawer.radius
-            color: "#20000000"
-            blur: 10
-            spread: 2
-            offset: Qt.point(0, -2)
-            z: 6
-        }
-
-        VerticalDrawer {
-            id: inputDrawer
-            interactionDomain: "app.promptPane"
+        PromptPane {
+            id: promptPane
             visible: !root.mapPaneVisible
-            side: DrawerSide.Bottom
-            size: 120
-            sizeMin: 80
-            sizeMax: Math.max(80, Math.round(content.height / 2))
-            z: 7
-            color: Theme.color.medium
-
-            Rectangle {
-                id: inputGutter
-                anchors.top: parent.top
-                anchors.left: parent.left
-                anchors.right: parent.right
-                height: 30
-                color: Theme.color.mediumBright
-
-                IconButton {
-                    id: sendButton
-                    iconName: "send"
-                    anchors.left: parent.left
-                    anchors.leftMargin: Theme.metric.spacing
-                    anchors.verticalCenter: parent.verticalCenter
-                    actionId: "prompt.send"
-                    interactionDomain: "app.prompt"
-                    interactionGroup: "prompt"
-                    interactionOrder: 1
-                    interactionController: root.interaction
-                    actionTarget: promptInput.InteractionScope.targetId
-                    onClicked: interaction.invokeAction(actionId, actionTarget)
-                }
-
-                IconButton {
-                    id: stopButton
-                    iconName: "square"
-                    actionId: "prompt.cancel"
-                    interactionDomain: "app.prompt"
-                    interactionGroup: "prompt"
-                    interactionOrder: 2
-                    interactionController: root.interaction
-                    actionTarget: promptInput.InteractionScope.targetId
-                    anchors.left: sendButton.right
-                    anchors.leftMargin: Theme.metric.spacing
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: chat.running
-                    onClicked: interaction.invokeAction(actionId, actionTarget)
-                }
-
-                Rectangle {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
-                    height: 1
-                    color: Theme.color.borderStrong
-                }
-            }
-
-            TextInput {
-                id: promptInput
-                interactionDomain: "app.prompt"
-                interactionGroup: "prompt"
-                interactionOrder: 0
-                anchors.top: inputGutter.bottom
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.bottom: parent.bottom
-                placeholderText: qsTr("Message the agent...")
-                readOnly: chat.running
-                onTextChanged: {
-                    draftSaveTimer.restart()
-                    interaction.setBusinessValue("prompt.text", text.trim())
-                }
-                Component.onCompleted: text = chat.draft
-                onAccepted: interaction.invokeAction("prompt.send", InteractionScope.targetId)
-                onContextMenuRequested: (x, y) => {
-                    const point = promptInput.mapToItem(root.contentItem, x, y)
-                    root.contextMenuRequested(point.x, point.y)
-                }
-            }
-        }
-
-        Timer {
-            id: draftSaveTimer
-            interval: 300
-            onTriggered: chat.saveDraft(promptInput.text)
-        }
-
-        Connections {
-            target: chat
-
-            function onDraftChanged() {
-                promptInput.text = chat.draft
-            }
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            chatController: chat
+            interactionController: root.interaction
+            contentHeight: content.height
+            overlay: root.contentItem
+            onContextMenuRequested: (x, y) => root.contextMenuRequested(x, y)
         }
     }
 
-    Rectangle {
-        x: 0
-        y: 0
+    SessionPane {
+        id: sessionPane
         width: root.width
         height: root.height
-        color: "transparent"
-
-        RectangularShadow {
-            anchors.fill: leftDrawer
-            visible: leftDrawer.width > 0
-            radius: leftDrawer.radius
-            color: "#20000000"
-            blur: 10
-            spread: 2
-            offset: Qt.point(2, 0)
+        chatController: chat
+        interactionController: root.interaction
+        renamingSession: root.renamingSession
+        topBarHeight: topBar.height
+        bottomBarHeight: bottomBar.height
+        contextMenu: interactionContextMenu
+        overlay: root.contentItem
+        onCreateSessionRequested: {
+            conversationView.snapToBottom()
+            promptPane.saveDraft()
+            chat.createSession()
         }
-
-        HorizontalDrawer {
-            id: leftDrawer
-            interactionDomain: "app.sessionPane"
-            size: 220
-            sizeMin: 140
-            sizeMax: root.width > 500 ? root.width / 2 : 250
-            y: topBar.height
-            height: root.height - topBar.height - bottomBar.height
-            z: 8
-
-            color: Theme.color.menu
-
-            Rectangle {
-                id: historyGutter
-                anchors.top: parent.top
-                anchors.left: parent.left
-                anchors.right: parent.right
-                height: 30
-                color: Theme.color.mediumBright
-                clip: true
-
-                Text {
-                    anchors.left: parent.left
-                    anchors.leftMargin: 12
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: qsTr("Session History")
-                    color: Theme.color.text
-                    font.pixelSize: 12
-                }
-
-                IconButton {
-                    id: clearHistoryButton
-                    iconName: "ellipsis"
-                    accessibleLabel: qsTr("History actions")
-                    interactionController: root.interaction
-                    interactionDomain: "app.sessionPane"
-                    interactionGroup: "session-toolbar"
-                    interactionOrder: 0
-                    active: historyMenu.opened
-                    anchors.right: parent.right
-                    anchors.rightMargin: 6
-                    anchors.verticalCenter: parent.verticalCenter
-                    onClicked: historyMenu.toggle()
-                }
-
-                IconButton {
-                    id: addSessionButton
-                    iconName: "plus"
-                    accessibleLabel: qsTr("Create session")
-                    interactionController: root.interaction
-                    interactionDomain: "app.sessionPane"
-                    interactionGroup: "session-toolbar"
-                    interactionOrder: 1
-                    anchors.right: clearHistoryButton.left
-                    anchors.verticalCenter: parent.verticalCenter
-                    onClicked: {
-                        conversationView.stickToBottom = true
-                        chat.saveDraft(promptInput.text)
-                        chat.createSession()
-                    }
-                }
-
-                Rectangle {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
-                    height: 1
-                    color: Theme.color.borderStrong
-                }
-            }
-
-            DropdownMenu {
-                id: historyMenu
-                interactionController: root.interaction
-                interactionDomain: "app.historyMenu"
-                x: leftDrawer.width - width
-                y: historyGutter.y + clearHistoryButton.y + clearHistoryButton.height + 2
-
-            }
-
-            ListView {
-                id: sessionView
-                anchors.top: historyGutter.bottom
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.bottom: parent.bottom
-                clip: true
-                model: chat.sessions
-
-                delegate: Rectangle {
-                    id: sessionRow
-                    width: ListView.view.width
-                    height: 28
-                    InteractionScope.domain: "app.sessionList"
-                    InteractionScope.role: "session-row"
-                    InteractionScope.semanticKey: model.sessionId
-                    InteractionScope.label: model.title
-                    InteractionScope.group: "session-list"
-                    InteractionScope.order: index * 2
-                    InteractionScope.focusable: !sessionRow.renaming
-                    InteractionScope.selectable: true
-                    InteractionScope.activatable: true
-                    InteractionScope.contextMenuable: true
-                    InteractionScope.navigable: true
-                    InteractionScope.selectionMode: "multiple"
-
-                    readonly property bool renaming: root.renamingSession === model.sessionId
-
-                    readonly property bool selected: root.interaction.selectionRevision >= 0
-                        && root.interaction.isSelected(sessionRow.InteractionScope.targetId)
-
-                    function selectWithModifiers(modifiers) {
-                        const intent = root.interaction.selectionIntent(
-                            (modifiers & Qt.ShiftModifier) !== 0,
-                            (modifiers & Qt.ControlModifier) !== 0
-                        )
-                        root.interaction.executeCommand({
-                            kind: "select",
-                            domain: "app.sessionList",
-                            targets: [sessionRow.InteractionScope.targetId],
-                            intent: intent,
-                        })
-                    }
-
-                    function activate() {
-                        sessionRow.selectWithModifiers(0)
-                    }
-
-                    color: model.sessionId === chat.activeSession || sessionRow.selected
-                        ? Theme.color.active
-                        : ((root.interaction.hoveredTarget === sessionRow.InteractionScope.targetId || (interactionContextMenu.opened && interactionContextMenu.actionTarget === sessionRow.InteractionScope.targetId) || sessionRow.activeFocus) ? Theme.color.hover : "transparent")
-                    border.color: sessionRow.activeFocus ? Theme.color.accent : "transparent"
-                    border.width: sessionRow.activeFocus ? 1 : 0
-
-                    MouseArea {
-                        anchors.fill: parent
-                        enabled: !sessionRow.renaming
-                        cursorShape: Qt.PointingHandCursor
-                        acceptedButtons: Qt.LeftButton | Qt.RightButton
-                        onClicked: mouse => {
-                            if (mouse.button === Qt.RightButton) {
-                                const point = sessionRow.mapToItem(root.contentItem, mouse.x, mouse.y)
-                                root.interaction.executeCommand({
-                                    kind: "openContextMenu",
-                                    target: sessionRow.InteractionScope.targetId,
-                                    x: point.x,
-                                    y: point.y,
-                                })
-                                return
-                            }
-                            sessionRow.selectWithModifiers(mouse.modifiers)
-                        }
-                    }
-
-                    Text {
-                        visible: !sessionRow.renaming
-                        anchors.left: parent.left
-                        anchors.right: model.running ? sessionSpinner.left : sessionMenuButton.left
-                        anchors.leftMargin: 12
-                        anchors.rightMargin: 8
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: model.title
-                        color: Theme.color.text
-                        font.pixelSize: 12
-                        elide: Text.ElideRight
-                    }
-
-                    Quick.TextInput {
-                        id: sessionRename
-                        InteractionScope.domain: "app.sessionList"
-                        InteractionScope.role: "session-rename"
-                        InteractionScope.semanticKey: model.sessionId
-                        InteractionScope.order: index
-                        InteractionScope.group: ""
-                        InteractionScope.focusable: true
-                        InteractionScope.editable: true
-                        InteractionScope.navigable: true
-                        visible: sessionRow.renaming
-                        anchors.left: parent.left
-                        anchors.right: sessionMenuButton.left
-                        anchors.leftMargin: 12
-                        anchors.rightMargin: 8
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: ""
-                        color: Theme.color.text
-                        font.pixelSize: 12
-                        clip: true
-                        selectByMouse: true
-                        selectionColor: Theme.color.accent
-                        selectedTextColor: Theme.color.text
-                        cursorDelegate: Rectangle {
-                            width: 2
-                            color: Theme.color.accent
-                        }
-
-                        function cancelEditing() {
-                            root.renamingSession = ""
-                        }
-
-                        onAccepted: root.commitRename(model.sessionId, text)
-
-                        onActiveFocusChanged: {
-                            if (!activeFocus && sessionRow.renaming) {
-                                root.commitRename(model.sessionId, text)
-                            }
-                        }
-
-                        onVisibleChanged: {
-                            if (visible) {
-                                text = model.title
-                                forceActiveFocus()
-                                selectAll()
-                            }
-                        }
-                    }
-
-                    Spinner {
-                        id: sessionSpinner
-                        visible: model.running
-                        width: 12
-                        height: 12
-                        anchors.right: sessionMenuButton.left
-                        anchors.rightMargin: 8
-                        anchors.verticalCenter: parent.verticalCenter
-                    }
-
-                    IconButton {
-                        id: sessionMenuButton
-                        iconName: "ellipsis"
-                        interactionController: root.interaction
-                        accessibleLabel: qsTr("Session actions")
-                        interactionDomain: "app.sessionList"
-                        interactionGroup: "session-list"
-                        interactionOrder: index * 2 + 1
-                        active: interactionContextMenu.opened && interactionContextMenu.actionTarget === sessionRow.InteractionScope.targetId
-                        anchors.right: parent.right
-                        anchors.rightMargin: 6
-                        anchors.verticalCenter: parent.verticalCenter
-                        onClicked: {
-                            const target = sessionRow.InteractionScope.targetId
-                            if (interactionContextMenu.opened && interactionContextMenu.actionTarget === target) {
-                                root.interaction.executeCommand({kind: "closeContextMenu"})
-                            } else {
-                                const point = sessionMenuButton.mapToItem(root.contentItem, 0, sessionMenuButton.height)
-                                root.interaction.executeCommand({
-                                    kind: "openContextMenu",
-                                    target: target,
-                                    x: point.x,
-                                    y: point.y,
-                                })
-                            }
-                        }
-                    }
-
-                }
-            }
-        }
+        onRenameCancelled: root.renamingSession = ""
+        onRenameAccepted: (sessionId, title) => root.commitRename(sessionId, title)
     }
 
     DropdownMenu {
@@ -762,8 +283,8 @@ Window {
                 return
             }
 
-            conversationView.stickToBottom = true
-            chat.saveDraft(promptInput.text)
+            conversationView.snapToBottom()
+            promptPane.saveDraft()
             chat.selectSession(sessionId)
         }
     }
@@ -806,34 +327,5 @@ Window {
         description: chat.status.length > 0 ? chat.status : qsTr("An AI agent harness.")
     }
 
-    Timer {
-        id: quitDrainTimer
-        interval: 100
-        repeat: true
-        onTriggered: {
-            if (!chat.hasInFlight()) {
-                stop()
-                quitTimeoutTimer.stop()
-                Qt.quit()
-            }
-        }
-    }
 
-    Timer {
-        id: quitTimeoutTimer
-        interval: 5000
-        onTriggered: {
-            quitDrainTimer.stop()
-            Qt.quit()
-        }
-    }
-
-    ConfirmDialog {
-        id: quitDialog
-        interactionController: root.interaction
-        message: qsTr("Are you sure you want to exit? Any in-flight responses will be cancelled.")
-        confirmText: qsTr("Quit")
-        cancelText: qsTr("Cancel")
-        onAccepted: root.performQuit()
-    }
 }

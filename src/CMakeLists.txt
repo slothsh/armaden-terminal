@@ -79,6 +79,12 @@ add_qml_module_target(
         ${QOBJECTS_MODULE_HEADER_FILES}
     QML_MODULE_FILES
         qml/Main.qml
+        qml/views/ConversationView.qml
+        qml/views/ConversationBlock.qml
+        qml/views/PromptPane.qml
+        qml/views/SessionPane.qml
+        qml/views/SessionRow.qml
+        qml/views/QuitController.qml
 )
 
 target_include_directories(
