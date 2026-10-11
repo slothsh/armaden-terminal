@@ -36,6 +36,16 @@ Rectangle {
         control.accepted()
     }
 
+    function handleKeyPress(key, modifiers) {
+        const isEnter = key === Qt.Key_Return || key === Qt.Key_Enter
+        if (isEnter && (modifiers & Qt.ControlModifier)) {
+            control.accepted()
+            return true
+        }
+
+        return false
+    }
+
     function ensureCursorVisible() {
         const r = area.cursorRectangle;
         const top = r.y - area.topPadding;
@@ -52,10 +62,10 @@ Rectangle {
         anchors.fill: parent
         barTopMargin: 8
         barBottomMargin: 8
-        contentCursorShape: Qt.IBeamCursor
 
         TextArea {
             id: area
+            objectName: "promptTextArea"
             T.ContextMenu.menu: null
             T.ContextMenu.onRequested: function(position) {
                 control.contextMenuRequested(position.x, position.y)
@@ -74,6 +84,13 @@ Rectangle {
             wrapMode: TextArea.Wrap
             background: null
             readOnly: control.readOnly
+
+            Keys.priority: Keys.BeforeItem
+            Keys.onPressed: event => {
+                if (control.handleKeyPress(event.key, event.modifiers)) {
+                    event.accepted = true
+                }
+            }
 
             cursorDelegate: Rectangle {
                 width: 2

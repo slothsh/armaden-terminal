@@ -4,6 +4,7 @@ import Lib.Theme
 Rectangle {
     id: block
 
+    objectName: "conversationBlock"
     required property int index
     required property int kind
     required property string text
@@ -12,6 +13,7 @@ Rectangle {
     property bool renderEnabled: true
     property var imageLoader: null
     property var markdownParser: null
+    property var scrollController: null
     property var customBlockRenderers: ({})
     property int userTextKind: 0
     property int assistantTextKind: 1
@@ -22,35 +24,105 @@ Rectangle {
     property int toolResultPreviewLimit: 120
     property int toolResultCodeLimit: 480
 
-    function parseToolResult(value) {
-        let parsed
-        try {
-            parsed = JSON.parse(value)
-        } catch (error) {
-            return {valid: false, value: null}
-        }
-
-        for (let depth = 0; depth < 2 && typeof parsed === "string"; ++depth) {
+    function decodeJsonValue(value) {
+        let decoded = value
+        for (let depth = 0; depth < 2 && typeof decoded === "string"; ++depth) {
             try {
-                parsed = JSON.parse(parsed)
+                decoded = JSON.parse(decoded)
             } catch (error) {
                 break
             }
         }
 
-        return {valid: true, value: parsed}
+        return decoded
+    }
+
+    function scrollTextWheel(wheel) {
+        if (!block.scrollController) {
+            return
+        }
+
+        const delta = wheel.pixelDelta.y !== 0
+            ? wheel.pixelDelta.y
+            : wheel.angleDelta.y / 120 * block.scrollController.wheelStep
+        block.scrollController.scrollBy(-delta)
+        wheel.accepted = true
+    }
+
+    function parseToolResult(value) {
+        try {
+            return {valid: true, value: block.decodeJsonValue(JSON.parse(value))}
+        } catch (error) {
+            return {valid: false, value: null}
+        }
+    }
+
+    function isMessageEnvelope(value) {
+        if (value === null || typeof value !== "object" || Array.isArray(value)) {
+            return false
+        }
+        if (!Object.prototype.hasOwnProperty.call(value, "content")) {
+            return false
+        }
+
+        return Object.prototype.hasOwnProperty.call(value, "role")
+            || Object.prototype.hasOwnProperty.call(value, "type")
+            || Object.prototype.hasOwnProperty.call(value, "tool_call_id")
+            || Object.prototype.hasOwnProperty.call(value, "content_blocks")
+            || Object.prototype.hasOwnProperty.call(value, "name")
+    }
+
+    function toolResultReturnedValue(value) {
+        if (value === null || typeof value !== "object" || Array.isArray(value)) {
+            return value
+        }
+
+        if (block.isMessageEnvelope(value)) {
+            if (typeof value.content === "string" && value.content.length > 0) {
+                return block.decodeJsonValue(value.content)
+            }
+            const blocks = value.content_blocks
+            if (Array.isArray(blocks) && blocks.length > 0 && typeof blocks[0].text === "string") {
+                return block.decodeJsonValue(blocks[0].text)
+            }
+
+            return value.content === undefined || value.content === null ? "" : value.content
+        }
+
+        const hasRequest = Object.prototype.hasOwnProperty.call(value, "request")
+        const hasResponse = Object.prototype.hasOwnProperty.call(value, "response")
+        if (!hasRequest && !hasResponse) {
+            return value
+        }
+
+        const result = {}
+        if (hasRequest) {
+            result.request = block.decodeJsonValue(value.request)
+        }
+        if (hasResponse) {
+            result.response = block.decodeJsonValue(value.response)
+        }
+
+        return result
     }
 
     readonly property var parsedToolResult: block.kind === block.toolResultKind
         ? block.parseToolResult(block.payload)
         : ({valid: false, value: null})
+    readonly property var returnedToolResult: block.parsedToolResult.valid
+        ? block.toolResultReturnedValue(block.parsedToolResult.value)
+        : null
+    readonly property string toolResultText: typeof block.returnedToolResult === "string"
+        ? block.returnedToolResult : ""
     readonly property bool hasJsonToolResult: block.parsedToolResult.valid
+        && block.returnedToolResult !== null
+        && typeof block.returnedToolResult === "object"
     readonly property string toolResultCode: {
         if (!block.hasJsonToolResult) {
             return ""
         }
 
-        const formatted = JSON.stringify(block.parsedToolResult.value, null, 2)
+        const formatted = JSON.stringify(block.returnedToolResult, null, 2)
         if (formatted.length <= block.toolResultCodeLimit) {
             return formatted
         }
@@ -60,7 +132,8 @@ Rectangle {
         return formatted.slice(0, end).trim() + "\n…"
     }
     readonly property string toolResultPreview: {
-        const compact = String(block.payload).replace(/\s+/g, " ").trim()
+        const source = block.toolResultText.length > 0 ? block.toolResultText : block.payload
+        const compact = String(source).replace(/\s+/g, " ").trim()
         if (compact.length <= block.toolResultPreviewLimit) {
             return compact
         }
@@ -126,6 +199,7 @@ Rectangle {
             renderEnabled: block.renderEnabled
             parser: block.markdownParser
             imageLoader: block.imageLoader
+            scrollController: block.scrollController
             customBlockRenderers: block.customBlockRenderers
             contentColor: block.kind === block.reasoningKind ? Theme.color.textMuted : Theme.color.text
             mutedColor: Theme.color.textMuted
@@ -159,6 +233,21 @@ Rectangle {
                 ? "monospace" : ""
             selectionColor: Theme.color.accent
             selectedTextColor: Theme.color.text
+
+            HoverHandler {
+                objectName: "conversationTextCursor"
+                cursorShape: Qt.IBeamCursor
+            }
+        }
+
+        MouseArea {
+            objectName: "conversationTextWheelCapture"
+            anchors.fill: plainText
+            enabled: plainText.visible
+            acceptedButtons: Qt.NoButton
+            hoverEnabled: true
+            cursorShape: Qt.IBeamCursor
+            onWheel: wheel => block.scrollTextWheel(wheel)
         }
     }
 }

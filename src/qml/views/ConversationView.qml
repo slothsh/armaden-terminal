@@ -96,14 +96,12 @@ Item {
 
     ScrollingArea {
         id: scrollArea
+        objectName: "conversationScrollArea"
         anchors.top: toolbar.bottom
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         interactionDomain: "app.conversation"
-        contentCursorShape: Qt.IBeamCursor
-        contentCursorStart: control.columnInset
-        contentCursorWidth: control.columnWidth
         barTopMargin: Theme.metric.spacing
         barBottomMargin: Theme.metric.spacing
         stickToBottom: true
@@ -153,6 +151,7 @@ Item {
                             imageLoader: control.imageLoader
                             markdownParser: control.markdownParser
                             customBlockRenderers: control.customBlockRenderers
+                            scrollController: scrollArea
                             userTextKind: control.userTextKind
                             assistantTextKind: control.assistantTextKind
                             reasoningKind: control.reasoningKind

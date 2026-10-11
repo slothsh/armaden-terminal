@@ -7,6 +7,7 @@ Item {
     property var node: ({kind: "document", children: []})
     property var imageLoader: null
     property var customBlockRenderers: ({})
+    property var scrollController: null
     property int imageRevision: 0
     property string parentKind: ""
     property int position: 0
@@ -21,6 +22,18 @@ Item {
 
     implicitHeight: nodeRenderer.item ? nodeRenderer.item.implicitHeight : 0
     height: implicitHeight
+
+    function scrollTextWheel(wheel) {
+        if (!control.scrollController) {
+            return
+        }
+
+        const delta = wheel.pixelDelta.y !== 0
+            ? wheel.pixelDelta.y
+            : wheel.angleDelta.y / 120 * control.scrollController.wheelStep
+        control.scrollController.scrollBy(-delta)
+        wheel.accepted = true
+    }
 
     function escapeHtml(value) {
         return String(value)
@@ -205,6 +218,7 @@ Item {
             nodes: control.node.children || []
             imageLoader: control.imageLoader
             customBlockRenderers: control.customBlockRenderers
+            scrollController: control.scrollController
             imageRevision: control.imageRevision
             contentColor: control.contentColor
             mutedColor: control.mutedColor
@@ -248,6 +262,21 @@ Item {
                     ? TextEdit.AlignHCenter
                     : (control.node.alignment === 3 ? TextEdit.AlignRight : TextEdit.AlignLeft)
                 onLinkActivated: link => control.linkActivated(link)
+
+                HoverHandler {
+                    objectName: "markdownRichTextCursor"
+                    cursorShape: Qt.IBeamCursor
+                }
+
+            }
+
+            MouseArea {
+                objectName: "markdownRichTextWheelCapture"
+                anchors.fill: richText
+                acceptedButtons: Qt.NoButton
+                hoverEnabled: true
+                cursorShape: Qt.IBeamCursor
+                onWheel: wheel => control.scrollTextWheel(wheel)
             }
         }
     }
@@ -272,6 +301,21 @@ Item {
                 font.pixelSize: 12
                 selectionColor: Theme.color.accent
                 selectedTextColor: control.contentColor
+
+                HoverHandler {
+                    objectName: "markdownFallbackTextCursor"
+                    cursorShape: Qt.IBeamCursor
+                }
+
+            }
+
+            MouseArea {
+                objectName: "markdownFallbackTextWheelCapture"
+                anchors.fill: fallbackText
+                acceptedButtons: Qt.NoButton
+                hoverEnabled: true
+                cursorShape: Qt.IBeamCursor
+                onWheel: wheel => control.scrollTextWheel(wheel)
             }
         }
     }
@@ -291,6 +335,7 @@ Item {
                     width: childColumn.width
                     imageLoader: control.imageLoader
                     customBlockRenderers: control.customBlockRenderers
+                    scrollController: control.scrollController
                     imageRevision: control.imageRevision
                     renderEnabled: control.renderEnabled
                     parentKind: control.node.kind
@@ -335,6 +380,7 @@ Item {
                         width: listItemContent.width
                         imageLoader: control.imageLoader
                         customBlockRenderers: control.customBlockRenderers
+                        scrollController: control.scrollController
                         imageRevision: control.imageRevision
                         renderEnabled: control.renderEnabled
                         parentKind: "listItem"
@@ -376,6 +422,7 @@ Item {
                         width: quoteContent.width
                         imageLoader: control.imageLoader
                         customBlockRenderers: control.customBlockRenderers
+                        scrollController: control.scrollController
                         imageRevision: control.imageRevision
                         renderEnabled: control.renderEnabled
                         parentKind: "blockquote"
@@ -415,6 +462,7 @@ Item {
                         index: parent.index
                         imageLoader: control.imageLoader
                         customBlockRenderers: control.customBlockRenderers
+                        scrollController: control.scrollController
                         imageRevision: control.imageRevision
                         renderEnabled: control.renderEnabled
                         contentColor: control.contentColor

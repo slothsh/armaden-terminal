@@ -1605,6 +1605,41 @@ auto InteractionController::syncWindowEvent(QQuickWindow* window, QEvent* event)
                         return true;
                     }
                 }
+
+                mts::interaction::Point const position = toPoint(wheel->position());
+                std::optional<mts::interaction::TargetRef> scrollTarget;
+                double scrollTargetArea = std::numeric_limits<double>::max();
+                for (mts::interaction::TargetRef const& candidate : m_registry->targets()) {
+                    bool const scrollSurface = candidate.role.name() == "scroll-area"
+                        || candidate.role.name() == "code-block";
+                    if (!scrollSurface
+                        || !candidate.capabilities.scrollable
+                        || !candidate.visible
+                        || !candidate.enabled
+                        || !candidate.geometry.contains(position)) {
+                        continue;
+                    }
+
+                    double const area = candidate.geometry.width * candidate.geometry.height;
+                    if (!scrollTarget.has_value() || area < scrollTargetArea) {
+                        scrollTarget = candidate;
+                        scrollTargetArea = area;
+                    }
+                }
+
+                if (scrollTarget.has_value()) {
+                    QQuickItem* const scrollItem = this->itemForTarget(scrollTarget->id.packed());
+                    if (scrollItem != nullptr
+                        && scrollItem->metaObject()->indexOfMethod("interactionScrollRequested(qreal)") >= 0
+                        && QMetaObject::invokeMethod(
+                            scrollItem,
+                            "interactionScrollRequested",
+                            Qt::DirectConnection,
+                            Q_ARG(qreal, delta)
+                        )) {
+                        return true;
+                    }
+                }
             }
             break;
         }

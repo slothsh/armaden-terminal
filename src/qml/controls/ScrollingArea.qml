@@ -27,9 +27,6 @@ Item {
     property int gutterWidth: 16
     property int hideDelay: 2000
     property int hideDuration: 150
-    property int contentCursorShape: Qt.ArrowCursor
-    property int contentCursorStart: 0
-    property int contentCursorWidth: -1
 
     property alias contentY: flick.contentY
     property alias contentHeight: flick.contentHeight
@@ -72,33 +69,27 @@ Item {
         });
     }
 
-    function cursorShapeAt(x, y) {
-        if (control.contentCursorWidth < 0)
-            return control.contentCursorShape;
-        const insideX = x >= control.contentCursorStart
-            && x < control.contentCursorStart + control.contentCursorWidth;
-        const contentBottom = contentColumn.height + flick.originY - flick.contentY;
-        return (insideX && y < contentBottom) ? control.contentCursorShape : Qt.ArrowCursor;
-    }
-
     function scrollBy(delta) {
         flick.contentY = Math.max(flick.originY, Math.min(flick.contentY + delta, control.maxContentY()));
+        scrollBar.poke();
     }
 
-    MouseArea {
-        anchors.fill: parent
-        acceptedButtons: Qt.NoButton
-        hoverEnabled: true
-        cursorShape: control.cursorShapeAt(mouseX, mouseY)
+    signal interactionScrollRequested(real delta)
 
-        onWheel: wheel => {
-            const delta = wheel.pixelDelta.y !== 0
-                ? wheel.pixelDelta.y
-                : wheel.angleDelta.y / 120 * control.wheelStep;
-            control.scrollBy(-delta);
-            scrollBar.poke();
-            wheel.accepted = true;
-        }
+    onInteractionScrollRequested: delta => control.scrollBy(-delta * control.wheelStep)
+
+    function handleWheel(wheel) {
+        const delta = wheel.pixelDelta.y !== 0
+            ? wheel.pixelDelta.y
+            : wheel.angleDelta.y / 120 * control.wheelStep;
+        control.scrollBy(-delta);
+        wheel.accepted = true;
+    }
+
+    WheelHandler {
+        objectName: "scrollAreaWheelHandler"
+        target: null
+        onWheel: wheel => control.handleWheel(wheel)
     }
 
     Rectangle {

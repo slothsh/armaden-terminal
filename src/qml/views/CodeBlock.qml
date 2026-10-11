@@ -1,14 +1,39 @@
 import QtQuick
 import Lib.Controls
+import Lib.Interaction
 import Lib.Theme
 
 Rectangle {
     id: control
 
+    InteractionScope.domain: "app.conversation"
+    InteractionScope.role: "code-block"
+    InteractionScope.focusable: true
+    InteractionScope.scrollable: true
+    InteractionScope.hitTestable: true
+
     required property string code
     property string language: ""
     property bool wordWrap: true
     property real maxCodeHeight: 360
+    property real wheelStep: 90
+    readonly property bool codeOverflows: codeViewport.contentHeight > codeViewport.height + 1
+        || codeViewport.contentWidth > codeViewport.width + 1
+    readonly property bool scrollEnabled: control.codeOverflows && (control.activeFocus || codeText.activeFocus)
+
+    signal interactionScrollRequested(real delta)
+
+    onInteractionScrollRequested: delta => {
+        if (!control.scrollEnabled) {
+            return
+        }
+
+        const maxContentY = Math.max(0, codeViewport.contentHeight - codeViewport.height)
+        codeViewport.contentY = Math.max(0, Math.min(
+            maxContentY,
+            codeViewport.contentY - delta * control.wheelStep
+        ))
+    }
 
     radius: Theme.metric.radius
     color: Theme.color.dark
@@ -42,8 +67,12 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             iconName: control.wordWrap ? "move-horizontal" : "wrap-text"
             accessibleLabel: control.wordWrap ? qsTr("Disable code wrapping") : qsTr("Enable code wrapping")
-            active: control.wordWrap
             onClicked: control.wordWrap = !control.wordWrap
+
+            HoverHandler {
+                objectName: "codeWrapPointerCursor"
+                cursorShape: Qt.PointingHandCursor
+            }
         }
 
         IconButton {
@@ -61,6 +90,11 @@ Rectangle {
                 codeText.deselect()
                 codeText.cursorPosition = cursor
             }
+
+            HoverHandler {
+                objectName: "codeCopyPointerCursor"
+                cursorShape: Qt.PointingHandCursor
+            }
         }
 
         Rectangle {
@@ -74,12 +108,14 @@ Rectangle {
 
     Flickable {
         id: codeViewport
+        objectName: "codeViewport"
         anchors.top: header.bottom
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.margins: 8
         clip: true
+        interactive: control.scrollEnabled
         boundsBehavior: Flickable.StopAtBounds
         contentWidth: control.wordWrap ? width : Math.max(width, codeText.contentWidth)
         contentHeight: Math.max(height, codeText.contentHeight)
@@ -99,6 +135,11 @@ Rectangle {
             font.pixelSize: 12
             selectionColor: Theme.color.accent
             selectedTextColor: Theme.color.text
+
+            HoverHandler {
+                objectName: "codeTextCursor"
+                cursorShape: Qt.IBeamCursor
+            }
         }
     }
 }

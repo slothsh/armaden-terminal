@@ -7,6 +7,7 @@ Column {
     property string sourceText: ""
     property bool streaming: false
     property var parser: null
+    property var scrollController: null
     property bool renderEnabled: true
     property var imageLoader: null
     property var customBlockRenderers: ({})
@@ -85,6 +86,7 @@ Column {
             width: control.width
             imageLoader: control.imageLoader
             customBlockRenderers: control.customBlockRenderers
+            scrollController: control.scrollController
             imageRevision: control.imageRevision
             renderEnabled: control.renderEnabled
             contentColor: control.contentColor

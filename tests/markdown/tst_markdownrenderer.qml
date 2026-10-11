@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Window
 import QtTest
+import Lib.Controls
 
 TestCase {
     id: testCase
@@ -9,6 +10,7 @@ TestCase {
     when: windowShown
     property int streamTickCount: 0
     property int heartbeatCount: 0
+    property var promptInputUnderTest: null
     width: 800
     height: 600
 
@@ -65,6 +67,21 @@ TestCase {
         interval: 5
         repeat: true
         onTriggered: testCase.heartbeatCount += 1
+    }
+
+    Component {
+        id: promptInputComponent
+
+        TextInput {
+            width: 480
+            height: 120
+        }
+    }
+
+    SignalSpy {
+        id: promptAcceptedSpy
+        target: testCase.promptInputUnderTest
+        signalName: "accepted"
     }
 
     Window {
@@ -144,35 +161,61 @@ TestCase {
         })
         verify(call)
         const callText = findChild(call, "conversationPlainText")
+        const conversationTextCursor = findChild(call, "conversationTextCursor")
         verify(callText)
+        verify(conversationTextCursor)
+        compare(conversationTextCursor.cursorShape, Qt.IBeamCursor)
         compare(callText.text, "Used tool: graphql")
         verify(!callText.text.includes("private arguments"))
 
-        const directJson = '{"status":"ok","output":"value"}'
+        const returnedContent = JSON.stringify({ok: true, result: {data: {players: []}}})
+        const messageEnvelope = JSON.stringify({
+            content: returnedContent,
+            content_blocks: [{text: returnedContent, type: "text"}],
+            name: "command_graphql",
+            role: "tool",
+            tool_call_id: "call_LhEWjzKQBZksHl7xKjQWMMyO",
+            type: "tool",
+            usage_metadata: {}
+        })
         const result = component.createObject(rendererWindow, {
             index: 1,
             kind: 4,
-            text: "graphql",
-            payload: directJson
+            text: "command_graphql",
+            payload: messageEnvelope
         })
         verify(result)
         verify(result.hasJsonToolResult)
         const resultCode = findChild(result, "markdownCodeText")
         verify(resultCode)
         verify(resultCode.text.startsWith("{"))
-        verify(resultCode.text.includes('"status": "ok"'))
+        verify(resultCode.text.includes('"ok": true'))
+        verify(resultCode.text.includes('"players": []'))
+        verify(!resultCode.text.includes("tool_call_id"))
+        verify(!resultCode.text.includes("content_blocks"))
+        verify(!resultCode.text.includes("usage_metadata"))
+        verify(!resultCode.text.includes("role"))
 
+        const requestObject = JSON.stringify({method: "POST", variables: {message: "hello"}})
+        const responseObject = JSON.stringify({data: {sent: true}, metadata: "hidden from preview"})
+        const envelope = JSON.stringify({
+            request: requestObject,
+            response: responseObject,
+            internals: {secret: "not for display"}
+        })
         const escapedResult = component.createObject(rendererWindow, {
             index: 2,
             kind: 4,
             text: "graphql",
-            payload: JSON.stringify(directJson)
+            payload: JSON.stringify(envelope)
         })
         verify(escapedResult)
         verify(escapedResult.hasJsonToolResult)
         const escapedCode = findChild(escapedResult, "markdownCodeText")
         verify(escapedCode)
-        verify(escapedCode.text.includes('"output": "value"'))
+        verify(escapedCode.text.includes('"method": "POST"'))
+        verify(escapedCode.text.includes('"sent": true'))
+        verify(!escapedCode.text.includes('"internals"'))
 
         const largeResult = component.createObject(rendererWindow, {
             index: 3,
@@ -190,7 +233,13 @@ TestCase {
             index: 4,
             kind: 4,
             text: "graphql",
-            payload: "service unavailable"
+            payload: JSON.stringify({
+                content: "service unavailable",
+                name: "command_graphql",
+                role: "tool",
+                tool_call_id: "call_plain",
+                type: "tool"
+            })
         })
         verify(plainResult)
         verify(!plainResult.hasJsonToolResult)
@@ -218,6 +267,22 @@ TestCase {
         compare(markdownComponent.status, Component.Ready)
     }
 
+    function test_ctrlEnterActivatesPromptAndPlainEnterIsUnhandled() {
+        testCase.promptInputUnderTest = promptInputComponent.createObject(testCase)
+        verify(testCase.promptInputUnderTest)
+
+        compare(testCase.promptInputUnderTest.handleKeyPress(Qt.Key_Return, Qt.NoModifier), false)
+        compare(promptAcceptedSpy.count, 0)
+        compare(testCase.promptInputUnderTest.handleKeyPress(Qt.Key_Return, Qt.ControlModifier), true)
+        compare(promptAcceptedSpy.count, 1)
+        compare(testCase.promptInputUnderTest.handleKeyPress(Qt.Key_Enter, Qt.ControlModifier), true)
+        compare(promptAcceptedSpy.count, 2)
+
+        testCase.promptInputUnderTest.destroy()
+        testCase.promptInputUnderTest = null
+        promptAcceptedSpy.clear()
+    }
+
     function test_codeBlockHasContentHeight() {
         tryVerify(function() { return codeLoader.item && codeLoader.item.implicitHeight > 30 })
         compare(codeLoader.item.language, "cpp")
@@ -232,14 +297,56 @@ TestCase {
         verify(wrapButton)
         verify(copyButton)
         compare(codeLoader.item.wordWrap, true)
+        compare(wrapButton.active, false)
+        compare(copyButton.active, false)
+        verify(!wrapButton.activeFocus)
+        verify(!copyButton.activeFocus)
+
+        const wrapCursor = findChild(wrapButton, "codeWrapPointerCursor")
+        const copyCursor = findChild(copyButton, "codeCopyPointerCursor")
+        const textCursor = findChild(codeLoader.item, "codeTextCursor")
+        verify(wrapCursor)
+        verify(copyCursor)
+        verify(textCursor)
+        compare(wrapCursor.cursorShape, Qt.PointingHandCursor)
+        compare(copyCursor.cursorShape, Qt.PointingHandCursor)
+        compare(textCursor.cursorShape, Qt.IBeamCursor)
+
+        verify(!wrapButton.hovered)
+        verify(!copyButton.hovered)
+        verify(!wrapCursor.hovered)
+        verify(!wrapButton.activeFocus)
+
         wrapButton.activate()
         compare(codeLoader.item.wordWrap, false)
+        compare(wrapButton.active, false)
         wrapButton.activate()
         compare(codeLoader.item.wordWrap, true)
+        compare(wrapButton.active, false)
+
+        const component = Qt.createComponent(Qt.resolvedUrl("../../src/qml/views/CodeBlock.qml"))
+        const longCodeBlock = component.createObject(rendererWindow, {
+            width: 320,
+            code: Array(100).fill("long code line").join("\n"),
+            language: "json"
+        })
+        verify(longCodeBlock)
+        const codeViewport = findChild(longCodeBlock, "codeViewport")
+        verify(codeViewport)
+        tryVerify(function() { return codeViewport.contentHeight > codeViewport.height })
+        verify(longCodeBlock.codeOverflows)
+        verify(!longCodeBlock.scrollEnabled)
+        verify(!codeViewport.interactive)
+        longCodeBlock.interactionScrollRequested(-1)
+        compare(codeViewport.contentY, 0)
+        longCodeBlock.destroy()
     }
 
     function test_structuredInlineContentHasContentHeight() {
         tryVerify(function() { return markdownNodeLoader.item && markdownNodeLoader.item.implicitHeight > 0 })
+        const textCursor = findChild(markdownNodeLoader.item, "markdownRichTextCursor")
+        verify(textCursor)
+        compare(textCursor.cursorShape, Qt.IBeamCursor)
     }
 
     function test_tableCellsHaveContentHeight() {
@@ -291,17 +398,52 @@ TestCase {
         view.destroy()
     }
 
-    function test_scrollingAreaCanScrollAndFollowTheTail() {
+    function test_messageTextWheelHandlerScrollsTheTranscript() {
         const view = createView()
         verify(view)
         populate(20)
+        const scrollArea = findChild(view, "conversationScrollArea")
+        const block = findChild(view, "conversationBlock")
+        verify(scrollArea)
+        verify(block)
         tryVerify(function() { return view.contentHeight > view.viewportHeight })
-        view.snapToBottom()
-        tryVerify(function() { return view.atBottom() })
-
+        view.stickToBottom = false
+        scrollArea.contentY = 0
         const previousY = view.contentY
-        view.scrollBy(-80)
-        verify(view.contentY < previousY)
+        const wheel = {
+            pixelDelta: {y: 0},
+            angleDelta: {y: -120},
+            accepted: false
+        }
+        block.scrollTextWheel(wheel)
+        verify(wheel.accepted)
+        verify(view.contentY > previousY)
+        view.destroy()
+    }
+
+    function test_scrollingAreaCanScrollAndFollowTheTail() {
+        const view = createView()
+        verify(view)
+        const scrollArea = findChild(view, "conversationScrollArea")
+        verify(scrollArea)
+        populate(20)
+        tryVerify(function() { return view.contentHeight > view.viewportHeight })
+        view.stickToBottom = false
+        scrollArea.contentY = 0
+        const beforeWheelY = view.contentY
+        const wheel = {
+            pixelDelta: {y: 0},
+            angleDelta: {y: -120},
+            accepted: false
+        }
+        scrollArea.handleWheel(wheel)
+        verify(wheel.accepted)
+        verify(view.contentY > beforeWheelY)
+        scrollArea.contentY = 0
+        scrollArea.interactionScrollRequested(-1)
+        verify(view.contentY > 0)
+        view.stickToBottom = true
+        view.snapToBottom()
         conversationModel.append({kind: 0, text: "new tail message", payload: ""})
         tryVerify(function() { return view.atBottom() })
         view.destroy()

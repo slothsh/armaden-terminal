@@ -9,6 +9,7 @@ Item {
     readonly property int position: index
     property var imageLoader: null
     property var customBlockRenderers: ({})
+    property var scrollController: null
     property int imageRevision: 0
     property string parentKind: ""
     property int listStart: 1
@@ -34,6 +35,7 @@ Item {
             item.node = control.node
             item.imageLoader = control.imageLoader
             item.customBlockRenderers = control.customBlockRenderers
+            item.scrollController = control.scrollController
             item.imageRevision = control.imageRevision
             item.parentKind = control.parentKind
             item.position = control.position

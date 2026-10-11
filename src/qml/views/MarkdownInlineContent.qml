@@ -7,6 +7,7 @@ Column {
     required property var nodes
     property var imageLoader: null
     property var customBlockRenderers: ({})
+    property var scrollController: null
     property int imageRevision: 0
     property color contentColor: Theme.color.text
     property color mutedColor: Theme.color.textMuted
@@ -139,6 +140,7 @@ Column {
                     index: segmentLoader.segmentIndex
                     imageLoader: control.imageLoader
                     customBlockRenderers: control.customBlockRenderers
+                    scrollController: control.scrollController
                     imageRevision: control.imageRevision
                     parentKind: "paragraph"
                     contentColor: control.contentColor
