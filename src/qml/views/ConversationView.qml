@@ -12,6 +12,9 @@ Item {
     property var markdownParser: null
     property var customBlockRenderers: ({})
     property bool reasoningVisible: true
+    property bool expandVisible: true
+    property bool expandActive: false
+    property bool expandEnabled: true
     property int userTextKind: 0
     property int assistantTextKind: 1
     property int reasoningKind: 2
@@ -23,6 +26,8 @@ Item {
     readonly property alias contentY: scrollArea.contentY
     readonly property alias contentHeight: scrollArea.contentHeight
     readonly property alias viewportHeight: scrollArea.viewportHeight
+
+    signal expandRequested()
 
     function snapToBottom() {
         control.stickToBottom = true
@@ -41,7 +46,7 @@ Item {
         scrollArea.scrollBy(delta)
     }
 
-    Row {
+    Item {
         id: toolbar
         anchors.top: parent.top
         anchors.left: parent.left
@@ -49,9 +54,20 @@ Item {
         height: 30
         z: 2
 
-        Item {
-            width: Math.max(0, parent.width - reasoningButton.width - Theme.metric.spacing)
-            height: parent.height
+        IconButton {
+            id: expandButton
+            objectName: "conversationExpandButton"
+            iconName: "expand"
+            accessibleLabel: qsTr("Expand conversation")
+            interactionDomain: "app.conversation"
+            interactionGroup: "conversation-bar"
+            interactionOrder: 1
+            x: Math.max(control.columnInset, Theme.metric.spacing)
+            anchors.verticalCenter: parent.verticalCenter
+            visible: control.expandVisible
+            enabled: control.expandEnabled
+            iconColor: control.expandActive ? Theme.color.accent : Theme.color.textMuted
+            onClicked: control.expandRequested()
         }
 
         IconButton {
@@ -59,9 +75,22 @@ Item {
             objectName: "reasoningButton"
             iconName: control.reasoningVisible ? "eye" : "eye-off"
             accessibleLabel: control.reasoningVisible ? qsTr("Hide reasoning blocks") : qsTr("Show reasoning blocks")
+            interactionDomain: "app.conversation"
+            interactionGroup: "conversation-bar"
+            interactionOrder: 2
             active: !control.reasoningVisible
+            anchors.right: parent.right
+            anchors.rightMargin: Theme.metric.spacing
             anchors.verticalCenter: parent.verticalCenter
             onClicked: control.reasoningVisible = !control.reasoningVisible
+        }
+
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: 1
+            color: Theme.color.borderStrong
         }
     }
 

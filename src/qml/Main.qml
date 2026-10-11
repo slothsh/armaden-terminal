@@ -146,14 +146,9 @@ Window {
         closeActionId: "app.quit"
         interactionController: root.interaction
         actionTarget: root.InteractionScope.targetId
-        expandVisible: !root.mapPaneVisible && chat.conversation.count > 0
-        expandActive: root.chatExpanded
-        expandEnabled: !root.chatNarrow
         contentX: content.x
-        contentInset: root.chatColumnInset
         onMenuRequested: appMenu.toggle()
         onCloseRequested: interaction.invokeAction("app.quit", root.InteractionScope.targetId)
-        onExpandRequested: root.chatExpanded = !root.chatExpanded
     }
 
     BottomBar {
@@ -233,6 +228,10 @@ Window {
             errorKind: ConversationModel.Error
             columnWidth: root.chatColumnWidth
             columnInset: root.chatColumnInset
+            expandVisible: !root.mapPaneVisible && chat.conversation.count > 0
+            expandActive: root.chatExpanded
+            expandEnabled: !root.chatNarrow
+            onExpandRequested: root.chatExpanded = !root.chatExpanded
         }
 
         PromptPane {

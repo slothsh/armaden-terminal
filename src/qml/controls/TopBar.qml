@@ -12,17 +12,12 @@ Rectangle {
 
     signal menuRequested()
     signal closeRequested()
-    signal expandRequested()
 
     property bool menuActive: false
-    property bool expandVisible: true
-    property bool expandActive: false
-    property bool expandEnabled: true
     property string closeActionId: ""
     property var interactionController: null
     property var actionTarget: 0
     property real contentX: 0
-    property real contentInset: 0
     readonly property real menuAnchorBottom: menuButton.y + menuButton.height
 
     implicitHeight: Theme.metric.topBarHeight
@@ -60,23 +55,7 @@ Rectangle {
         x: control.contentX - 1
         width: 1
         color: Theme.color.borderStrong
-        visible: control.expandVisible && control.contentX > 0
-    }
-
-    IconButton {
-        id: expandButton
-        iconName: "expand"
-        accessibleLabel: qsTr("Expand conversation")
-        interactionDomain: "app.topBar"
-        interactionGroup: "top-bar"
-        interactionOrder: 1
-        interactionController: control.interactionController
-        x: Math.max(control.contentX + Math.max(control.contentInset, Theme.metric.spacing), menuButton.x + menuButton.width + Theme.metric.spacing)
-        anchors.verticalCenter: parent.verticalCenter
-        visible: control.expandVisible
-        enabled: control.expandEnabled
-        iconColor: control.expandActive ? Theme.color.accent : Theme.color.textMuted
-        onClicked: control.expandRequested()
+        visible: control.contentX > 0
     }
 
     IconButton {
@@ -85,7 +64,7 @@ Rectangle {
         accessibleLabel: qsTr("Close application")
         interactionDomain: "app.topBar"
         interactionGroup: "top-bar"
-        interactionOrder: 2
+        interactionOrder: 1
         iconSize: 20
         actionId: control.closeActionId
         interactionController: control.interactionController

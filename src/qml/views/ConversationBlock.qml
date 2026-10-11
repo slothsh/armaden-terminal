@@ -20,7 +20,45 @@ Rectangle {
     property int toolResultKind: 4
     property int errorKind: 5
     property int toolResultPreviewLimit: 120
+    property int toolResultCodeLimit: 480
 
+    function parseToolResult(value) {
+        let parsed
+        try {
+            parsed = JSON.parse(value)
+        } catch (error) {
+            return {valid: false, value: null}
+        }
+
+        for (let depth = 0; depth < 2 && typeof parsed === "string"; ++depth) {
+            try {
+                parsed = JSON.parse(parsed)
+            } catch (error) {
+                break
+            }
+        }
+
+        return {valid: true, value: parsed}
+    }
+
+    readonly property var parsedToolResult: block.kind === block.toolResultKind
+        ? block.parseToolResult(block.payload)
+        : ({valid: false, value: null})
+    readonly property bool hasJsonToolResult: block.parsedToolResult.valid
+    readonly property string toolResultCode: {
+        if (!block.hasJsonToolResult) {
+            return ""
+        }
+
+        const formatted = JSON.stringify(block.parsedToolResult.value, null, 2)
+        if (formatted.length <= block.toolResultCodeLimit) {
+            return formatted
+        }
+
+        const boundary = formatted.lastIndexOf("\n", block.toolResultCodeLimit)
+        const end = boundary > block.toolResultCodeLimit * 0.6 ? boundary : block.toolResultCodeLimit
+        return formatted.slice(0, end).trim() + "\n…"
+    }
     readonly property string toolResultPreview: {
         const compact = String(block.payload).replace(/\s+/g, " ").trim()
         if (compact.length <= block.toolResultPreviewLimit) {
@@ -74,7 +112,9 @@ Rectangle {
         anchors.right: parent.right
         anchors.top: parent.top
         anchors.margins: 12
-        implicitHeight: block.markdownContent ? markdown.implicitHeight : plainText.contentHeight
+        implicitHeight: block.markdownContent
+            ? markdown.implicitHeight
+            : (block.hasJsonToolResult ? toolResultCode.implicitHeight : plainText.contentHeight)
         height: implicitHeight
 
         MarkdownView {
@@ -91,12 +131,22 @@ Rectangle {
             mutedColor: Theme.color.textMuted
         }
 
+        CodeBlock {
+            id: toolResultCode
+            objectName: "toolResultCode"
+            width: body.width
+            visible: block.hasJsonToolResult
+            code: block.toolResultCode
+            language: "json"
+            maxCodeHeight: 180
+        }
+
         TextEdit {
             id: plainText
             objectName: "conversationPlainText"
             width: body.width
             height: Math.max(contentHeight, font.pixelSize * 1.4)
-            visible: !block.markdownContent
+            visible: !block.markdownContent && !block.hasJsonToolResult
             readOnly: true
             selectByMouse: true
             textFormat: TextEdit.PlainText

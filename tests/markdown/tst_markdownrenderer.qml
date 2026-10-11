@@ -131,7 +131,7 @@ TestCase {
         })
     }
 
-    function test_toolCallsHideArgumentsAndTruncateResults() {
+    function test_toolCallsHideArgumentsAndRenderJsonResultsAsCode() {
         const component = Qt.createComponent(Qt.resolvedUrl("../../src/qml/views/ConversationBlock.qml"))
         compare(component.status, Component.Ready)
 
@@ -148,24 +148,61 @@ TestCase {
         compare(callText.text, "Used tool: graphql")
         verify(!callText.text.includes("private arguments"))
 
-        const payload = ('{"status":"ok", "output":"long response"}\n').repeat(10)
+        const directJson = '{"status":"ok","output":"value"}'
         const result = component.createObject(rendererWindow, {
             index: 1,
             kind: 4,
             text: "graphql",
-            payload: payload
+            payload: directJson
         })
         verify(result)
-        const resultText = findChild(result, "conversationPlainText")
-        verify(resultText)
-        verify(resultText.text.startsWith("Result: {"))
-        verify(resultText.text.endsWith("…"))
-        compare(result.toolResultPreview.length, result.toolResultPreviewLimit)
-        compare(resultText.text.length, "Result: ".length + result.toolResultPreviewLimit)
-        verify(!resultText.text.includes("\n"))
+        verify(result.hasJsonToolResult)
+        const resultCode = findChild(result, "markdownCodeText")
+        verify(resultCode)
+        verify(resultCode.text.startsWith("{"))
+        verify(resultCode.text.includes('"status": "ok"'))
+
+        const escapedResult = component.createObject(rendererWindow, {
+            index: 2,
+            kind: 4,
+            text: "graphql",
+            payload: JSON.stringify(directJson)
+        })
+        verify(escapedResult)
+        verify(escapedResult.hasJsonToolResult)
+        const escapedCode = findChild(escapedResult, "markdownCodeText")
+        verify(escapedCode)
+        verify(escapedCode.text.includes('"output": "value"'))
+
+        const largeResult = component.createObject(rendererWindow, {
+            index: 3,
+            kind: 4,
+            text: "graphql",
+            payload: JSON.stringify({data: Array(100).fill("a long tool result value")})
+        })
+        verify(largeResult)
+        const truncatedCode = findChild(largeResult, "markdownCodeText")
+        verify(truncatedCode)
+        verify(truncatedCode.text.endsWith("…"))
+        verify(truncatedCode.text.length <= largeResult.toolResultCodeLimit + 2)
+
+        const plainResult = component.createObject(rendererWindow, {
+            index: 4,
+            kind: 4,
+            text: "graphql",
+            payload: "service unavailable"
+        })
+        verify(plainResult)
+        verify(!plainResult.hasJsonToolResult)
+        const plainText = findChild(plainResult, "conversationPlainText")
+        verify(plainText)
+        compare(plainText.text, "Result: service unavailable")
 
         call.destroy()
         result.destroy()
+        escapedResult.destroy()
+        largeResult.destroy()
+        plainResult.destroy()
     }
 
     function test_qmlComponentsLoad() {
@@ -267,6 +304,24 @@ TestCase {
         verify(view.contentY < previousY)
         conversationModel.append({kind: 0, text: "new tail message", payload: ""})
         tryVerify(function() { return view.atBottom() })
+        view.destroy()
+    }
+
+    function test_expandControlLivesInTheConversationBar() {
+        const view = createView()
+        verify(view)
+        const expand = findChild(view, "conversationExpandButton")
+        verify(expand)
+        compare(expand.visible, true)
+        compare(expand.enabled, true)
+
+        let requested = 0
+        view.expandRequested.connect(function() { requested += 1 })
+        expand.activate()
+        compare(requested, 1)
+
+        view.expandVisible = false
+        tryVerify(function() { return !expand.visible })
         view.destroy()
     }
 
