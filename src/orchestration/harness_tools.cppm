@@ -130,7 +130,12 @@ inline auto makeGameGraphqlClient(mts::harness::ServerConfig const& config) -> G
         return {};
     }
 
-    auto const client = factory->create(clientConfig.value(), nullptr);
+    std::shared_ptr<mts::agent::IAuthorizationProvider> authorization;
+    if (!config.bearerToken.empty()) {
+        authorization = std::make_shared<mts::agent::BearerTokenAuthorizationProvider>(config.bearerToken);
+    }
+
+    auto const client = factory->create(clientConfig.value(), std::move(authorization));
     if (!client) {
         return {};
     }

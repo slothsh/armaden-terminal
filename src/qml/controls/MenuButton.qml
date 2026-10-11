@@ -46,7 +46,6 @@ Rectangle {
         }
     }
 
-    enabled: control.actionAllowed
     implicitHeight: 26
     implicitWidth: 160
     radius: 2

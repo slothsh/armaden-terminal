@@ -13,6 +13,7 @@
 #include "foundation/network/http_client_factory.hpp"
 #include "foundation/network/http_client_types.hpp"
 #include "foundation/network/i_authorization_provider.hpp"
+#include "foundation/network/authorization_provider.hpp"
 #include "foundation/config/config_loader.hpp"
 #include "foundation/event/i_event_sink.hpp"
 
@@ -93,6 +94,7 @@ using ::lgc::DefaultHttpClientFactory;
 using ::lgc::HttpClientFactoryOptions;
 using ::lgc::IHttpClientFactory;
 using ::lgc::IAuthorizationProvider;
+using ::lgc::BearerTokenAuthorizationProvider;
 using ::lgc::defaultHttpClientFactory;
 using ::lgc::ConfigLoader;
 using ::lgc::Config;

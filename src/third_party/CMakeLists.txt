@@ -1,3 +1,6 @@
+add_library(md4c STATIC "${md4c_SOURCE_DIR}/src/md4c.c")
+target_include_directories(md4c PUBLIC "${md4c_SOURCE_DIR}/src")
+
 # Third-party module source files
 file(GLOB_RECURSE MAGIC_ENUM_MODULE_SRC_FILES CONFIGURE_DEPENDS "${magic_enum_SOURCE_DIR}/module/*.cppm")
 

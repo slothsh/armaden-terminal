@@ -6,6 +6,7 @@
 class ChatController;
 class MapController;
 class InteractionController;
+class MarkdownImageService;
 class QGuiApplication;
 class QQmlApplicationEngine;
 
@@ -50,6 +51,7 @@ private:
     char** m_argv;
     std::unique_ptr<QGuiApplication> m_application;
     std::unique_ptr<QQmlApplicationEngine> m_engine;
+    std::unique_ptr<MarkdownImageService> m_markdownImageService;
     std::unique_ptr<mts::runtime::ThreadPool> m_pool;
     std::unique_ptr<mts::events::EventBus> m_bus;
     std::unique_ptr<mts::persistence::SessionStoreHandle> m_store;

@@ -8,17 +8,31 @@ Rectangle {
     required property int kind
     required property string text
     required property string payload
+    property bool streaming: false
+    property bool renderEnabled: true
+    property var imageLoader: null
+    property var markdownParser: null
+    property var customBlockRenderers: ({})
+    property int userTextKind: 0
+    property int assistantTextKind: 1
+    property int reasoningKind: 2
+    property int toolCallKind: 3
+    property int toolResultKind: 4
+    property int errorKind: 5
+
+    readonly property bool markdownContent: block.kind === block.assistantTextKind
+        || block.kind === block.reasoningKind
 
     width: parent.width
-    height: blockText.contentHeight + 24
+    height: body.implicitHeight + 24
     radius: 0
     color: {
         switch (block.kind) {
-            case ConversationModel.UserText: return Theme.color.medium
-            case ConversationModel.Reasoning: return Theme.color.menu
-            case ConversationModel.ToolCall: return Theme.color.menu
-            case ConversationModel.ToolResult: return Theme.color.menu
-            case ConversationModel.Error: return "#3a1f1f"
+            case block.userTextKind: return Theme.color.medium
+            case block.reasoningKind: return Theme.color.menu
+            case block.toolCallKind: return Theme.color.menu
+            case block.toolResultKind: return Theme.color.menu
+            case block.errorKind: return "#3a1f1f"
             default: return Theme.color.menu
         }
     }
@@ -32,26 +46,48 @@ Rectangle {
         color: Theme.color.borderStrong
     }
 
-    TextEdit {
-        id: blockText
+    Item {
+        id: body
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
         anchors.margins: 12
-        height: contentHeight
-        readOnly: true
-        selectByMouse: true
-        textFormat: TextEdit.PlainText
-        wrapMode: TextEdit.Wrap
-        text: block.kind === ConversationModel.ToolResult && block.payload.length > 0
-            ? block.text + " " + block.payload
-            : (block.kind === ConversationModel.ToolCall ? block.text + " " + block.payload : block.text)
-        color: block.kind === ConversationModel.Reasoning ? Theme.color.textMuted : Theme.color.text
-        font.pixelSize: 12
-        font.italic: block.kind === ConversationModel.Reasoning
-        font.family: (block.kind === ConversationModel.ToolCall || block.kind === ConversationModel.ToolResult)
-            ? "monospace" : ""
-        selectionColor: Theme.color.accent
-        selectedTextColor: Theme.color.text
+        implicitHeight: block.markdownContent ? markdown.implicitHeight : plainText.contentHeight
+        height: implicitHeight
+
+        MarkdownView {
+            id: markdown
+            width: body.width
+            visible: block.markdownContent
+            sourceText: block.text
+            streaming: block.streaming
+            renderEnabled: block.renderEnabled
+            parser: block.markdownParser
+            imageLoader: block.imageLoader
+            customBlockRenderers: block.customBlockRenderers
+            contentColor: block.kind === block.reasoningKind ? Theme.color.textMuted : Theme.color.text
+            mutedColor: Theme.color.textMuted
+        }
+
+        TextEdit {
+            id: plainText
+            width: body.width
+            height: Math.max(contentHeight, font.pixelSize * 1.4)
+            visible: !block.markdownContent
+            readOnly: true
+            selectByMouse: true
+            textFormat: TextEdit.PlainText
+            wrapMode: TextEdit.Wrap
+            text: block.kind === block.toolResultKind && block.payload.length > 0
+                ? block.text + " " + block.payload
+                : (block.kind === block.toolCallKind ? block.text + " " + block.payload : block.text)
+            color: block.kind === block.reasoningKind ? Theme.color.textMuted : Theme.color.text
+            font.pixelSize: 12
+            font.italic: false
+            font.family: (block.kind === block.toolCallKind || block.kind === block.toolResultKind)
+                ? "monospace" : ""
+            selectionColor: Theme.color.accent
+            selectedTextColor: Theme.color.text
+        }
     }
 }

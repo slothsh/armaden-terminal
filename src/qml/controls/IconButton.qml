@@ -51,7 +51,6 @@ Rectangle {
         }
     }
 
-    enabled: control.actionAllowed
     implicitWidth: 24
     implicitHeight: 24
     radius: Theme.metric.radius

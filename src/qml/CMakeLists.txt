@@ -1,4 +1,5 @@
 add_library(LibQml)
+set_target_properties(LibQml PROPERTIES LINKER_LANGUAGE CXX)
 
 target_link_libraries(
     LibQml

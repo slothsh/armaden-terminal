@@ -18,6 +18,11 @@ Window {
 
     property var chat: null
     property var interaction: null
+    property var markdownImages: null
+
+    MarkdownParser {
+        id: contentParser
+    }
     property string pendingDelete: ""
     property string renamingSession: ""
 
@@ -217,8 +222,15 @@ Window {
             anchors.right: parent.right
             anchors.top: parent.top
             anchors.bottom: promptPane.top
-            stickToBottom: true
             chatController: chat
+            imageLoader: root.markdownImages
+            markdownParser: contentParser
+            userTextKind: ConversationModel.UserText
+            assistantTextKind: ConversationModel.AssistantText
+            reasoningKind: ConversationModel.Reasoning
+            toolCallKind: ConversationModel.ToolCall
+            toolResultKind: ConversationModel.ToolResult
+            errorKind: ConversationModel.Error
             columnWidth: root.chatColumnWidth
             columnInset: root.chatColumnInset
         }

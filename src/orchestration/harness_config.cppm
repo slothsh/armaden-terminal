@@ -10,6 +10,7 @@ struct ServerConfig {
     std::string origin = "http://127.0.0.1:8000";
     std::string graphqlPath = "api/command/graphql";
     std::string schemaPath = "api/command/schema";
+    std::string bearerToken;
 };
 
 struct NamingConfig {
@@ -40,6 +41,10 @@ struct CompactionConfig {
     }
 
     if (auto const status = section.readString("schemaPath", target.schemaPath); !status) {
+        return status;
+    }
+
+    if (auto const status = section.readString("bearerToken", target.bearerToken); !status) {
         return status;
     }
 

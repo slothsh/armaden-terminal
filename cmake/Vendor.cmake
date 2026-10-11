@@ -16,6 +16,20 @@ CPMAddPackage(
 )
 
 CPMAddPackage(
+    NAME md4c
+    GITHUB_REPOSITORY mity/md4c
+    GIT_TAG release-0.5.3
+    DOWNLOAD_ONLY YES
+)
+
+CPMAddPackage(
+    NAME ctre
+    GITHUB_REPOSITORY hanickadot/compile-time-regular-expressions
+    GIT_TAG 62b060684d571df4dfab0fafeeddcf524db7c99e
+    DOWNLOAD_ONLY YES
+)
+
+CPMAddPackage(
     NAME magic_enum
     GITHUB_REPOSITORY Neargye/magic_enum 
     VERSION 0.9.7

@@ -9,13 +9,15 @@ list(FILTER QOBJECTS_MODULE_HEADER_FILES EXCLUDE REGEX "interaction_(scope|hub)\
 file(GLOB_RECURSE LOGGING_MODULE_SRC_FILES CONFIGURE_DEPENDS logging/*.cppm)
 
 find_package(EnTT REQUIRED)
-find_package(Qt6 6.11 REQUIRED COMPONENTS Quick QuickShapes CanvasPainter)
+find_package(Qt6 6.11 REQUIRED COMPONENTS Quick QuickShapes CanvasPainter Network)
 qt_standard_project_setup(REQUIRES 6.11)
 
 add_subdirectory(third_party/)
 add_subdirectory(json/)
 add_subdirectory(core/)
 add_subdirectory(interaction/)
+add_subdirectory(markdown/)
+add_subdirectory(regex/)
 
 qt_add_qml_module(
     interactionui
@@ -81,6 +83,12 @@ add_qml_module_target(
         qml/Main.qml
         qml/views/ConversationView.qml
         qml/views/ConversationBlock.qml
+        qml/views/MarkdownView.qml
+        qml/views/MarkdownNode.qml
+        qml/views/MarkdownNodeDelegate.qml
+        qml/views/MarkdownInlineContent.qml
+        qml/views/MarkdownImage.qml
+        qml/views/CodeBlock.qml
         qml/views/PromptPane.qml
         qml/views/SessionPane.qml
         qml/views/SessionRow.qml
@@ -101,6 +109,7 @@ target_link_libraries(
         spdlog::spdlog
         STDEXEC::stdexec
         Qt6::Quick
+        Qt6::Network
         Qt6::CanvasPainter
         EnTT::EnTT
         lgc::langgraph
@@ -117,6 +126,8 @@ target_link_libraries(
         LibImagery
         LibMap
         LibOrchestration
+        LibMarkdown
+        LibRegex
     PRIVATE
         LibQml
         interactionui

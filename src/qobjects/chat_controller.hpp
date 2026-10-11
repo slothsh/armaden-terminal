@@ -27,6 +27,7 @@ class ConversationProjector;
 class ChatController : public QObject {
     Q_OBJECT
     QML_NAMED_ELEMENT(ChatController)
+    QML_UNCREATABLE("ChatController is created by the application")
     Q_PROPERTY(SessionListModel* sessions READ sessions CONSTANT)
     Q_PROPERTY(ConversationModel* conversation READ conversation CONSTANT)
     Q_PROPERTY(bool running READ running NOTIFY runningChanged)

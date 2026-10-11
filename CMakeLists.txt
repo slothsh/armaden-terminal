@@ -5,7 +5,7 @@ include(cmake/Toolchain.cmake)
 
 initialize_toolchain()
 
-project(mindtosis VERSION 0.0.0 LANGUAGES CXX)
+project(mindtosis VERSION 0.0.0 LANGUAGES C CXX)
 
 prepare_testing()
 

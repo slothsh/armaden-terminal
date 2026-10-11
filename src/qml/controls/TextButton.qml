@@ -46,7 +46,6 @@ Rectangle {
         }
     }
 
-    enabled: control.actionAllowed
     implicitWidth: labelText.implicitWidth + 24
     implicitHeight: 30
     radius: Theme.metric.radius

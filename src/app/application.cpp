@@ -4,6 +4,7 @@
 #include "chat_controller.hpp"
 #include "interaction_controller.hpp"
 #include "map_controller.hpp"
+#include "markdown_image_service.hpp"
 
 #include <QBuffer>
 #include <QByteArray>
@@ -218,6 +219,7 @@ mts::app::Application::Application(int argc, char** argv)
     mts::config::RuntimeConfig runtimeConfig;
     mts::imagery::CacheConfig cacheConfig;
     mts::map::MapConfig mapConfig;
+    mts::config::MarkdownImageConfig markdownImageConfig;
 
     auto const reportConfigError = [this](mts::core::Status const& status) {
         if (!status && m_initialStatus.empty()) {
@@ -232,6 +234,11 @@ mts::app::Application::Application(int argc, char** argv)
     reportConfigError(mts::config::applyConfig(view, runtimeConfig));
     reportConfigError(mts::imagery::applyConfig(view, cacheConfig));
     reportConfigError(mts::map::applyConfig(view, mapConfig));
+    mts::core::Status const markdownImageStatus = mts::config::applyConfig(view, markdownImageConfig);
+    if (!markdownImageStatus) {
+        reportConfigError(markdownImageStatus);
+        markdownImageConfig = mts::config::MarkdownImageConfig{};
+    }
 
     if (!configError.empty()) {
         m_initialStatus = configError;
@@ -341,9 +348,12 @@ mts::app::Application::Application(int argc, char** argv)
 
     mts::log::info("Done! Connecting application to GUI engine...");
 
+    m_markdownImageService = std::make_unique<MarkdownImageService>(markdownImageConfig);
+
     m_engine->setInitialProperties({
         {"chat", QVariant::fromValue(static_cast<QObject*>(m_chat))},
         {"interaction", QVariant::fromValue(static_cast<QObject*>(m_interaction))},
+        {"markdownImages", QVariant::fromValue(static_cast<QObject*>(m_markdownImageService.get()))},
     });
 
     QObject::connect(
@@ -361,6 +371,7 @@ mts::app::Application::Application(int argc, char** argv)
 
 mts::app::Application::~Application() {
     m_engine.reset();
+    m_markdownImageService.reset();
 
     delete m_chat;
     m_chat = nullptr;
