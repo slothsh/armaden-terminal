@@ -19,6 +19,28 @@ Rectangle {
     property int toolCallKind: 3
     property int toolResultKind: 4
     property int errorKind: 5
+    property int toolResultPreviewLimit: 120
+
+    readonly property string toolResultPreview: {
+        const compact = String(block.payload).replace(/\s+/g, " ").trim()
+        if (compact.length <= block.toolResultPreviewLimit) {
+            return compact
+        }
+
+        return compact.slice(0, Math.max(0, block.toolResultPreviewLimit - 1)).trim() + "…"
+    }
+    readonly property string displayText: {
+        if (block.kind === block.toolCallKind) {
+            const name = block.text.trim()
+            return name.length > 0 ? qsTr("Used tool: %1").arg(name) : qsTr("Used a tool")
+        }
+        if (block.kind === block.toolResultKind) {
+            return block.toolResultPreview.length > 0
+                ? qsTr("Result: %1").arg(block.toolResultPreview)
+                : qsTr("Result: (empty)")
+        }
+        return block.text
+    }
 
     readonly property bool markdownContent: block.kind === block.assistantTextKind
         || block.kind === block.reasoningKind
@@ -71,6 +93,7 @@ Rectangle {
 
         TextEdit {
             id: plainText
+            objectName: "conversationPlainText"
             width: body.width
             height: Math.max(contentHeight, font.pixelSize * 1.4)
             visible: !block.markdownContent
@@ -78,9 +101,7 @@ Rectangle {
             selectByMouse: true
             textFormat: TextEdit.PlainText
             wrapMode: TextEdit.Wrap
-            text: block.kind === block.toolResultKind && block.payload.length > 0
-                ? block.text + " " + block.payload
-                : (block.kind === block.toolCallKind ? block.text + " " + block.payload : block.text)
+            text: block.displayText
             color: block.kind === block.reasoningKind ? Theme.color.textMuted : Theme.color.text
             font.pixelSize: 12
             font.italic: false

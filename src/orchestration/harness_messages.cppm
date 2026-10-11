@@ -82,23 +82,23 @@ inline auto emitMessage(
 ) -> void {
     switch (message.type_) {
         case mts::agent::MessageType::Human:
-            bus.publish(mts::events::MessageAdded{session, mts::events::MessageKind::UserText, message.content_});
+            bus.publishDirect(mts::events::MessageAdded{session, mts::events::MessageKind::UserText, message.content_});
             break;
 
         case mts::agent::MessageType::System:
-            bus.publish(mts::events::MessageAdded{session, mts::events::MessageKind::Reasoning, message.content_});
+            bus.publishDirect(mts::events::MessageAdded{session, mts::events::MessageKind::Reasoning, message.content_});
             break;
 
         case mts::agent::MessageType::Tool:
-            bus.publish(mts::events::ToolCallFinished{session, message.toolCallId_, message.name_, message.content_, true});
+            bus.publishDirect(mts::events::ToolCallFinished{session, message.toolCallId_, message.name_, message.content_, true});
             break;
 
         case mts::agent::MessageType::AI:
             if (message.toolCalls_.empty()) {
-                bus.publish(mts::events::MessageAdded{session, mts::events::MessageKind::AssistantText, message.content_});
+                bus.publishDirect(mts::events::MessageAdded{session, mts::events::MessageKind::AssistantText, message.content_});
             } else {
                 for (auto const& call : message.toolCalls_) {
-                    bus.publish(mts::events::ToolCallStarted{session, call.id_, call.name_, call.args_.dump()});
+                    bus.publishDirect(mts::events::ToolCallStarted{session, call.id_, call.name_, call.args_.dump()});
                 }
             }
             break;

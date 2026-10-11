@@ -131,6 +131,43 @@ TestCase {
         })
     }
 
+    function test_toolCallsHideArgumentsAndTruncateResults() {
+        const component = Qt.createComponent(Qt.resolvedUrl("../../src/qml/views/ConversationBlock.qml"))
+        compare(component.status, Component.Ready)
+
+        const arguments = '{"query":"private arguments should not be shown"}'
+        const call = component.createObject(rendererWindow, {
+            index: 0,
+            kind: 3,
+            text: "graphql",
+            payload: arguments
+        })
+        verify(call)
+        const callText = findChild(call, "conversationPlainText")
+        verify(callText)
+        compare(callText.text, "Used tool: graphql")
+        verify(!callText.text.includes("private arguments"))
+
+        const payload = ('{"status":"ok", "output":"long response"}\n').repeat(10)
+        const result = component.createObject(rendererWindow, {
+            index: 1,
+            kind: 4,
+            text: "graphql",
+            payload: payload
+        })
+        verify(result)
+        const resultText = findChild(result, "conversationPlainText")
+        verify(resultText)
+        verify(resultText.text.startsWith("Result: {"))
+        verify(resultText.text.endsWith("…"))
+        compare(result.toolResultPreview.length, result.toolResultPreviewLimit)
+        compare(resultText.text.length, "Result: ".length + result.toolResultPreviewLimit)
+        verify(!resultText.text.includes("\n"))
+
+        call.destroy()
+        result.destroy()
+    }
+
     function test_qmlComponentsLoad() {
         var codeComponent = Qt.createComponent(Qt.resolvedUrl("../../src/qml/views/CodeBlock.qml"))
         if (codeComponent.status !== Component.Ready) {

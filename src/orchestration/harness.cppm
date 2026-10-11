@@ -161,14 +161,14 @@ auto AgentHarness::submitUserMessage(SessionId const& session, std::string text)
         return mts::agent::fromFoundation(status);
     }
 
-    m_impl->bus->publish(mts::events::MessageAdded{session, mts::events::MessageKind::UserText, text});
+    m_impl->bus->publishDirect(mts::events::MessageAdded{session, mts::events::MessageKind::UserText, text});
 
     return Status::ok();
 }
 
 auto AgentHarness::runBlocking(SessionId const& session, mts::runtime::Cancellation& cancellation) -> Status {
     auto& bus = *m_impl->bus;
-    bus.publish(mts::events::RunStarted{session});
+    bus.publishDirect(mts::events::RunStarted{session});
 
     auto const registry = m_impl->registry;
 
@@ -185,7 +185,7 @@ auto AgentHarness::runBlocking(SessionId const& session, mts::runtime::Cancellat
                 messages.value(),
                 [&bus, &session](mts::model::Chunk const& chunk) {
                     if (!chunk.text_.empty()) {
-                        bus.publish(mts::events::TokenDelta{session, chunk.text_});
+                        bus.publishDirect(mts::events::TokenDelta{session, chunk.text_});
                     }
                 },
                 cancellation.token()
@@ -233,13 +233,13 @@ auto AgentHarness::runBlocking(SessionId const& session, mts::runtime::Cancellat
 
     auto const compiled = graph.compile();
     if (!compiled) {
-        bus.publish(mts::events::RunFailed{session, compiled.status().message()});
+        bus.publishDirect(mts::events::RunFailed{session, compiled.status().message()});
         return compiled.status();
     }
 
     auto const stored = m_impl->store->loadMessages(session);
     if (!stored) {
-        bus.publish(mts::events::RunFailed{session, std::string(stored.error().message())});
+        bus.publishDirect(mts::events::RunFailed{session, std::string(stored.error().message())});
         return mts::agent::fromFoundation(stored.error());
     }
 
@@ -253,7 +253,7 @@ auto AgentHarness::runBlocking(SessionId const& session, mts::runtime::Cancellat
         {"messages", mts::agent::messagesToJson(history)},
     });
     if (!input) {
-        bus.publish(mts::events::RunFailed{session, input.status().message()});
+        bus.publishDirect(mts::events::RunFailed{session, input.status().message()});
         return input.status();
     }
 
@@ -278,25 +278,25 @@ auto AgentHarness::runBlocking(SessionId const& session, mts::runtime::Cancellat
 
     auto const result = compiled.value().stream(input.value(), options);
     if (!result) {
-        bus.publish(mts::events::RunFailed{session, result.status().message()});
+        bus.publishDirect(mts::events::RunFailed{session, result.status().message()});
         return result.status();
     }
 
     auto const runStatus = result.value().status_;
     if (runStatus == mts::agent::RunStatus::Cancelled) {
-        bus.publish(mts::events::RunFinished{session});
+        bus.publishDirect(mts::events::RunFinished{session});
         return Status::cancelled("run cancelled");
     }
 
     if (runStatus != mts::agent::RunStatus::Completed) {
         std::string const message = detail::failureMessage(result.value());
-        bus.publish(mts::events::RunFailed{session, message});
+        bus.publishDirect(mts::events::RunFailed{session, message});
         return Status::internal(message);
     }
 
     auto const messages = mts::agent::messagesFromStateJson(result.value().state_.view());
     if (!messages) {
-        bus.publish(mts::events::RunFailed{session, messages.status().message()});
+        bus.publishDirect(mts::events::RunFailed{session, messages.status().message()});
         return messages.status();
     }
 
@@ -304,14 +304,14 @@ auto AgentHarness::runBlocking(SessionId const& session, mts::runtime::Cancellat
     for (std::size_t index = history.size(); index < produced.size(); ++index) {
         auto const& message = produced[index];
         if (auto const status = m_impl->store->appendMessage(detail::storedFromBaseMessage(session, message)); !status) {
-            bus.publish(mts::events::RunFailed{session, std::string(status.error().message())});
+            bus.publishDirect(mts::events::RunFailed{session, std::string(status.error().message())});
             return mts::agent::fromFoundation(status);
         }
 
         detail::emitMessage(bus, session, message);
     }
 
-    bus.publish(mts::events::RunFinished{session});
+    bus.publishDirect(mts::events::RunFinished{session});
 
     return Status::ok();
 }
