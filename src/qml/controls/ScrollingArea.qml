@@ -6,12 +6,13 @@ import Lib.Theme
 Item {
     id: control
 
-    InteractionScope.domain: control.interactionDomain
-    InteractionScope.role: "scroll-area"
+    InteractionScope.domain: control.interactionEnabled ? control.interactionDomain : ""
+    InteractionScope.role: control.interactionEnabled ? "scroll-area" : ""
     InteractionScope.scrollable: true
-    InteractionScope.hitTestable: true
+    InteractionScope.hitTestable: control.interactionEnabled
 
     property string interactionDomain: "app.scroll"
+    property bool interactionEnabled: true
 
     default property alias content: contentColumn.data
 
@@ -27,10 +28,15 @@ Item {
     property int gutterWidth: 16
     property int hideDelay: 2000
     property int hideDuration: 150
+    property bool horizontalScrollEnabled: false
+    property real contentWidthHint: -1
 
     property alias contentY: flick.contentY
+    property alias contentX: flick.contentX
     property alias contentHeight: flick.contentHeight
+    property alias contentWidth: flick.contentWidth
     property alias viewportHeight: flick.height
+    property alias viewportWidth: flick.width
 
     Flickable {
         id: flick
@@ -38,7 +44,9 @@ Item {
         clip: true
         interactive: false
         boundsBehavior: Flickable.StopAtBounds
-        contentWidth: width
+        contentWidth: control.horizontalScrollEnabled && control.contentWidthHint >= 0
+            ? Math.max(width, control.contentWidthHint)
+            : width
         contentHeight: contentColumn.height + control.bottomPadding
 
         onContentHeightChanged: {
@@ -72,6 +80,15 @@ Item {
     function scrollBy(delta) {
         flick.contentY = Math.max(flick.originY, Math.min(flick.contentY + delta, control.maxContentY()));
         scrollBar.poke();
+    }
+
+    function maxContentX() {
+        return flick.originX + Math.max(0, flick.contentWidth - flick.width);
+    }
+
+    function scrollXBy(delta) {
+        flick.contentX = Math.max(flick.originX, Math.min(flick.contentX + delta, control.maxContentX()));
+        hScrollBar.poke();
     }
 
     signal interactionScrollRequested(real delta)
@@ -191,6 +208,109 @@ Item {
 
         HoverHandler {
             id: gutterHover
+        }
+    }
+
+    Rectangle {
+        id: hScrollBar
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: control.barRightMargin
+        height: control.barWidth
+        radius: height / 2
+        color: control.barColor
+        z: 10
+        visible: control.horizontalScrollEnabled && flick.contentWidth > flick.width
+        readonly property bool revealed: Window.active && (hGutterHover.hovered || hDragArea.pressed)
+        opacity: 0
+        readonly property real trackLeft: control.barTopMargin
+        readonly property real trackWidth: Math.max(0, control.width - control.barTopMargin - control.barBottomMargin)
+        readonly property real contentRange: Math.max(0, flick.contentWidth - flick.width)
+        width: Math.min(trackWidth, Math.max(control.barMinHeight, trackWidth * flick.width / Math.max(1, flick.contentWidth)))
+        x: trackLeft + (contentRange <= 0
+            ? 0
+            : (flick.contentX - flick.originX) / contentRange * (trackWidth - width))
+
+        onRevealedChanged: {
+            if (revealed) {
+                hHideTimer.stop()
+                hHideAnimation.stop()
+                hScrollBar.opacity = 1
+            } else {
+                hHideTimer.restart()
+            }
+        }
+
+        function poke() {
+            hHideTimer.stop()
+            hHideAnimation.stop()
+            hScrollBar.opacity = 1
+            hHideTimer.restart()
+        }
+
+        Timer {
+            id: hHideTimer
+            interval: control.hideDelay
+            onTriggered: {
+                if (!hScrollBar.revealed) {
+                    hHideAnimation.restart()
+                }
+            }
+        }
+
+        NumberAnimation {
+            id: hHideAnimation
+            target: hScrollBar
+            property: "opacity"
+            to: 0
+            duration: control.hideDuration
+            easing.type: Easing.Linear
+        }
+
+        MouseArea {
+            id: hDragArea
+            anchors.fill: parent
+            enabled: hScrollBar.opacity > 0
+            cursorShape: Qt.PointingHandCursor
+
+            property real grab: 0
+
+            onPressed: mouse => {
+                hDragArea.grab = mapToItem(flick, mouse.x, mouse.y).x - (hScrollBar.x - flick.x);
+            }
+
+            onPositionChanged: mouse => {
+                if (!hDragArea.pressed) {
+                    return;
+                }
+
+                const travel = Math.max(1, hScrollBar.trackWidth - hScrollBar.width);
+                const left = mapToItem(flick, mouse.x, mouse.y).x - hDragArea.grab;
+                const ratio = Math.max(0, Math.min(1, (left - hScrollBar.trackLeft) / travel));
+                flick.contentX = flick.originX + ratio * hScrollBar.contentRange;
+            }
+
+            onWheel: wheel => {
+                const delta = wheel.pixelDelta.x !== 0
+                    ? wheel.pixelDelta.x
+                    : wheel.angleDelta.x / 120 * control.wheelStep;
+                control.scrollXBy(-delta);
+                hScrollBar.poke();
+                wheel.accepted = true;
+            }
+        }
+    }
+
+    Item {
+        id: hScrollGutter
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        height: control.gutterWidth
+        z: 11
+        visible: control.horizontalScrollEnabled
+
+        HoverHandler {
+            id: hGutterHover
         }
     }
 }

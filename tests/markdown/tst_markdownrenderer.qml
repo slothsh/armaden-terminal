@@ -386,6 +386,27 @@ TestCase {
         longCodeBlock.destroy()
     }
 
+    function test_codeBlockScrollsHorizontallyWhenWrapDisabled() {
+        const component = Qt.createComponent(Qt.resolvedUrl("../../src/qml/views/CodeBlock.qml"))
+        compare(component.status, Component.Ready)
+
+        const block = component.createObject(rendererWindow, {
+            width: 200,
+            wordWrap: false,
+            code: "const value = \"" + "a".repeat(400) + "\";",
+            language: "js"
+        })
+        verify(block)
+        const viewport = findChild(block, "codeViewport")
+        verify(viewport)
+        tryVerify(function() { return viewport.contentWidth > viewport.viewportWidth })
+        verify(block.codeOverflows)
+
+        block.wordWrap = true
+        tryVerify(function() { return viewport.contentWidth <= viewport.viewportWidth + 1 })
+        block.destroy()
+    }
+
     function test_structuredInlineContentHasContentHeight() {
         tryVerify(function() { return markdownNodeLoader.item && markdownNodeLoader.item.implicitHeight > 0 })
         const textCursor = findChild(markdownNodeLoader.item, "markdownRichTextCursor")

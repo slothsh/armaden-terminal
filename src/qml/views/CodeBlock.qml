@@ -17,8 +17,8 @@ Rectangle {
     property bool wordWrap: true
     property real maxCodeHeight: 360
     property real wheelStep: 90
-    readonly property bool codeOverflows: codeViewport.contentHeight > codeViewport.height + 1
-        || codeViewport.contentWidth > codeViewport.width + 1
+    readonly property bool codeOverflows: codeViewport.contentHeight > codeViewport.viewportHeight + 1
+        || codeViewport.contentWidth > codeViewport.viewportWidth + 1
     readonly property bool scrollEnabled: control.codeOverflows && (control.activeFocus || codeText.activeFocus)
 
     signal interactionScrollRequested(real delta)
@@ -28,11 +28,7 @@ Rectangle {
             return
         }
 
-        const maxContentY = Math.max(0, codeViewport.contentHeight - codeViewport.height)
-        codeViewport.contentY = Math.max(0, Math.min(
-            maxContentY,
-            codeViewport.contentY - delta * control.wheelStep
-        ))
+        codeViewport.interactionScrollRequested(delta)
     }
 
     radius: Theme.metric.radius
@@ -106,7 +102,7 @@ Rectangle {
         }
     }
 
-    Flickable {
+    ScrollingArea {
         id: codeViewport
         objectName: "codeViewport"
         anchors.top: header.bottom
@@ -114,16 +110,15 @@ Rectangle {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.margins: 8
-        clip: true
-        interactive: control.scrollEnabled
-        boundsBehavior: Flickable.StopAtBounds
-        contentWidth: control.wordWrap ? width : Math.max(width, codeText.contentWidth)
-        contentHeight: Math.max(height, codeText.contentHeight)
+        interactionEnabled: false
+        horizontalScrollEnabled: !control.wordWrap
+        contentWidthHint: control.wordWrap ? -1 : codeText.contentWidth
+        wheelStep: control.wheelStep
 
         TextEdit {
             id: codeText
             objectName: "markdownCodeText"
-            width: control.wordWrap ? codeViewport.width : Math.max(codeViewport.width, contentWidth)
+            width: control.wordWrap ? codeViewport.viewportWidth : Math.max(codeViewport.viewportWidth, contentWidth)
             height: Math.max(contentHeight, font.pixelSize * 1.4)
             readOnly: true
             selectByMouse: true
