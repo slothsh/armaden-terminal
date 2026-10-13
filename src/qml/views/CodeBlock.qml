@@ -67,6 +67,7 @@ Rectangle {
             anchors.right: wrapButton.left
             anchors.rightMargin: 4
             anchors.verticalCenter: parent.verticalCenter
+            height: 24
             visible: control.expandToggleVisible
             label: control.expanded ? qsTr("Collapse") : qsTr("Expand")
             onClicked: control.expanded = !control.expanded
