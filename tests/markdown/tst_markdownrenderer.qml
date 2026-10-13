@@ -254,6 +254,50 @@ TestCase {
         plainResult.destroy()
     }
 
+    function test_structuredBlocksDoNotInstantiateRawText() {
+        const component = Qt.createComponent(Qt.resolvedUrl("../../src/qml/views/ConversationBlock.qml"))
+        compare(component.status, Component.Ready)
+
+        const markdownBlock = component.createObject(rendererWindow, {
+            index: 0,
+            kind: 1,
+            text: "# Heading\n\nBody copy",
+            payload: ""
+        })
+        verify(markdownBlock)
+        verify(markdownBlock.markdownContent)
+        verify(!findChild(markdownBlock, "conversationPlainText"))
+
+        const jsonBlock = component.createObject(rendererWindow, {
+            index: 1,
+            kind: 4,
+            text: "graphql",
+            payload: JSON.stringify({
+                content: JSON.stringify({ok: true}),
+                role: "tool"
+            })
+        })
+        verify(jsonBlock)
+        verify(jsonBlock.hasJsonToolResult)
+        verify(!findChild(jsonBlock, "conversationPlainText"))
+
+        const plainBlock = component.createObject(rendererWindow, {
+            index: 2,
+            kind: 0,
+            text: "plain user text",
+            payload: ""
+        })
+        verify(plainBlock)
+        verify(plainBlock.plainContent)
+        const plainText = findChild(plainBlock, "conversationPlainText")
+        verify(plainText)
+        compare(plainText.text, "plain user text")
+
+        markdownBlock.destroy()
+        jsonBlock.destroy()
+        plainBlock.destroy()
+    }
+
     function test_qmlComponentsLoad() {
         var codeComponent = Qt.createComponent(Qt.resolvedUrl("../../src/qml/views/CodeBlock.qml"))
         if (codeComponent.status !== Component.Ready) {

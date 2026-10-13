@@ -155,6 +155,7 @@ Rectangle {
 
     readonly property bool markdownContent: block.kind === block.assistantTextKind
         || block.kind === block.reasoningKind
+    readonly property bool plainContent: !block.markdownContent && !block.hasJsonToolResult
 
     width: parent.width
     height: body.implicitHeight + 24
@@ -187,7 +188,7 @@ Rectangle {
         anchors.margins: 12
         implicitHeight: block.markdownContent
             ? markdown.implicitHeight
-            : (block.hasJsonToolResult ? toolResultCode.implicitHeight : plainText.contentHeight)
+            : (block.hasJsonToolResult ? toolResultCode.implicitHeight : plainTextLoader.implicitHeight)
         height: implicitHeight
 
         MarkdownView {
@@ -215,39 +216,54 @@ Rectangle {
             maxCodeHeight: 180
         }
 
-        TextEdit {
-            id: plainText
-            objectName: "conversationPlainText"
+        Loader {
+            id: plainTextLoader
             width: body.width
-            height: Math.max(contentHeight, font.pixelSize * 1.4)
-            visible: !block.markdownContent && !block.hasJsonToolResult
-            readOnly: true
-            selectByMouse: true
-            textFormat: TextEdit.PlainText
-            wrapMode: TextEdit.Wrap
-            text: block.displayText
-            color: block.kind === block.reasoningKind ? Theme.color.textMuted : Theme.color.text
-            font.pixelSize: 12
-            font.italic: false
-            font.family: (block.kind === block.toolCallKind || block.kind === block.toolResultKind)
-                ? "monospace" : ""
-            selectionColor: Theme.color.accent
-            selectedTextColor: Theme.color.text
-
-            HoverHandler {
-                objectName: "conversationTextCursor"
-                cursorShape: Qt.IBeamCursor
-            }
+            active: block.plainContent
+            sourceComponent: plainContentComponent
         }
 
-        MouseArea {
-            objectName: "conversationTextWheelCapture"
-            anchors.fill: plainText
-            enabled: plainText.visible
-            acceptedButtons: Qt.NoButton
-            hoverEnabled: true
-            cursorShape: Qt.IBeamCursor
-            onWheel: wheel => block.scrollTextWheel(wheel)
+        Component {
+            id: plainContentComponent
+
+            Item {
+                width: plainTextLoader.width
+                implicitHeight: plainText.contentHeight
+                height: implicitHeight
+
+                TextEdit {
+                    id: plainText
+                    objectName: "conversationPlainText"
+                    width: parent.width
+                    height: Math.max(contentHeight, font.pixelSize * 1.4)
+                    readOnly: true
+                    selectByMouse: true
+                    textFormat: TextEdit.PlainText
+                    wrapMode: TextEdit.Wrap
+                    text: block.displayText
+                    color: block.kind === block.reasoningKind ? Theme.color.textMuted : Theme.color.text
+                    font.pixelSize: 12
+                    font.italic: false
+                    font.family: (block.kind === block.toolCallKind || block.kind === block.toolResultKind)
+                        ? "monospace" : ""
+                    selectionColor: Theme.color.accent
+                    selectedTextColor: Theme.color.text
+
+                    HoverHandler {
+                        objectName: "conversationTextCursor"
+                        cursorShape: Qt.IBeamCursor
+                    }
+                }
+
+                MouseArea {
+                    objectName: "conversationTextWheelCapture"
+                    anchors.fill: plainText
+                    acceptedButtons: Qt.NoButton
+                    hoverEnabled: true
+                    cursorShape: Qt.IBeamCursor
+                    onWheel: wheel => block.scrollTextWheel(wheel)
+                }
+            }
         }
     }
 }
