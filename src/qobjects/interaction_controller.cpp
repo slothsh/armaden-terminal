@@ -1607,38 +1607,52 @@ auto InteractionController::syncWindowEvent(QQuickWindow* window, QEvent* event)
                 }
 
                 mts::interaction::Point const position = toPoint(wheel->position());
-                std::optional<mts::interaction::TargetRef> scrollTarget;
+                QQuickItem* scrollItem = nullptr;
                 double scrollTargetArea = std::numeric_limits<double>::max();
-                for (mts::interaction::TargetRef const& candidate : m_registry->targets()) {
-                    bool const scrollSurface = candidate.role.name() == "scroll-area"
-                        || candidate.role.name() == "code-block";
-                    if (!scrollSurface
-                        || !candidate.capabilities.scrollable
-                        || !candidate.visible
-                        || !candidate.enabled
-                        || !candidate.geometry.contains(position)) {
+                for (auto const& [scope, packed] : m_bindings.asKeyValueRange()) {
+                    auto const candidate = m_registry->find(mts::interaction::TargetId::fromPacked(packed));
+                    if (!candidate.has_value()) {
                         continue;
                     }
 
-                    double const area = candidate.geometry.width * candidate.geometry.height;
-                    if (!scrollTarget.has_value() || area < scrollTargetArea) {
-                        scrollTarget = candidate;
+                    bool const scrollSurface = candidate->role.name() == "scroll-area"
+                        || candidate->role.name() == "code-block";
+                    if (!scrollSurface
+                        || !candidate->capabilities.scrollable
+                        || !candidate->visible
+                        || !candidate->enabled) {
+                        continue;
+                    }
+
+                    auto* const item = qobject_cast<QQuickItem*>(scope->owner());
+                    if (item == nullptr
+                        || item->window() != window
+                        || !item->isVisible()
+                        || item->opacity() <= 0.0) {
+                        continue;
+                    }
+
+                    QRectF const geometry = item->mapRectToScene(QRectF(0.0, 0.0, item->width(), item->height()));
+                    if (!geometry.contains(QPointF(position.x, position.y))) {
+                        continue;
+                    }
+
+                    double const area = geometry.width() * geometry.height();
+                    if (scrollItem == nullptr || area < scrollTargetArea) {
+                        scrollItem = item;
                         scrollTargetArea = area;
                     }
                 }
 
-                if (scrollTarget.has_value()) {
-                    QQuickItem* const scrollItem = this->itemForTarget(scrollTarget->id.packed());
-                    if (scrollItem != nullptr
-                        && scrollItem->metaObject()->indexOfMethod("interactionScrollRequested(qreal)") >= 0
-                        && QMetaObject::invokeMethod(
-                            scrollItem,
-                            "interactionScrollRequested",
-                            Qt::DirectConnection,
-                            Q_ARG(qreal, delta)
-                        )) {
-                        return true;
-                    }
+                if (scrollItem != nullptr
+                    && scrollItem->metaObject()->indexOfMethod("interactionScrollRequested(qreal)") >= 0
+                    && QMetaObject::invokeMethod(
+                        scrollItem,
+                        "interactionScrollRequested",
+                        Qt::DirectConnection,
+                        Q_ARG(qreal, delta)
+                    )) {
+                    return true;
                 }
             }
             break;

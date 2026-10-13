@@ -9,7 +9,7 @@ Rectangle {
     InteractionScope.domain: "app.conversation"
     InteractionScope.role: "code-block"
     InteractionScope.focusable: true
-    InteractionScope.scrollable: true
+    InteractionScope.scrollable: control.scrollEnabled
     InteractionScope.hitTestable: true
 
     required property string code
