@@ -2,6 +2,7 @@ import QtQuick
 import Lib.Controls
 import Lib.Interaction
 import Lib.Theme
+import Lucide
 
 Rectangle {
     id: control
@@ -15,11 +16,14 @@ Rectangle {
     required property string code
     property string language: ""
     property bool wordWrap: true
-    property real maxCodeHeight: 360
+    property bool expanded: false
+    property real collapsedHeight: 360
     property real wheelStep: 90
     readonly property bool codeOverflows: codeViewport.contentHeight > codeViewport.viewportHeight + 1
         || codeViewport.contentWidth > codeViewport.viewportWidth + 1
     readonly property bool scrollEnabled: control.codeOverflows && (control.activeFocus || codeText.activeFocus)
+    readonly property bool hasHiddenContent: codeViewport.contentHeight > codeViewport.viewportHeight + 1
+    readonly property bool expandToggleVisible: control.expanded || control.hasHiddenContent
 
     signal interactionScrollRequested(real delta)
 
@@ -35,7 +39,9 @@ Rectangle {
     color: Theme.color.dark
     border.color: Theme.color.borderStrong
     border.width: 1
-    implicitHeight: header.height + Math.min(control.maxCodeHeight, Math.max(40, codeText.contentHeight + 16))
+    implicitHeight: header.height + (control.expanded
+        ? Math.max(40, codeText.contentHeight + 16)
+        : Math.min(control.collapsedHeight, Math.max(40, codeText.contentHeight + 16)))
     clip: true
 
     Rectangle {
@@ -43,7 +49,7 @@ Rectangle {
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        height: 30
+        height: 38
         color: Theme.color.mediumBright
 
         Text {
@@ -53,6 +59,17 @@ Rectangle {
             text: control.language.length > 0 ? control.language : qsTr("Code")
             color: Theme.color.textMuted
             font.pixelSize: 11
+        }
+
+        TextButton {
+            id: expandToggleButton
+            objectName: "codeExpandToggleButton"
+            anchors.right: wrapButton.left
+            anchors.rightMargin: 4
+            anchors.verticalCenter: parent.verticalCenter
+            visible: control.expandToggleVisible
+            label: control.expanded ? qsTr("Collapse") : qsTr("Expand")
+            onClicked: control.expanded = !control.expanded
         }
 
         IconButton {
@@ -75,7 +92,7 @@ Rectangle {
             id: copyButton
             objectName: "codeCopyButton"
             anchors.right: parent.right
-            anchors.rightMargin: 4
+            anchors.rightMargin: Theme.metric.spacing
             anchors.verticalCenter: parent.verticalCenter
             iconName: "copy"
             accessibleLabel: qsTr("Copy code")
@@ -135,6 +152,35 @@ Rectangle {
                 objectName: "codeTextCursor"
                 cursorShape: Qt.IBeamCursor
             }
+        }
+    }
+
+    Item {
+        id: expandButton
+        objectName: "codeExpandButton"
+        width: 24
+        height: 24
+        visible: control.expandToggleVisible
+        anchors.horizontalCenter: codeViewport.horizontalCenter
+        anchors.bottom: codeViewport.bottom
+        anchors.bottomMargin: control.wordWrap ? 2 : 12
+        z: 20
+
+        LucideIcon {
+            objectName: "codeExpandIcon"
+            anchors.centerIn: parent
+            name: control.expanded ? "arrow-up" : "arrow-down"
+            size: 18
+            strokeWidth: 2
+            color: expandMouse.containsMouse ? Theme.color.text : Theme.color.textMuted
+        }
+
+        MouseArea {
+            id: expandMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: control.expanded = !control.expanded
         }
     }
 }

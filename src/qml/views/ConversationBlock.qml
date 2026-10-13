@@ -22,7 +22,6 @@ Rectangle {
     property int toolResultKind: 4
     property int errorKind: 5
     property int toolResultPreviewLimit: 120
-    property int toolResultCodeLimit: 480
 
     function decodeJsonValue(value) {
         let decoded = value
@@ -117,20 +116,9 @@ Rectangle {
     readonly property bool hasJsonToolResult: block.parsedToolResult.valid
         && block.returnedToolResult !== null
         && typeof block.returnedToolResult === "object"
-    readonly property string toolResultCode: {
-        if (!block.hasJsonToolResult) {
-            return ""
-        }
-
-        const formatted = JSON.stringify(block.returnedToolResult, null, 2)
-        if (formatted.length <= block.toolResultCodeLimit) {
-            return formatted
-        }
-
-        const boundary = formatted.lastIndexOf("\n", block.toolResultCodeLimit)
-        const end = boundary > block.toolResultCodeLimit * 0.6 ? boundary : block.toolResultCodeLimit
-        return formatted.slice(0, end).trim() + "\n…"
-    }
+    readonly property string toolResultFullCode: block.hasJsonToolResult
+        ? JSON.stringify(block.returnedToolResult, null, 2)
+        : ""
     readonly property string toolResultPreview: {
         const source = block.toolResultText.length > 0 ? block.toolResultText : block.payload
         const compact = String(source).replace(/\s+/g, " ").trim()
@@ -211,9 +199,9 @@ Rectangle {
             objectName: "toolResultCode"
             width: body.width
             visible: block.hasJsonToolResult
-            code: block.toolResultCode
+            code: block.toolResultFullCode
             language: "json"
-            maxCodeHeight: 180
+            collapsedHeight: 180
         }
 
         Loader {

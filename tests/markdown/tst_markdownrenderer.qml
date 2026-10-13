@@ -224,10 +224,39 @@ TestCase {
             payload: JSON.stringify({data: Array(100).fill("a long tool result value")})
         })
         verify(largeResult)
-        const truncatedCode = findChild(largeResult, "markdownCodeText")
-        verify(truncatedCode)
-        verify(truncatedCode.text.endsWith("…"))
-        verify(truncatedCode.text.length <= largeResult.toolResultCodeLimit + 2)
+        const largeCodeText = findChild(largeResult, "markdownCodeText")
+        verify(largeCodeText)
+        verify(!largeCodeText.text.endsWith("…"))
+        verify(largeCodeText.text.length > 1000)
+
+        const largeCodeBlock = findChild(largeResult, "toolResultCode")
+        verify(largeCodeBlock)
+        verify(!largeCodeBlock.expanded)
+
+        const expandIcon = findChild(largeResult, "codeExpandIcon")
+        verify(expandIcon)
+        compare(expandIcon.name, "arrow-down")
+
+        const headerToggle = findChild(largeResult, "codeExpandToggleButton")
+        verify(headerToggle)
+        compare(headerToggle.label, "Expand")
+
+        const expandButton = findChild(largeResult, "codeExpandButton")
+        verify(expandButton)
+        tryVerify(function() { return expandButton.visible })
+
+        const collapsedHeight = largeCodeBlock.implicitHeight
+        mouseClick(expandButton, expandButton.width / 2, expandButton.height / 2)
+        tryVerify(function() { return largeCodeBlock.expanded })
+        tryVerify(function() { return largeCodeBlock.implicitHeight > collapsedHeight })
+        tryVerify(function() { return expandIcon.name === "arrow-up" })
+        tryVerify(function() { return expandButton.visible })
+        tryVerify(function() { return headerToggle.label === "Collapse" })
+
+        headerToggle.activate()
+        tryVerify(function() { return !largeCodeBlock.expanded })
+        tryVerify(function() { return expandIcon.name === "arrow-down" })
+        tryVerify(function() { return largeCodeText.text === largeCodeBlock.code })
 
         const plainResult = component.createObject(rendererWindow, {
             index: 4,
