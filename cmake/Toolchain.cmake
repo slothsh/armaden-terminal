@@ -235,7 +235,7 @@ function(prepare_linux_llvm_modules_support SUCCESS)
                 -x c++-module
                 -o std.pcm
                 ${LIBSTDCXX_STD_MODULE_SOURCE}
-        DEPENDS ${LIBSTDCXX_STD_MODULE_SOURCE}
+        DEPENDS ${LIBSTDCXX_STD_MODULE_SOURCE} ${CMAKE_CXX_COMPILER}
         COMMENT "Precompiling libstdc++ standard module (std.pcm)"
     )
 
@@ -290,7 +290,7 @@ function(prepare_darwin_llvm_modules_support SUCCESS)
                 --precompile
                 -o std.pcm
                 ${LLVM_ROOT}/share/libc++/v1/std.cppm
-        DEPENDS ${LLVM_ROOT}/share/libc++/v1/std.cppm
+        DEPENDS ${LLVM_ROOT}/share/libc++/v1/std.cppm ${CMAKE_CXX_COMPILER}
         COMMENT "Precompiling libc++ standard module (std.pcm)"
     )
 

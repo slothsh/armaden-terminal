@@ -31,6 +31,13 @@ function(add_executable_target TARGET_NAME)
     )
 
     add_executable(${TARGET_NAME} ${ARG_SOURCE_FILES})
+
+    set(CONFIGURED_MODULE_FILES)
+    foreach(MODULE_FILE ${ARG_MODULE_FILES})
+        configure_module_file(${MODULE_FILE} ${TARGET_NAME})
+        list(APPEND CONFIGURED_MODULE_FILES "${MODULE_CONFIGURED_FILE}")
+    endforeach()
+
     target_sources(
         ${TARGET_NAME}
         PUBLIC
@@ -38,17 +45,14 @@ function(add_executable_target TARGET_NAME)
         TYPE CXX_MODULES
         BASE_DIRS
             ${ARG_BASE_DIRS}
+            "${CMAKE_BINARY_DIR}/module_units"
         FILES
-            ${ARG_MODULE_FILES}
+            ${CONFIGURED_MODULE_FILES}
             ${ARG_THIRD_PARTY_MODULE_FILES}
     )
 
     foreach(SOURCE_FILE ${ARG_SOURCE_FILES})
         configure_module_file(${SOURCE_FILE} ${TARGET_NAME} IS_SOURCE_FILE)
-    endforeach()
-
-    foreach(MODULE_FILE ${ARG_MODULE_FILES})
-        configure_module_file(${MODULE_FILE} ${TARGET_NAME})
     endforeach()
 
     add_dependencies(${TARGET_NAME} ${CXX_TARGET_PRECOMPILED_STD})
@@ -130,6 +134,12 @@ function(add_library_target TARGET_NAME)
     endif()
 
     add_library(${TARGET_NAME} ${LIB_TYPE} ${ARG_SOURCE_FILES})
+    set(CONFIGURED_MODULE_FILES)
+    foreach(MODULE_FILE ${ARG_MODULE_FILES})
+        configure_module_file(${MODULE_FILE} ${TARGET_NAME})
+        list(APPEND CONFIGURED_MODULE_FILES "${MODULE_CONFIGURED_FILE}")
+    endforeach()
+
     target_sources(
         ${TARGET_NAME}
         PUBLIC
@@ -137,14 +147,11 @@ function(add_library_target TARGET_NAME)
         TYPE CXX_MODULES
         BASE_DIRS
             ${ARG_BASE_DIRS}
+            "${CMAKE_BINARY_DIR}/module_units"
         FILES
-            ${ARG_MODULE_FILES}
+            ${CONFIGURED_MODULE_FILES}
             ${ARG_THIRD_PARTY_MODULE_FILES}
     )
-
-    foreach(MODULE_FILE ${ARG_MODULE_FILES})
-        configure_module_file(${MODULE_FILE} ${TARGET_NAME})
-    endforeach()
 
     add_dependencies(${TARGET_NAME} ${CXX_TARGET_PRECOMPILED_STD})
     target_compile_options(${TARGET_NAME} PRIVATE -fmodule-file=std=${CXX_STD_PCM})
@@ -180,16 +187,41 @@ function(configure_module_file MODULE_FILE TARGET_NAME)
         "MODULE_ID=${MODULE_ID}"
     )
 
-    if(NOT ARG_IS_SOURCE_FILE)
-        list(APPEND COMPILE_DEFINITIONS MODULE_FILE_TRANSLATION_UNIT)
-    endif()
+    get_filename_component(MODULE_FILE_ABSOLUTE "${MODULE_FILE}" ABSOLUTE)
 
-    set_source_files_properties(
-        ${MODULE_FILE}
-        PROPERTIES
-        COMPILE_OPTIONS
-        "-include${MODULE_INFO_FILE}"
-        COMPILE_DEFINITIONS
-        "${COMPILE_DEFINITIONS}"
-    )
+    if(ARG_IS_SOURCE_FILE)
+        set_source_files_properties(
+            ${MODULE_FILE}
+            PROPERTIES
+            COMPILE_OPTIONS
+            "-include${MODULE_INFO_FILE}"
+            COMPILE_DEFINITIONS
+            "${COMPILE_DEFINITIONS}"
+        )
+        set(MODULE_CONFIGURED_FILE "${MODULE_FILE_ABSOLUTE}" PARENT_SCOPE)
+    else()
+        file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/module_units")
+        set(MODULE_UNIT_FILE "${CMAKE_BINARY_DIR}/module_units/${TARGET_NAME}_${MODULE_NAME}_${MODULE_ID}.cppm")
+
+        file(READ "${MODULE_FILE_ABSOLUTE}" MODULE_UNIT_CONTENT)
+        set(MODULE_UNIT_TEXT "module;\n#include \"${MODULE_INFO_FILE}\"\n#line 1 \"${MODULE_FILE_ABSOLUTE}\"\n${MODULE_UNIT_CONTENT}")
+
+        if(NOT EXISTS "${MODULE_UNIT_FILE}")
+            file(WRITE "${MODULE_UNIT_FILE}" "${MODULE_UNIT_TEXT}")
+        else()
+            file(READ "${MODULE_UNIT_FILE}" MODULE_UNIT_EXISTING)
+            if(NOT MODULE_UNIT_EXISTING STREQUAL MODULE_UNIT_TEXT)
+                file(WRITE "${MODULE_UNIT_FILE}" "${MODULE_UNIT_TEXT}")
+            endif()
+        endif()
+
+        set_source_files_properties(
+            ${MODULE_UNIT_FILE}
+            PROPERTIES
+            COMPILE_DEFINITIONS
+            "${COMPILE_DEFINITIONS}"
+        )
+
+        set(MODULE_CONFIGURED_FILE "${MODULE_UNIT_FILE}" PARENT_SCOPE)
+    endif()
 endfunction()
