@@ -136,6 +136,71 @@ TestCase {
     }
 
     Loader {
+        id: columnTableLoader
+        Component.onCompleted: setSource(Qt.resolvedUrl("../../src/qml/views/MarkdownNode.qml"), {
+            width: 600,
+            node: ({
+                kind: "table",
+                maxColumnWidth: 160,
+                children: [
+                    {kind: "tableHead", children: [{kind: "tableRow", children: [
+                        {kind: "tableHeaderCell", alignment: 0, children: [{kind: "text", text: "A"}]},
+                        {kind: "tableHeaderCell", alignment: 0, children: [{kind: "text", text: "A fairly long header label"}]}
+                    ]}]},
+                    {kind: "tableBody", children: [{kind: "tableRow", children: [
+                        {kind: "tableCell", alignment: 0, children: [{kind: "text", text: "1"}]},
+                        {kind: "tableCell", alignment: 0, children: [{kind: "text", text: "short"}]}
+                    ]}]}
+                ]
+            })
+        })
+    }
+
+    Loader {
+        id: wrapTableLoader
+        Component.onCompleted: setSource(Qt.resolvedUrl("../../src/qml/views/MarkdownNode.qml"), {
+            width: 600,
+            node: ({
+                kind: "table",
+                maxColumnWidth: 80,
+                children: [
+                    {kind: "tableHead", children: [{kind: "tableRow", children: [
+                        {kind: "tableHeaderCell", alignment: 0, children: [{kind: "text", text: "A"}]},
+                        {kind: "tableHeaderCell", alignment: 0, children: [{kind: "text", text: "B"}]}
+                    ]}]},
+                    {kind: "tableBody", children: [{kind: "tableRow", children: [
+                        {kind: "tableCell", alignment: 0, children: [{kind: "text", text: "hi"}]},
+                        {kind: "tableCell", alignment: 0, children: [{kind: "text", text: "This cell contains a fairly long sentence that must wrap onto multiple lines"}]}
+                    ]}]}
+                ]
+            })
+        })
+    }
+
+    Loader {
+        id: truncateTableLoader
+        Component.onCompleted: setSource(Qt.resolvedUrl("../../src/qml/views/MarkdownNode.qml"), {
+            width: 600,
+            node: ({
+                kind: "table",
+                maxColumnWidth: 80,
+                truncate: true,
+                maxLines: 1,
+                children: [
+                    {kind: "tableHead", children: [{kind: "tableRow", children: [
+                        {kind: "tableHeaderCell", alignment: 0, children: [{kind: "text", text: "A"}]},
+                        {kind: "tableHeaderCell", alignment: 0, children: [{kind: "text", text: "B"}]}
+                    ]}]},
+                    {kind: "tableBody", children: [{kind: "tableRow", children: [
+                        {kind: "tableCell", alignment: 0, children: [{kind: "text", text: "hi"}]},
+                        {kind: "tableCell", alignment: 0, children: [{kind: "text", text: "This cell contains a fairly long sentence that must wrap onto multiple lines"}]}
+                    ]}]}
+                ]
+            })
+        })
+    }
+
+    Loader {
         id: imageParagraphLoader
         Component.onCompleted: setSource(Qt.resolvedUrl("../../src/qml/views/MarkdownNode.qml"), {
             width: 600,
@@ -450,10 +515,69 @@ TestCase {
         verify(cell.text.includes("A"))
     }
 
+    function test_tableColumnsSizeToLongestCell() {
+        tryVerify(function() { return columnTableLoader.item && columnTableLoader.item.implicitHeight > 0 })
+        const cells = collectByObjectName(columnTableLoader.item, "tableCell")
+        compare(cells.length, 4)
+        verify(cells[0].width < cells[1].width)
+        verify(cells[1].width <= 160)
+        verify(cells[0].width >= 64)
+        compare(cells[0].width, cells[2].width)
+        compare(cells[1].width, cells[3].width)
+        const frame = findChild(columnTableLoader.item, "tableFrame")
+        verify(frame)
+        verify(frame.width < columnTableLoader.item.width)
+    }
+
+    function test_tableWrappedTextGrowsRowHeight() {
+        tryVerify(function() { return wrapTableLoader.item && wrapTableLoader.item.implicitHeight > 0 })
+        const cells = collectByObjectName(wrapTableLoader.item, "tableCell")
+        compare(cells.length, 4)
+        compare(cells[0].height, cells[1].height)
+        compare(cells[2].height, cells[3].height)
+        verify(cells[3].height > cells[1].height)
+    }
+
+    function test_tableTruncationElidesOverflow() {
+        tryVerify(function() { return truncateTableLoader.item && truncateTableLoader.item.implicitHeight > 0 })
+        const cells = collectByObjectName(truncateTableLoader.item, "tableCell")
+        const truncated = collectByObjectName(truncateTableLoader.item, "markdownTruncatedText")
+        verify(truncated.length > 0)
+        let elided = false
+        for (let index = 0; index < truncated.length; ++index) {
+            if (truncated[index].truncated) {
+                elided = true
+            }
+        }
+        verify(elided)
+        const longText = findChild(cells[3], "markdownTruncatedText")
+        verify(longText)
+        verify(longText.truncated)
+        compare(longText.lineCount, 1)
+        compare(cells[2].height, cells[3].height)
+        const wrapCells = collectByObjectName(wrapTableLoader.item, "tableCell")
+        verify(cells[3].height < wrapCells[3].height)
+    }
+
     function test_inlineImageIsRepresentedAsASeparateRenderer() {
         tryVerify(function() { return imageParagraphLoader.item && imageParagraphLoader.item.implicitHeight > 0 })
         tryVerify(function() { return fakeImages.requests > 0 })
         compare(fakeImages.lastSource, "https://example.invalid/image.png")
+    }
+
+    function collectByObjectName(root, name) {
+        const result = []
+        if (root.objectName === name) {
+            result.push(root)
+        }
+        const children = root.children || []
+        for (let index = 0; index < children.length; ++index) {
+            const nested = collectByObjectName(children[index], name)
+            for (let nestedIndex = 0; nestedIndex < nested.length; ++nestedIndex) {
+                result.push(nested[nestedIndex])
+            }
+        }
+        return result
     }
 
     function createView() {

@@ -15,6 +15,9 @@ Item {
     property int listStart: 1
     property string listMarker: "•"
     property int tableColumns: 1
+    property var tableColumnWidths: []
+    property bool tableTruncate: false
+    property int tableMaxLines: 3
     property bool renderEnabled: true
     property color contentColor: "white"
     property color mutedColor: "gray"
@@ -42,6 +45,9 @@ Item {
             item.listStart = control.listStart
             item.listMarker = control.listMarker
             item.tableColumns = control.tableColumns
+            item.tableColumnWidths = control.tableColumnWidths
+            item.tableTruncate = control.tableTruncate
+            item.tableMaxLines = control.tableMaxLines
             item.renderEnabled = control.renderEnabled
             item.contentColor = control.contentColor
             item.mutedColor = control.mutedColor
@@ -60,6 +66,24 @@ Item {
     onImageRevisionChanged: {
         if (loader.item) {
             loader.item.imageRevision = control.imageRevision
+        }
+    }
+
+    onTableColumnWidthsChanged: {
+        if (loader.item) {
+            loader.item.tableColumnWidths = control.tableColumnWidths
+        }
+    }
+
+    onTableTruncateChanged: {
+        if (loader.item) {
+            loader.item.tableTruncate = control.tableTruncate
+        }
+    }
+
+    onTableMaxLinesChanged: {
+        if (loader.item) {
+            loader.item.tableMaxLines = control.tableMaxLines
         }
     }
 }

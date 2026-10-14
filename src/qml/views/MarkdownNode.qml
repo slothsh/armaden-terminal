@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Layouts
 import Lib.Theme
 
 Item {
@@ -14,6 +15,11 @@ Item {
     property int listStart: 1
     property string listMarker: "•"
     property int tableColumns: 1
+    property real tableMaxColumnWidth: 360
+    property real tableMinColumnWidth: 64
+    property var tableColumnWidths: []
+    property bool tableTruncate: false
+    property int tableMaxLines: 3
     property bool renderEnabled: true
     property color contentColor: Theme.color.text
     property color mutedColor: Theme.color.textMuted
@@ -106,6 +112,28 @@ Item {
         }
     }
 
+    function plainTextOf(item) {
+        const children = item.children || []
+        switch (item.kind) {
+            case "text": return item.text || ""
+            case "entity": return item.text || ""
+            case "hardBreak": return "\n"
+            case "softBreak": return " "
+            case "image": return "[" + (item.text || "") + "]"
+            case "rawHtml": return item.text || ""
+            default: break
+        }
+        return children.length > 0 ? control.inlinePlainText(children) : (item.text || "")
+    }
+
+    function inlinePlainText(nodes) {
+        let result = ""
+        for (let index = 0; index < nodes.length; ++index) {
+            result += control.plainTextOf(nodes[index])
+        }
+        return result
+    }
+
     function hasImage(item) {
         const children = item.children || []
         for (let i = 0; i < children.length; ++i) {
@@ -114,6 +142,31 @@ Item {
             }
         }
         return false
+    }
+
+    function tableRows(item) {
+        const rows = []
+        const groups = item.children || []
+        for (let groupIndex = 0; groupIndex < groups.length; ++groupIndex) {
+            const group = groups[groupIndex]
+            const isHeader = group.kind === "tableHead"
+            const groupRows = group.children || []
+            for (let rowIndex = 0; rowIndex < groupRows.length; ++rowIndex) {
+                const row = groupRows[rowIndex]
+                rows.push({
+                    kind: row.kind,
+                    children: row.children || [],
+                    tableGroup: isHeader ? "tableHead" : "tableBody",
+                    tableFirstRow: false,
+                    tableLastRow: false
+                })
+            }
+        }
+        if (rows.length > 0) {
+            rows[0].tableFirstRow = true
+            rows[rows.length - 1].tableLastRow = true
+        }
+        return rows
     }
 
     function tableColumnCount(item) {
@@ -141,6 +194,9 @@ Item {
         if ((node.kind === "paragraph" || node.kind === "tableCell" || node.kind === "tableHeaderCell")
                 && control.hasImage(node)) {
             return inlineContentComponent
+        }
+        if (node.kind === "table") {
+            return tableComponent
         }
         if (node.kind === "horizontalRule") {
             return ruleComponent
@@ -242,12 +298,15 @@ Item {
 
         Item {
             width: control.width
-            implicitHeight: Math.max(richText.contentHeight, richText.font.pixelSize * 1.4)
+            implicitHeight: control.tableTruncate
+                ? Math.max(truncatedText.implicitHeight, truncatedText.font.pixelSize * 1.4)
+                : Math.max(richText.contentHeight, richText.font.pixelSize * 1.4)
             height: implicitHeight
 
             TextEdit {
                 id: richText
                 objectName: "markdownRichText"
+                visible: !control.tableTruncate
                 anchors.fill: parent
                 readOnly: true
                 selectByMouse: true
@@ -270,8 +329,26 @@ Item {
 
             }
 
+            Text {
+                id: truncatedText
+                objectName: "markdownTruncatedText"
+                visible: control.tableTruncate
+                anchors.fill: parent
+                textFormat: Text.PlainText
+                wrapMode: Text.WordWrap
+                elide: Text.ElideRight
+                maximumLineCount: Math.max(1, control.tableMaxLines)
+                text: control.inlinePlainText(control.node.children || [])
+                color: control.contentColor
+                font.pixelSize: 12
+                horizontalAlignment: control.node.alignment === 2
+                    ? Text.AlignHCenter
+                    : (control.node.alignment === 3 ? Text.AlignRight : Text.AlignLeft)
+            }
+
             MouseArea {
                 objectName: "markdownRichTextWheelCapture"
+                visible: !control.tableTruncate
                 anchors.fill: richText
                 acceptedButtons: Qt.NoButton
                 hoverEnabled: true
@@ -437,22 +514,194 @@ Item {
     }
 
     Component {
+        id: tableComponent
+
+        Item {
+            width: control.width
+            implicitHeight: tableFrame.implicitHeight
+            height: implicitHeight
+
+            Rectangle {
+                id: tableFrame
+                objectName: "tableFrame"
+
+                readonly property int cellPadding: 6
+                readonly property int columnCount: control.tableColumnCount(control.node)
+                readonly property real maxColumnWidth: control.node.maxColumnWidth > 0
+                    ? control.node.maxColumnWidth
+                    : control.tableMaxColumnWidth
+                readonly property real minColumnWidth: control.node.minColumnWidth > 0
+                    ? control.node.minColumnWidth
+                    : control.tableMinColumnWidth
+                readonly property bool truncate: control.node.truncate === true
+                readonly property int maxLines: control.node.maxLines > 0
+                    ? control.node.maxLines
+                    : control.tableMaxLines
+                readonly property var columnWidths: {
+                    const revision = tableMeasure.revision
+                    const available = Math.max(0, control.width - 2)
+                    const widths = []
+                    let total = 0
+                    for (let columnIndex = 0; columnIndex < columnCount; ++columnIndex) {
+                        const natural = naturalColumnWidth(columnIndex) + 2 * cellPadding
+                        const width = Math.max(minColumnWidth, Math.min(maxColumnWidth, natural))
+                        widths.push(width)
+                        total += width
+                    }
+                    if (total > available && total > 0) {
+                        const factor = available / total
+                        for (let columnIndex = 0; columnIndex < widths.length; ++columnIndex) {
+                            widths[columnIndex] = Math.max(minColumnWidth, Math.floor(widths[columnIndex] * factor))
+                        }
+                    }
+                    return widths
+                }
+                readonly property real totalColumnWidth: {
+                    const widths = tableFrame.columnWidths
+                    let total = 0
+                    for (let columnIndex = 0; columnIndex < widths.length; ++columnIndex) {
+                        total += widths[columnIndex]
+                    }
+                    return total
+                }
+
+                function naturalColumnWidth(columnIndex) {
+                    let widest = 0
+                    const measureRows = tableMeasure.children
+                    for (let rowIndex = 0; rowIndex < measureRows.length; ++rowIndex) {
+                        const cells = measureRows[rowIndex].children
+                        if (cells === undefined) {
+                            continue
+                        }
+                        for (let cellIndex = 0; cellIndex < cells.length; ++cellIndex) {
+                            const cell = cells[cellIndex]
+                            if (cell.measureColumn === columnIndex) {
+                                widest = Math.max(widest, cell.implicitWidth)
+                            }
+                        }
+                    }
+                    return widest
+                }
+
+                width: totalColumnWidth > 0 ? Math.min(control.width, Math.ceil(totalColumnWidth + 2)) : control.width
+                implicitHeight: tableColumn.implicitHeight + 2
+                height: implicitHeight
+                radius: Theme.metric.radius
+                color: Theme.color.dark
+
+                Rectangle {
+                    id: tableClip
+                    anchors.fill: parent
+                    anchors.margins: 1
+                    color: "transparent"
+                    clip: true
+
+                    Column {
+                        id: tableColumn
+                        anchors.fill: parent
+
+                        Repeater {
+                            model: control.tableRows(control.node)
+
+                            delegate: MarkdownNodeDelegate {
+                                width: tableColumn.width
+                                imageLoader: control.imageLoader
+                                customBlockRenderers: control.customBlockRenderers
+                                scrollController: control.scrollController
+                                imageRevision: control.imageRevision
+                                renderEnabled: control.renderEnabled
+                                tableColumnWidths: tableFrame.columnWidths
+                                tableTruncate: tableFrame.truncate
+                                tableMaxLines: tableFrame.maxLines
+                                contentColor: control.contentColor
+                                mutedColor: control.mutedColor
+                                onLinkActivated: link => control.linkActivated(link)
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    id: tableBorder
+                    anchors.fill: parent
+                    radius: tableFrame.radius
+                    color: "transparent"
+                    border.color: Theme.color.borderStrong
+                    border.width: 1
+                }
+
+                Item {
+                    id: tableMeasure
+                    visible: false
+
+                    property int revision: 0
+
+                    Repeater {
+                        model: control.tableRows(control.node)
+                        onCountChanged: tableMeasure.revision++
+
+                        delegate: Row {
+                            required property var modelData
+
+                            Repeater {
+                                model: modelData.children
+                                onCountChanged: tableMeasure.revision++
+
+                                delegate: Text {
+                                    required property var modelData
+                                    required property int index
+
+                                    readonly property int measureColumn: index
+
+                                    textFormat: Text.RichText
+                                    wrapMode: Text.NoWrap
+                                    text: control.richTextHtml(modelData)
+                                    font.pixelSize: 12
+                                    onImplicitWidthChanged: tableMeasure.revision++
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Component {
         id: tableRowComponent
 
-        Row {
+        RowLayout {
             id: row
+            objectName: "tableRow"
             width: control.width
             spacing: 0
 
             Repeater {
                 model: control.node.children || []
 
-                delegate: Item {
+                delegate: Rectangle {
+                    id: cell
+                    objectName: "tableCell"
+
                     required property var modelData
                     required property int index
 
-                    width: row.width / Math.max(1, control.node.children.length)
-                    height: cellRenderer.implicitHeight + 12
+                    readonly property bool firstColumn: index === 0
+                    readonly property bool lastColumn: index === control.node.children.length - 1
+                    readonly property real cellRadius: Math.max(0, Theme.metric.radius - 1)
+                    readonly property real columnWidth: (control.tableColumnWidths
+                        && index < control.tableColumnWidths.length)
+                        ? control.tableColumnWidths[index]
+                        : row.width / Math.max(1, control.node.children.length)
+
+                    Layout.fillHeight: true
+                    Layout.preferredWidth: cell.columnWidth
+                    implicitHeight: cellRenderer.implicitHeight + 12
+                    color: control.node.tableGroup === "tableHead" ? Theme.color.mediumBright : Theme.color.dark
+                    topLeftRadius: control.node.tableFirstRow && firstColumn ? cellRadius : 0
+                    topRightRadius: control.node.tableFirstRow && lastColumn ? cellRadius : 0
+                    bottomLeftRadius: control.node.tableLastRow && firstColumn ? cellRadius : 0
+                    bottomRightRadius: control.node.tableLastRow && lastColumn ? cellRadius : 0
 
                     MarkdownNodeDelegate {
                         id: cellRenderer
@@ -465,12 +714,15 @@ Item {
                         scrollController: control.scrollController
                         imageRevision: control.imageRevision
                         renderEnabled: control.renderEnabled
+                        tableTruncate: control.tableTruncate
+                        tableMaxLines: control.tableMaxLines
                         contentColor: control.contentColor
                         mutedColor: control.mutedColor
                         onLinkActivated: link => control.linkActivated(link)
                     }
 
                     Rectangle {
+                        visible: !control.node.tableLastRow
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.bottom: parent.bottom
@@ -479,6 +731,7 @@ Item {
                     }
 
                     Rectangle {
+                        visible: index < control.node.children.length - 1
                         anchors.top: parent.top
                         anchors.bottom: parent.bottom
                         anchors.right: parent.right
