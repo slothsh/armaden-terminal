@@ -19,40 +19,6 @@ export namespace mts::harness {
 using SessionId = mts::persistence::SessionId;
 using Status = mts::agent::Status;
 
-struct MapToolRegion {
-    double x = 0.0;
-    double y = 0.0;
-    double width = 0.0;
-    double height = 0.0;
-};
-
-struct MapToolSnapshot {
-    std::string snapshotId;
-    int width = 0;
-    int height = 0;
-    int level = 0;
-    std::vector<std::string> layers;
-    MapToolRegion region;
-    std::string unitLabel;
-    std::string pngBase64;
-};
-
-struct MapTools {
-    std::function<mts::agent::Result<mts::agent::json>()> info;
-    std::function<mts::agent::Result<MapToolSnapshot>(
-        std::optional<MapToolRegion> const& region,
-        std::optional<int> level,
-        std::vector<std::string> const& layers
-    )> snapshot;
-    int visionTimeoutMs = 30000;
-};
-
-[[nodiscard]] auto makeGetMapInfoTool(MapTools const& tools) -> mts::agent::Tool;
-[[nodiscard]] auto makeDescribeMapTool(
-    MapTools const& tools,
-    mts::model::ProviderHandle* visionProvider
-) -> mts::agent::Tool;
-
 class AgentHarness {
 public:
     AgentHarness(

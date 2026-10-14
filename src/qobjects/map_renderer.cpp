@@ -11,6 +11,7 @@
 #include <QPointF>
 #include <QRectF>
 #include <QtGlobal>
+#include <QtQuick/QQuickWindow>
 
 #include <chrono>
 
@@ -28,6 +29,7 @@ struct MapRenderer::Impl {
     mts::ecs::registry world;
     mts::ecs::entity camera = mts::ecs::null;
     mts::ecs::entity grid = mts::ecs::null;
+    float devicePixelRatio = 1.0f;
     std::chrono::steady_clock::time_point lastCameraChangeAt = std::chrono::steady_clock::now();
 };
 
@@ -52,6 +54,10 @@ auto MapRenderer::initializeResources(QCanvasPainter* painter) -> void {
 }
 
 auto MapRenderer::synchronizeData(QCanvasPainterItem* item) -> void {
+    m_impl->devicePixelRatio = item->window() != nullptr
+        ? static_cast<float>(item->window()->devicePixelRatio())
+        : 1.0f;
+
     if (QCanvasPainter* const painter = this->painter(); painter != nullptr) {
         m_impl->cache.maybeRelease(painter, m_impl->lastCameraChangeAt);
     }
@@ -95,7 +101,7 @@ auto MapRenderer::synchronizeData(QCanvasPainterItem* item) -> void {
 
 auto MapRenderer::paint(QCanvasPainter* painter) -> void {
     QRectF const canvasRect(0, 0, this->width(), this->height());
-    float const devicePixelRatio = qMax(1.0f, painter->devicePixelRatio());
+    float const devicePixelRatio = qMax(1.0f, m_impl->devicePixelRatio);
     mts::render2d::RenderContext const context{
         painter,
         canvasRect,
