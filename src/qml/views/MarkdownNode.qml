@@ -540,31 +540,27 @@ Item {
                 readonly property var columnWidths: {
                     const revision = tableMeasure.revision
                     const available = Math.max(0, control.width - 2)
-                    const widths = []
+                    const weights = []
                     let total = 0
                     for (let columnIndex = 0; columnIndex < columnCount; ++columnIndex) {
                         const natural = naturalColumnWidth(columnIndex) + 2 * cellPadding
-                        const width = Math.max(minColumnWidth, Math.min(maxColumnWidth, natural))
-                        widths.push(width)
-                        total += width
+                        const weight = Math.max(minColumnWidth, Math.min(maxColumnWidth, natural))
+                        weights.push(weight)
+                        total += weight
                     }
-                    if (total > available && total > 0) {
-                        const factor = available / total
-                        for (let columnIndex = 0; columnIndex < widths.length; ++columnIndex) {
-                            widths[columnIndex] = Math.max(minColumnWidth, Math.floor(widths[columnIndex] * factor))
+                    const widths = []
+                    let assigned = 0
+                    for (let columnIndex = 0; columnIndex < weights.length; ++columnIndex) {
+                        if (columnIndex === weights.length - 1) {
+                            widths.push(Math.max(0, available - assigned))
+                        } else {
+                            const width = Math.floor(available * weights[columnIndex] / total)
+                            widths.push(width)
+                            assigned += width
                         }
                     }
                     return widths
                 }
-                readonly property real totalColumnWidth: {
-                    const widths = tableFrame.columnWidths
-                    let total = 0
-                    for (let columnIndex = 0; columnIndex < widths.length; ++columnIndex) {
-                        total += widths[columnIndex]
-                    }
-                    return total
-                }
-
                 function naturalColumnWidth(columnIndex) {
                     let widest = 0
                     const measureRows = tableMeasure.children
@@ -583,7 +579,7 @@ Item {
                     return widest
                 }
 
-                width: totalColumnWidth > 0 ? Math.min(control.width, Math.ceil(totalColumnWidth + 2)) : control.width
+                width: control.width
                 implicitHeight: tableColumn.implicitHeight + 2
                 height: implicitHeight
                 radius: Theme.metric.radius

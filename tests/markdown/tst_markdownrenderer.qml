@@ -515,18 +515,19 @@ TestCase {
         verify(cell.text.includes("A"))
     }
 
-    function test_tableColumnsSizeToLongestCell() {
+    function test_tableColumnsScaleProportionallyToFullWidth() {
         tryVerify(function() { return columnTableLoader.item && columnTableLoader.item.implicitHeight > 0 })
         const cells = collectByObjectName(columnTableLoader.item, "tableCell")
         compare(cells.length, 4)
-        verify(cells[0].width < cells[1].width)
-        verify(cells[1].width <= 160)
-        verify(cells[0].width >= 64)
+        const available = columnTableLoader.item.width - 2
+        compare(cells[0].width + cells[1].width, available)
+        verify(cells[1].width > cells[0].width)
+        verify(cells[0].width > available / 4)
         compare(cells[0].width, cells[2].width)
         compare(cells[1].width, cells[3].width)
         const frame = findChild(columnTableLoader.item, "tableFrame")
         verify(frame)
-        verify(frame.width < columnTableLoader.item.width)
+        compare(frame.width, columnTableLoader.item.width)
     }
 
     function test_tableWrappedTextGrowsRowHeight() {
