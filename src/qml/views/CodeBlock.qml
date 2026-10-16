@@ -17,6 +17,10 @@ Rectangle {
     property string language: ""
     property bool wordWrap: true
     property bool expanded: false
+
+    onCodeChanged: {
+        control.expanded = false
+    }
     property real collapsedHeight: 360
     property real wheelStep: 90
     readonly property bool codeOverflows: codeViewport.contentHeight > codeViewport.viewportHeight + 1

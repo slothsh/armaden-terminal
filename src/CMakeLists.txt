@@ -4,6 +4,8 @@ file(GLOB_RECURSE QOBJECTS_MODULE_HEADER_FILES CONFIGURE_DEPENDS qobjects/*.hpp)
 
 list(FILTER QOBJECTS_MODULE_SRC_FILES EXCLUDE REGEX "interaction_(scope|hub)\\.cpp$")
 list(FILTER QOBJECTS_MODULE_HEADER_FILES EXCLUDE REGEX "interaction_(scope|hub)\\.hpp$")
+list(FILTER QOBJECTS_MODULE_SRC_FILES EXCLUDE REGEX "virtual_list_(view|layout)\\.cpp$")
+list(FILTER QOBJECTS_MODULE_HEADER_FILES EXCLUDE REGEX "virtual_list_(view|layout)\\.hpp$")
 
 # Project module source files
 file(GLOB_RECURSE LOGGING_MODULE_SRC_FILES CONFIGURE_DEPENDS logging/*.cppm)
@@ -28,6 +30,10 @@ qt_add_qml_module(
         qobjects/interaction_hub.cpp
         qobjects/interaction_scope.hpp
         qobjects/interaction_scope.cpp
+        qobjects/virtual_list_view.hpp
+        qobjects/virtual_list_view.cpp
+        qobjects/virtual_list_layout.hpp
+        qobjects/virtual_list_layout.cpp
     NO_LINT
 )
 

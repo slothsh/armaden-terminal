@@ -54,6 +54,9 @@ public:
     auto setText(int row, QString const& text) -> void;
     auto lastRow() const -> int;
 
+    Q_INVOKABLE auto kindAt(int row) const -> int;
+    Q_INVOKABLE auto heightHint(int row, qreal width) const -> qreal;
+
 private:
     QList<ConversationBlock> m_blocks;
 };

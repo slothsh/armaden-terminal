@@ -604,7 +604,7 @@ TestCase {
         }
     }
 
-    function test_repeaterFollowsTheTailWhenEnabled() {
+    function test_threadFollowsTheTailWhenEnabled() {
         const view = createView()
         verify(view)
         populate(20)
@@ -617,15 +617,97 @@ TestCase {
         view.destroy()
     }
 
+    function test_virtualizedThreadKeepsMountedItemsBounded() {
+        const view = createView()
+        verify(view)
+        populate(40)
+        view.snapToBottom()
+        tryVerify(function() { return view.contentHeight > view.viewportHeight })
+        tryVerify(function() { return view.atBottom() })
+        wait(150)
+
+        const list = findChild(view, "conversationListView")
+        verify(list)
+        compare(list.count, 40)
+        verify(list.mountedCount > 0)
+        verify(list.mountedCount < 40)
+        verify(list.itemForIndex(39) !== null)
+        tryVerify(function() { return list.itemForIndex(0) === null })
+        view.destroy()
+    }
+
+    function test_recycledBlocksShowNoResidue() {
+        const view = createView()
+        verify(view)
+        populate(20)
+        view.snapToBottom()
+        tryVerify(function() { return view.atBottom() })
+        wait(150)
+
+        const list = findChild(view, "conversationListView")
+        verify(list)
+        verify(list.itemForIndex(0) === null)
+
+        view.stickToBottom = false
+        view.scrollBy(-view.contentY)
+        wait(150)
+
+        const head = list.itemForIndex(0)
+        verify(head)
+        compare(head.text, conversationModel.get(0).text)
+        compare(head.kind, conversationModel.get(0).kind)
+        view.destroy()
+    }
+
+    function test_resizeReflowCostTracksViewportNotThread() {
+        const timings = {}
+
+        for (const blocks of [10, 40]) {
+            const view = createView()
+            verify(view)
+            populate(blocks)
+            view.snapToBottom()
+            tryVerify(function() { return view.atBottom() })
+            wait(120)
+
+            const list = findChild(view, "conversationListView")
+            verify(list)
+
+            const steps = 24
+            const start = Date.now()
+            for (let i = 0; i < steps; ++i) {
+                view.columnWidth = 600 + (i % 2 === 0 ? 4 : -4)
+                testCase.wait(8)
+            }
+            timings[blocks] = Date.now() - start
+
+            if (blocks === 40) {
+                verify(list.mountedCount > 0)
+                verify(list.mountedCount <= 25,
+                    "resize remounted most of the thread: " + list.mountedCount)
+            }
+
+            view.destroy()
+            wait(50)
+        }
+
+        console.log("DBG resize timings:", JSON.stringify(timings))
+        verify(timings[40] <= Math.max(500, timings[10] * 2.5),
+            "resize cost scales with thread size: 10=" + timings[10] + "ms 40=" + timings[40] + "ms")
+    }
+
     function test_messageTextWheelHandlerScrollsTheTranscript() {
         const view = createView()
         verify(view)
         populate(20)
         const scrollArea = findChild(view, "conversationScrollArea")
-        const block = findChild(view, "conversationBlock")
         verify(scrollArea)
+        let block = null
+        tryVerify(function() {
+            block = findChild(view, "conversationBlock")
+            return block !== null && view.contentHeight > view.viewportHeight
+        })
         verify(block)
-        tryVerify(function() { return view.contentHeight > view.viewportHeight })
         view.stickToBottom = false
         scrollArea.contentY = 0
         const previousY = view.contentY

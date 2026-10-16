@@ -30,6 +30,7 @@ Item {
     property int hideDuration: 150
     property bool horizontalScrollEnabled: false
     property real contentWidthHint: -1
+    property real contentHeightHint: -1
 
     property alias contentY: flick.contentY
     property alias contentX: flick.contentX
@@ -47,12 +48,16 @@ Item {
         contentWidth: control.horizontalScrollEnabled && control.contentWidthHint >= 0
             ? Math.max(width, control.contentWidthHint)
             : width
-        contentHeight: contentColumn.height + control.bottomPadding
+        contentHeight: control.contentHeightHint >= 0
+            ? control.contentHeightHint + control.bottomPadding
+            : contentColumn.height + control.bottomPadding
 
         onContentHeightChanged: {
-            if (control.stickToBottom) {
-                control.snapToEnd();
-            }
+            Qt.callLater(function() {
+                if (control.stickToBottom && control.atBottom()) {
+                    control.snapToEnd();
+                }
+            });
         }
 
         Column {
@@ -80,6 +85,10 @@ Item {
     function scrollBy(delta) {
         flick.contentY = Math.max(flick.originY, Math.min(flick.contentY + delta, control.maxContentY()));
         scrollBar.poke();
+    }
+
+    function adjustBy(delta) {
+        flick.contentY = Math.max(flick.originY, Math.min(flick.contentY + delta, control.maxContentY()));
     }
 
     function maxContentX() {

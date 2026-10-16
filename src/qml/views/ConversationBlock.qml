@@ -5,10 +5,11 @@ Rectangle {
     id: block
 
     objectName: "conversationBlock"
-    required property int index
-    required property int kind
-    required property string text
-    required property string payload
+    property int index: -1
+    property int kind: 0
+    property string text: ""
+    property string payload: ""
+    property bool reasoningVisible: true
     property bool streaming: false
     property bool renderEnabled: true
     property var imageLoader: null
@@ -22,6 +23,16 @@ Rectangle {
     property int toolResultKind: 4
     property int errorKind: 5
     property int toolResultPreviewLimit: 120
+
+    function resetTransientState() {
+        toolResultCode.expanded = false
+        toolResultCode.wordWrap = true
+    }
+
+    onIndexChanged: block.resetTransientState()
+    onKindChanged: block.resetTransientState()
+    onTextChanged: block.resetTransientState()
+    onPayloadChanged: block.resetTransientState()
 
     function decodeJsonValue(value) {
         let decoded = value
@@ -145,8 +156,8 @@ Rectangle {
         || block.kind === block.reasoningKind
     readonly property bool plainContent: !block.markdownContent && !block.hasJsonToolResult
 
-    width: parent.width
-    height: body.implicitHeight + 24
+    height: block.kind === block.reasoningKind && !block.reasoningVisible ? 0 : body.implicitHeight + 24
+    visible: block.kind !== block.reasoningKind || block.reasoningVisible
     radius: 0
     color: {
         switch (block.kind) {

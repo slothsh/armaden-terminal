@@ -112,7 +112,23 @@ set_tests_properties(interaction_qml_action_controls_test PROPERTIES
     LABELS "interaction;qml"
 )
 
+add_test(
+    NAME virtualization_qml_list_view_test
+    COMMAND
+        "${QMLTESTRUNNER_EXECUTABLE}"
+        -import "${MARKDOWN_QML_IMPORT_DIR}"
+        -input "${CMAKE_CURRENT_SOURCE_DIR}/virtualization/tst_virtuallistview.qml"
+)
+set_tests_properties(virtualization_qml_list_view_test PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    LABELS "virtualization;qml"
+)
+
 add_test_target(map_view_test map/map_view_test.cpp)
 target_sources(map_view_test PRIVATE ../src/qobjects/map_view.cpp)
 target_include_directories(map_view_test PRIVATE ../src/qobjects)
 target_link_libraries(map_view_test PRIVATE Qt6::Core)
+
+add_test_target(virtual_list_layout_test virtualization/virtual_list_layout_test.cpp)
+target_sources(virtual_list_layout_test PRIVATE ../src/qobjects/virtual_list_layout.cpp)
+target_include_directories(virtual_list_layout_test PRIVATE ../src/qobjects)

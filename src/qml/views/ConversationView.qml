@@ -1,5 +1,6 @@
 import QtQuick
 import Lib.Controls
+import Lib.Interaction
 import Lib.Theme
 
 Item {
@@ -12,6 +13,21 @@ Item {
     property var markdownParser: null
     property var customBlockRenderers: ({})
     property bool reasoningVisible: true
+
+    onReasoningVisibleChanged: control.invalidateReasoningSizes()
+
+    function invalidateReasoningSizes() {
+        if (!control.chatController) {
+            return
+        }
+
+        const conversation = control.chatController.conversation
+        for (let row = 0; row < conversation.count; ++row) {
+            if (conversation.kindAt(row) === control.reasoningKind) {
+                listView.invalidateSize(row)
+            }
+        }
+    }
     property bool expandVisible: true
     property bool expandActive: false
     property bool expandEnabled: true
@@ -105,61 +121,52 @@ Item {
         barTopMargin: Theme.metric.spacing
         barBottomMargin: Theme.metric.spacing
         stickToBottom: true
+        contentHeightHint: listView.contentHeight
 
-        Item {
+        VirtualListView {
+            id: listView
+            objectName: "conversationListView"
             width: Math.min(control.columnWidth, scrollArea.width)
             x: (scrollArea.width - width) / 2
-            height: threadColumn.height
+            height: listView.contentHeight
 
-            Column {
-                id: threadColumn
-                width: parent.width
-                spacing: 0
+            model: control.chatController ? control.chatController.conversation : null
+            contentY: scrollArea.contentY
+            viewportHeight: scrollArea.viewportHeight
+            cacheBuffer: 320
+            estimatedItemHeight: 96
+            maxItemsPerFrame: 8
+            followTail: scrollArea.stickToBottom && scrollArea.atBottom()
 
-                Repeater {
-                    id: blockRepeater
-                    model: control.chatController ? control.chatController.conversation : null
+            sizeHint: function(index, width, model) {
+                if (model && model.kindAt(index) === control.reasoningKind && !control.reasoningVisible) {
+                    return 1
+                }
+                return model ? model.heightHint(index, width) : 96
+            }
 
-                    onItemAdded: {
-                        if (control.stickToBottom) {
-                            scrollArea.snapToEnd()
-                        }
-                    }
+            onScrollAdjustmentRequested: delta => scrollArea.adjustBy(delta)
 
-                    delegate: Item {
-                        required property int index
-                        required property int kind
-                        required property string text
-                        required property string payload
+            delegate: Component {
+                ConversationBlock {
+                    id: block
 
-                        width: threadColumn.width
-                        height: kind === control.reasoningKind && !control.reasoningVisible ? 0 : block.height
-
-                        ConversationBlock {
-                            id: block
-                            width: threadColumn.width
-                            index: parent.index
-                            kind: parent.kind
-                            text: parent.text
-                            payload: parent.payload
-                            visible: parent.kind !== control.reasoningKind || control.reasoningVisible
-                            renderEnabled: control.visible && visible
-                            streaming: control.chatController
-                                && control.chatController.running
-                                && parent.index === control.chatController.conversation.count - 1
-                                && parent.kind === control.assistantTextKind
-                            imageLoader: control.imageLoader
-                            markdownParser: control.markdownParser
-                            customBlockRenderers: control.customBlockRenderers
-                            scrollController: scrollArea
-                            userTextKind: control.userTextKind
-                            assistantTextKind: control.assistantTextKind
-                            reasoningKind: control.reasoningKind
-                            toolCallKind: control.toolCallKind
-                            toolResultKind: control.toolResultKind
-                            errorKind: control.errorKind
-                        }
-                    }
+                    reasoningVisible: control.reasoningVisible
+                    renderEnabled: control.visible
+                    streaming: control.chatController
+                        && control.chatController.running
+                        && block.index === control.chatController.conversation.count - 1
+                        && block.kind === control.assistantTextKind
+                    imageLoader: control.imageLoader
+                    markdownParser: control.markdownParser
+                    customBlockRenderers: control.customBlockRenderers
+                    scrollController: scrollArea
+                    userTextKind: control.userTextKind
+                    assistantTextKind: control.assistantTextKind
+                    reasoningKind: control.reasoningKind
+                    toolCallKind: control.toolCallKind
+                    toolResultKind: control.toolResultKind
+                    errorKind: control.errorKind
                 }
             }
         }
