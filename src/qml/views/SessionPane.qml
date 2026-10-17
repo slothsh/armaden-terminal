@@ -41,7 +41,7 @@ Item {
         size: 220
         sizeMin: 140
         sizeMax: control.width > 500 ? control.width / 2 : 250
-        y: control.topBarHeight
+        y: control.topBarHeight * 2
         height: control.height - control.topBarHeight - control.bottomBarHeight
         z: 8
 
@@ -106,9 +106,9 @@ Item {
             id: historyMenu
             interactionController: control.interactionController
             interactionDomain: "app.historyMenu"
+            allowedActionIds: ["history.clear"]
             x: leftDrawer.width - width
             y: historyGutter.y + clearHistoryButton.y + clearHistoryButton.height + 2
-
         }
 
         ListView {

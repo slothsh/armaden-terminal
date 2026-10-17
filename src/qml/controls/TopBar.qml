@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Window
+import QtQuick.Layouts
 import Lib.Interaction
 import Lib.Controls
 import Lib.Theme
@@ -7,21 +8,21 @@ import Lib.Theme
 Rectangle {
     id: control
 
-    InteractionScope.domain: "app.topBar"
+    InteractionScope.domain: "app.menuBar"
     InteractionScope.role: "pane"
 
-    signal menuRequested()
     signal closeRequested()
+    signal maximizeRequested()
+    signal minimizeRequested()
 
-    property bool menuActive: false
     property string closeActionId: ""
+    property string maximizeActionId: ""
+    property string minimizeActionId: ""
     property var interactionController: null
     property var actionTarget: 0
-    property real contentX: 0
-    readonly property real menuAnchorBottom: menuButton.y + menuButton.height
 
-    implicitHeight: Theme.metric.topBarHeight
-    color: Theme.color.medium
+    implicitHeight: Theme.metric.menuBarHeight
+    color: Theme.color.dark
 
     MouseArea {
         anchors.fill: parent
@@ -33,53 +34,121 @@ Rectangle {
         }
     }
 
-    IconButton {
-        id: menuButton
-        iconName: "menu"
-        accessibleLabel: qsTr("Application menu")
-        interactionDomain: "app.topBar"
-        interactionGroup: "top-bar"
-        interactionOrder: 0
-        interactionController: control.interactionController
-        active: control.menuActive
-        anchors.left: parent.left
-        anchors.leftMargin: Theme.metric.spacing
-        anchors.verticalCenter: parent.verticalCenter
-        onClicked: control.menuRequested()
-    }
-
+    // TODO: TabManager
     Rectangle {
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: 1
-        x: control.contentX - 1
-        width: 1
-        color: Theme.color.borderStrong
-        visible: control.contentX > 0
+        id: tab
+        width: 200
+        height: control.height - Theme.metric.spacing
+        x: windowControls.mapToItem(control, windowControls.width, 0).x + Theme.metric.spacing*2
+        y: Theme.metric.spacing
+        topRightRadius: 6
+        topLeftRadius: 6
+        color: Theme.color.medium
+        z: 1
+
+        FlexboxLayout {
+            anchors.fill: parent
+            wrap: FlexboxLayout.Wrap
+            direction: FlexboxLayout.Row
+            justifyContent: FlexboxLayout.JustifySpaceBetween
+            alignItems: FlexboxLayout.AlignCenter
+            anchors.leftMargin: Theme.metric.spacing * 1.5
+            anchors.rightMargin: Theme.metric.spacing * 1.5
+
+            Text {
+                text: "Session 1"
+                font.pointSize: Theme.font.pointSize * 0.75
+                color: Theme.color.text
+            }
+
+            IconButton {
+                iconName: "x"
+                accessibleLabel: qsTr("Close application")
+                interactionDomain: "app.menuBar"
+                interactionGroup: "menu-bar"
+                interactionOrder: 0
+                iconSize: 12
+                iconColor: Theme.color.textMuted
+                outerWidth: 14
+                outerHeight: 14
+                actionId: control.closeActionId
+                interactionController: control.interactionController
+                actionTarget: control.actionTarget
+                onClicked: {
+                    console.log("TODO: not implemented")
+                }
+            }
+        }
     }
 
-    IconButton {
-        id: closeButton
-        iconName: "x"
-        accessibleLabel: qsTr("Close application")
-        interactionDomain: "app.topBar"
-        interactionGroup: "top-bar"
-        interactionOrder: 1
-        iconSize: 20
-        actionId: control.closeActionId
-        interactionController: control.interactionController
-        actionTarget: control.actionTarget
-        anchors.right: parent.right
+    FlexboxLayout {
+        anchors.fill: parent
+        wrap: FlexboxLayout.Wrap
+        direction: FlexboxLayout.Row
+        justifyContent: FlexboxLayout.JustifySpaceBetween
+        alignItems: FlexboxLayout.AlignCenter
         anchors.rightMargin: Theme.metric.spacing
-        anchors.verticalCenter: parent.verticalCenter
-        onClicked: control.closeRequested()
-    }
+        anchors.leftMargin: Theme.metric.spacing
 
-    Rectangle {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        height: 1
-        color: Theme.color.borderStrong
+        FlexboxLayout {
+            id: windowControls
+            anchors.left: parent.left
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            wrap: FlexboxLayout.Wrap
+            direction: FlexboxLayout.Row
+            justifyContent: FlexboxLayout.JustifySpaceBetween
+            alignItems: FlexboxLayout.AlignCenter
+            columnGap: 4
+
+            IconButton {
+                id: closeButton
+                iconName: "x"
+                accessibleLabel: qsTr("Close application")
+                interactionDomain: "app.menuBar"
+                interactionGroup: "menu-bar"
+                interactionOrder: 0
+                iconSize: 20
+                actionId: control.closeActionId
+                interactionController: control.interactionController
+                actionTarget: control.actionTarget
+                onClicked: control.closeRequested()
+            }
+
+            IconButton {
+                id: maximizeButton
+                iconName: "square"
+                accessibleLabel: qsTr("Maximize application")
+                interactionDomain: "app.menuBar"
+                interactionGroup: "menu-bar"
+                interactionOrder: 1
+                iconSize: 16
+                actionId: control.maximizeActionId
+                interactionController: control.interactionController
+                actionTarget: control.actionTarget
+                onClicked: control.maximizeRequested()
+            }
+
+            IconButton {
+                id: minimizeButton
+                iconName: "minus"
+                accessibleLabel: qsTr("Minimize application")
+                interactionDomain: "app.menuBar"
+                interactionGroup: "menu-bar"
+                interactionOrder: 2
+                iconSize: 16
+                actionId: control.minimizeActionId
+                interactionController: control.interactionController
+                actionTarget: control.actionTarget
+                onClicked: control.minimizeRequested()
+            }
+        }
+
+        Text {
+            text: "Terminal 0.1.0"
+            color: Theme.color.textDimmed
+            font.pointSize: Theme.font.pointSize * 0.75
+            font.weight: Font.Medium
+        }
     }
 }

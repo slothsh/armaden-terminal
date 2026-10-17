@@ -4,10 +4,13 @@ import QtQuick
 import QtQml
 
 QtObject {
-    property QtObject font: QtObject {}
+    property QtObject font: QtObject {
+        property int pointSize: 12
+    }
 
     property QtObject metric: QtObject {
         property int radius: 4
+        property int menuBarHeight: 34
         property int topBarHeight: 34
         property int spacing: 8
     }
@@ -29,6 +32,7 @@ QtObject {
 
         // Text & Icons
         property color text: "#e6e6e6"
+        property color textDimmed: "#aaaaaa"
         property color textMuted: "#8a8a8a"
 
         // Interaction

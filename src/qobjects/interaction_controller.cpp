@@ -2138,6 +2138,28 @@ auto InteractionController::installDefaultActions() -> void {
         {}
     );
     registerUiAction(
+        "app.maximize",
+        "Maximize",
+        "app",
+        "",
+        20,
+        {mts::interaction::ActionSurface::Menu, mts::interaction::ActionSurface::Button},
+        activatableTarget,
+        truePredicate,
+        {}
+    );
+    registerUiAction(
+        "app.minimize",
+        "Minimize",
+        "app",
+        "",
+        20,
+        {mts::interaction::ActionSurface::Menu, mts::interaction::ActionSurface::Button},
+        activatableTarget,
+        truePredicate,
+        {}
+    );
+    registerUiAction(
         "prompt.send",
         "Send message",
         "app.prompt",

@@ -18,6 +18,7 @@ qt_add_qml_module(
         HorizontalDrawer.qml
         IconButton.qml
         MenuButton.qml
+        MenuBar.qml
         TextButton.qml
         TextInput.qml
         ScrollingArea.qml

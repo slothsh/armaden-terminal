@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Templates as T
+import QtQuick.Window
 import Lib.Controls
 import Lib.Interaction
 import Lib.Theme
@@ -86,6 +87,36 @@ Item {
                 break
             }
 
+            case "app.maximize": {
+                const appWindow = Window.window
+                if (!appWindow) {
+                    break
+                }
+
+                if (appWindow.visibility !== Window.FullScreen) {
+                    appWindow.showFullScreen()
+                } else {
+                    appWindow.showNormal()
+                }
+
+                break
+            }
+
+            case "app.minimize": {
+                const appWindow = Window.window
+                if (!appWindow) {
+                    break
+                }
+
+                if (appWindow.visibility !== Window.Minimized) {
+                    appWindow.showMinimized()
+                } else {
+                    appWindow.showNormal()
+                }
+
+                break
+            }
+
             case "prompt.send": {
                 root.sendPrompt()
                 break
@@ -141,14 +172,27 @@ Item {
         id: topBar
         anchors.top: parent.top
         width: parent.width
+        z: 10
+        closeActionId: "app.quit"
+        maximizeActionId: "app.maximize"
+        minimizeActionId: "app.minimize"
+        interactionController: root.interaction
+        actionTarget: root.InteractionScope.targetId
+        onCloseRequested: interaction.invokeAction("app.quit", root.InteractionScope.targetId)
+        onMaximizeRequested: interaction.invokeAction("app.maximize", root.InteractionScope.targetId)
+        onMinimizeRequested: interaction.invokeAction("app.minimize", root.InteractionScope.targetId)
+    }
+
+    MenuBar {
+        id: menuBar
+        anchors.top: topBar.bottom
+        width: parent.width
         z: 9
         menuActive: appMenu.opened
-        closeActionId: "app.quit"
         interactionController: root.interaction
         actionTarget: root.InteractionScope.targetId
         contentX: content.x
         onMenuRequested: appMenu.toggle()
-        onCloseRequested: interaction.invokeAction("app.quit", root.InteractionScope.targetId)
     }
 
     BottomBar {
@@ -179,9 +223,9 @@ Item {
         InteractionScope.domain: "app.main"
         InteractionScope.role: "pane"
         x: sessionPane.drawerWidth
-        y: topBar.height
+        y: menuBar.height + topBar.height
         width: parent.width - sessionPane.drawerWidth
-        height: parent.height - topBar.height - bottomBar.height
+        height: parent.height - menuBar.height - topBar.height - bottomBar.height
         color: Theme.color.dark
         T.ContextMenu.menu: null
         T.ContextMenu.onRequested: function(position) {
@@ -274,7 +318,7 @@ Item {
         interactionController: root.interaction
         interactionDomain: "app.appMenu"
         x: Theme.metric.spacing
-        y: topBar.menuAnchorBottom + 2
+        y: menuBar.y + menuBar.menuAnchorBottom + 2
     }
 
     ContextMenu {

@@ -28,6 +28,9 @@ Rectangle {
     property string actionSurface: "button"
     property var interactionController: null
     property var actionTarget: 0
+    property int outerWidth: 24
+    property int outerHeight: 24
+
     readonly property bool hovered: control.interactionController && InteractionScope.targetId !== 0
         ? control.interactionController.hoveredTarget === InteractionScope.targetId
         : mouseArea.containsMouse
@@ -51,8 +54,9 @@ Rectangle {
         }
     }
 
-    implicitWidth: 24
-    implicitHeight: 24
+    implicitWidth: control.outerWidth
+    implicitHeight: control.outerHeight
+
     radius: Theme.metric.radius
     opacity: control.enabled && control.actionAllowed ? 1.0 : 0.4
     color: control.enabled && control.actionAllowed && control.hovered

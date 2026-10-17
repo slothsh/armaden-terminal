@@ -15,6 +15,7 @@ Popup {
     property bool focusTrap: true
     property string actionSurface: "menu"
     property var actionTarget: 0
+    property var allowedActionIds: []
     property var actionModel: []
     property var layerToken: 0
 
@@ -45,6 +46,7 @@ Popup {
     }
 
     onActionTargetChanged: control.refreshActions()
+    onAllowedActionIdsChanged: control.refreshActions()
     onActionSurfaceChanged: control.refreshActions()
     onInteractionControllerChanged: control.refreshActions()
 
@@ -55,9 +57,12 @@ Popup {
         }
 
         const revision = control.interactionController.actionRevision
-        control.actionModel = revision >= 0
+        const actions = revision >= 0
             ? control.interactionController.actionsFor(control.actionTarget, control.actionSurface)
             : []
+        control.actionModel = control.allowedActionIds.length > 0
+            ? actions.filter(action => control.allowedActionIds.indexOf(action.id) >= 0)
+            : actions
     }
 
     onAboutToShow: {
@@ -117,6 +122,7 @@ Popup {
 
             delegate: Column {
                 required property var modelData
+                required property int index
 
                 width: control.width - control.padding * 2
                 spacing: 0
