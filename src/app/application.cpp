@@ -10,13 +10,19 @@
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QGuiApplication>
+#include <QPointer>
 #include <QPointF>
 #include <QQmlApplicationEngine>
 #include <QQuickWindow>
 #include <QRectF>
 #include <QSizeF>
+#include <QTimer>
 #include <QUrl>
 #include <QVariant>
+
+#if MTS_QML_HOT_RELOAD
+#include "qml_hot_reload.hpp"
+#endif
 
 import std;
 import logging;
@@ -204,7 +210,6 @@ mts::app::Application::Application(int argc, char** argv)
     QQuickWindow::setTextRenderType(QQuickWindow::NativeTextRendering);
 
     m_application = std::make_unique<QGuiApplication>(argc, argv);
-    m_engine = std::make_unique<QQmlApplicationEngine>();
 
     Paths const paths = resolvePaths();
 
@@ -350,21 +355,26 @@ mts::app::Application::Application(int argc, char** argv)
 
     m_markdownImageService = std::make_unique<MarkdownImageService>(markdownImageConfig);
 
-    m_engine->setInitialProperties({
-        {"chat", QVariant::fromValue(static_cast<QObject*>(m_chat))},
-        {"interaction", QVariant::fromValue(static_cast<QObject*>(m_interaction))},
-        {"markdownImages", QVariant::fromValue(static_cast<QObject*>(m_markdownImageService.get()))},
-    });
+#if MTS_QML_HOT_RELOAD
+    m_hotReload = new QmlHotReload(QStringLiteral(MTS_QML_SOURCE_DIR_DEFAULT), m_application.get());
 
     QObject::connect(
-        m_engine.get(),
-        &QQmlApplicationEngine::objectCreationFailed,
+        m_hotReload,
+        &mts::app::QmlHotReload::reloadRequested,
         m_application.get(),
-        [] { QCoreApplication::exit(EXIT_FAILURE); },
+        [this] { this->reloadQml(); },
         Qt::QueuedConnection
     );
 
-    m_engine->load(QUrl("qrc:/qt/qml/Application/qml/Main.qml"));
+    QObject::connect(
+        m_hotReload,
+        &mts::app::QmlHotReload::errorReported,
+        m_application.get(),
+        [](QString const& message) { mts::log::error("{}", message.toStdString()); }
+    );
+#endif
+
+    this->loadQmlRoot();
 
     mts::log::info("Done! Running application...");
 }
@@ -395,3 +405,96 @@ mts::app::Application::~Application() {
 auto mts::app::Application::run() -> int {
     return m_application->exec();
 }
+
+auto mts::app::Application::qmlEntryUrl() -> QUrl {
+#if MTS_QML_HOT_RELOAD
+    return QUrl{"qrc:/qt/qml/Application/qml/DevHost.qml"};
+#else
+    return QUrl{"qrc:/qt/qml/Application/qml/AppEntry.qml"};
+#endif
+}
+
+auto mts::app::Application::setupQmlEngine(QQmlApplicationEngine* engine) -> void {
+#if MTS_QML_HOT_RELOAD
+    for (QString const& path : m_hotReload->hotReloadImportPaths()) {
+        engine->addImportPath(path);
+    }
+#endif
+
+    engine->setInitialProperties({
+        {"chat", QVariant::fromValue(static_cast<QObject*>(m_chat))},
+        {"interaction", QVariant::fromValue(static_cast<QObject*>(m_interaction))},
+        {"markdownImages", QVariant::fromValue(static_cast<QObject*>(m_markdownImageService.get()))},
+#if MTS_QML_HOT_RELOAD
+        {"hotReload", QVariant::fromValue(static_cast<QObject*>(m_hotReload))},
+#endif
+    });
+}
+
+auto mts::app::Application::loadQmlRoot() -> void {
+    m_engine = std::make_unique<QQmlApplicationEngine>();
+    this->setupQmlEngine(m_engine.get());
+
+    QObject::connect(
+        m_engine.get(),
+        &QQmlApplicationEngine::objectCreationFailed,
+        m_application.get(),
+        [] { QCoreApplication::exit(EXIT_FAILURE); },
+        Qt::QueuedConnection
+    );
+
+    QUrl const entry = this->qmlEntryUrl();
+    m_engine->load(entry);
+    mts::log::info("Loaded QML entry: {}", entry.toString().toStdString());
+}
+
+#if MTS_QML_HOT_RELOAD
+auto mts::app::Application::reloadQml() -> void {
+    if (m_reloadingQml) {
+        return;
+    }
+    m_reloadingQml = true;
+
+    mts::log::info("Reloading QML (revision {})...", m_hotReload->revision());
+
+    auto* next = new QQmlApplicationEngine();
+    this->setupQmlEngine(next);
+
+    bool failed = false;
+    QObject::connect(
+        next,
+        &QQmlApplicationEngine::objectCreationFailed,
+        next,
+        [&failed] { failed = true; }
+    );
+
+    next->load(this->qmlEntryUrl());
+
+    QPointer<QQmlApplicationEngine> const alive{next};
+    bool const creationFailed = failed;
+    QTimer::singleShot(0, m_application.get(), [this, alive, creationFailed] {
+        m_reloadingQml = false;
+
+        if (alive == nullptr) {
+            return;
+        }
+        QQmlApplicationEngine* const engine = alive.data();
+
+        bool const ready = !creationFailed
+            && !engine->rootObjects().isEmpty()
+            && engine->rootObjects().first()->property("viewReady").toBool();
+
+        if (!ready) {
+            mts::log::error("QML reload failed; keeping the previous view.");
+            if (m_hotReload->lastError().isEmpty()) {
+                m_hotReload->reportError(QStringLiteral("QML reload failed; the new view did not become ready."));
+            }
+            engine->deleteLater();
+            return;
+        }
+
+        m_engine.reset(engine);
+        mts::log::info("Reloaded QML (revision {}).", m_hotReload->revision());
+    });
+}
+#endif

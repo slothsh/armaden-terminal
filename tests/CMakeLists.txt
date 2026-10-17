@@ -129,6 +129,12 @@ target_sources(map_view_test PRIVATE ../src/qobjects/map_view.cpp)
 target_include_directories(map_view_test PRIVATE ../src/qobjects)
 target_link_libraries(map_view_test PRIVATE Qt6::Core)
 
+add_test_target(hot_reload_test hot_reload/hot_reload_test.cpp)
+target_sources(hot_reload_test PRIVATE ../src/app/qml_hot_reload.cpp)
+target_include_directories(hot_reload_test PRIVATE ../src/app)
+set_target_properties(hot_reload_test PROPERTIES AUTOMOC ON)
+target_link_libraries(hot_reload_test PRIVATE Qt6::Core)
+
 add_test_target(virtual_list_layout_test virtualization/virtual_list_layout_test.cpp)
 target_sources(virtual_list_layout_test PRIVATE ../src/qobjects/virtual_list_layout.cpp)
 target_include_directories(virtual_list_layout_test PRIVATE ../src/qobjects)

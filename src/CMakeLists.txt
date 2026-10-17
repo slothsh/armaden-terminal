@@ -76,6 +76,28 @@ add_executable_target(
         ${LOGGING_MODULE_SRC_FILES}
 )
 
+set(MTS_QML_MODULE_FILES
+    qml/Main.qml
+    qml/AppWindow.qml
+    qml/AppEntry.qml
+    qml/views/ConversationView.qml
+    qml/views/ConversationBlock.qml
+    qml/views/MarkdownView.qml
+    qml/views/MarkdownNode.qml
+    qml/views/MarkdownNodeDelegate.qml
+    qml/views/MarkdownInlineContent.qml
+    qml/views/MarkdownImage.qml
+    qml/views/CodeBlock.qml
+    qml/views/PromptPane.qml
+    qml/views/SessionPane.qml
+    qml/views/SessionRow.qml
+    qml/views/QuitController.qml
+)
+
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    list(APPEND MTS_QML_MODULE_FILES qml/DevHost.qml)
+endif()
+
 add_qml_module_target(
     mts
     URI Application
@@ -86,19 +108,7 @@ add_qml_module_target(
         ${QOBJECTS_MODULE_SRC_FILES}
         ${QOBJECTS_MODULE_HEADER_FILES}
     QML_MODULE_FILES
-        qml/Main.qml
-        qml/views/ConversationView.qml
-        qml/views/ConversationBlock.qml
-        qml/views/MarkdownView.qml
-        qml/views/MarkdownNode.qml
-        qml/views/MarkdownNodeDelegate.qml
-        qml/views/MarkdownInlineContent.qml
-        qml/views/MarkdownImage.qml
-        qml/views/CodeBlock.qml
-        qml/views/PromptPane.qml
-        qml/views/SessionPane.qml
-        qml/views/SessionRow.qml
-        qml/views/QuitController.qml
+        ${MTS_QML_MODULE_FILES}
 )
 
 target_include_directories(
@@ -137,4 +147,19 @@ target_link_libraries(
     PRIVATE
         LibQml
         interactionui
+)
+
+configure_module_file(app/qml_hot_reload.cpp mts IS_SOURCE_FILE)
+
+target_sources(
+    mts
+    PRIVATE
+        "$<$<CONFIG:Debug>:${CMAKE_CURRENT_SOURCE_DIR}/app/qml_hot_reload.cpp>"
+)
+
+target_compile_definitions(
+    mts
+    PRIVATE
+        MTS_QML_HOT_RELOAD=$<CONFIG:Debug>
+        "$<$<CONFIG:Debug>:MTS_QML_SOURCE_DIR_DEFAULT=\"${CMAKE_SOURCE_DIR}/src/qml\">"
 )

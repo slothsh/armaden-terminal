@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QUrl>
+
 #include <memory>
 #include <string>
 
@@ -9,6 +11,12 @@ class InteractionController;
 class MarkdownImageService;
 class QGuiApplication;
 class QQmlApplicationEngine;
+
+namespace mts::app {
+
+class QmlHotReload;
+
+}
 
 namespace mts::events {
 class EventBus;
@@ -47,6 +55,14 @@ public:
     auto run() -> int;
 
 private:
+    static auto qmlEntryUrl() -> QUrl;
+
+    auto setupQmlEngine(QQmlApplicationEngine* engine) -> void;
+    auto loadQmlRoot() -> void;
+#if MTS_QML_HOT_RELOAD
+    auto reloadQml() -> void;
+#endif
+
     int m_argc;
     char** m_argv;
     std::unique_ptr<QGuiApplication> m_application;
@@ -63,6 +79,10 @@ private:
     std::unique_ptr<mts::orchestration::ConversationService> m_conversationService;
     ChatController* m_chat = nullptr;
     InteractionController* m_interaction = nullptr;
+#if MTS_QML_HOT_RELOAD
+    QmlHotReload* m_hotReload = nullptr;
+    bool m_reloadingQml = false;
+#endif
     std::string m_initialStatus;
 };
 

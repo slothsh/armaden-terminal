@@ -1,28 +1,22 @@
 import QtQuick
-import QtQuick.Window
 import QtQuick.Templates as T
 import Lib.Controls
 import Lib.Interaction
 import Lib.Theme
+import Application
+import "views"
 
-Window {
+Item {
     id: root
+
     InteractionScope.domain: "app"
     InteractionScope.role: "window"
     InteractionScope.activatable: true
-    visible: true
-    color: Theme.color.dark
-    width: 960
-    height: 640
-    title: qsTr("mindtosis")
 
     property var chat: null
     property var interaction: null
     property var markdownImages: null
-
-    MarkdownParser {
-        id: contentParser
-    }
+    property var markdownParser: null
     property string pendingDelete: ""
     property string renamingSession: ""
 
@@ -123,11 +117,17 @@ Window {
         interaction.setBusinessValue("map.ready", chat.mapController.ready ? "true" : "false")
     }
 
-    onClosing: close => {
+    function interceptClose(close) {
         if (!quitController.quitConfirmed) {
             close.accepted = false
             quitController.requestQuit()
         }
+    }
+
+    Item {
+        id: overlayItem
+        anchors.fill: parent
+        z: 99
     }
 
     QuitController {
@@ -185,7 +185,7 @@ Window {
         color: Theme.color.dark
         T.ContextMenu.menu: null
         T.ContextMenu.onRequested: function(position) {
-            const point = content.mapToItem(root.contentItem, position.x, position.y)
+            const point = content.mapToItem(overlayItem, position.x, position.y)
             root.contextMenuRequested(point.x, point.y)
         }
 
@@ -219,7 +219,7 @@ Window {
             anchors.bottom: promptPane.top
             chatController: chat
             imageLoader: root.markdownImages
-            markdownParser: contentParser
+            markdownParser: root.markdownParser
             userTextKind: ConversationModel.UserText
             assistantTextKind: ConversationModel.AssistantText
             reasoningKind: ConversationModel.Reasoning
@@ -244,7 +244,7 @@ Window {
             chatController: chat
             interactionController: root.interaction
             contentHeight: content.height
-            overlay: root.contentItem
+            overlay: overlayItem
             onContextMenuRequested: (x, y) => root.contextMenuRequested(x, y)
         }
     }
@@ -259,7 +259,7 @@ Window {
         topBarHeight: topBar.height
         bottomBarHeight: bottomBar.height
         contextMenu: interactionContextMenu
-        overlay: root.contentItem
+        overlay: overlayItem
         onCreateSessionRequested: {
             conversationView.snapToBottom()
             promptPane.saveDraft()
