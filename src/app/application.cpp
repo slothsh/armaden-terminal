@@ -456,23 +456,23 @@ auto mts::app::Application::reloadQml() -> void {
     m_reloadingQml = true;
 
     mts::log::info("Reloading QML (revision {})...", m_hotReload->revision());
+    m_hotReload->clearError();
 
     auto* next = new QQmlApplicationEngine();
     this->setupQmlEngine(next);
 
-    bool failed = false;
+    auto const failed = std::make_shared<bool>(false);
     QObject::connect(
         next,
         &QQmlApplicationEngine::objectCreationFailed,
         next,
-        [&failed] { failed = true; }
+        [failed] { *failed = true; }
     );
 
     next->load(this->qmlEntryUrl());
 
     QPointer<QQmlApplicationEngine> const alive{next};
-    bool const creationFailed = failed;
-    QTimer::singleShot(0, m_application.get(), [this, alive, creationFailed] {
+    QTimer::singleShot(0, m_application.get(), [this, alive, failed] {
         m_reloadingQml = false;
 
         if (alive == nullptr) {
@@ -480,7 +480,7 @@ auto mts::app::Application::reloadQml() -> void {
         }
         QQmlApplicationEngine* const engine = alive.data();
 
-        bool const ready = !creationFailed
+        bool const ready = !*failed
             && !engine->rootObjects().isEmpty()
             && engine->rootObjects().first()->property("viewReady").toBool();
 
@@ -493,6 +493,7 @@ auto mts::app::Application::reloadQml() -> void {
             return;
         }
 
+        m_hotReload->clearError();
         m_engine.reset(engine);
         mts::log::info("Reloaded QML (revision {}).", m_hotReload->revision());
     });

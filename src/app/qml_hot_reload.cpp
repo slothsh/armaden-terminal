@@ -93,6 +93,10 @@ auto QmlHotReload::reportError(QString const& message) -> void {
     emit this->errorReported(message);
 }
 
+auto QmlHotReload::clearError() -> void {
+    this->setLastError(QString());
+}
+
 auto QmlHotReload::hotReloadImportPaths() -> QStringList {
     if (m_importDir == nullptr || !m_importDir->isValid()) {
         return {};

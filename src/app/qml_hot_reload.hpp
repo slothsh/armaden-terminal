@@ -25,6 +25,7 @@ public:
 
     Q_INVOKABLE auto reload() -> void;
     Q_INVOKABLE auto reportError(QString const& message) -> void;
+    auto clearError() -> void;
 
     [[nodiscard]] auto hotReloadImportPaths() -> QStringList;
 
